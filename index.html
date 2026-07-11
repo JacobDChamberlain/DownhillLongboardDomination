@@ -132,11 +132,15 @@
 </div>
 
 <script type="importmap">
-{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
 </script>
 
 <script type="module">
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ------------------------------------------------------------------
 // Scene, camera, renderer
@@ -147,18 +151,24 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;   // filmic contrast — the big "looks real" lever
+renderer.toneMappingExposure = 1.05;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const skyTop = new THREE.Color(0x2a6cff), skyBot = new THREE.Color(0xbfe3ff);
-scene.background = skyBot.clone();
-scene.fog = new THREE.FogExp2(0xbfe3ff, 0.0016);
+// Golden-hour palette
+const skyZenith  = new THREE.Color(0x2f6bb0);   // deep blue overhead
+const skyHorizon = new THREE.Color(0xf1e3c9);   // warm pale haze at the horizon
+const hazeColor  = new THREE.Color(0xd7e0ea);   // distance haze / fog tint
+const FOG_DENSITY = 0.0004;                     // lower = distant ridgelines stay visible (tunable)
+scene.background = hazeColor.clone();
+scene.fog = new THREE.FogExp2(hazeColor.getHex(), FOG_DENSITY);
 
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 6000);
 
-// Lighting — warm afternoon sun
-const sun = new THREE.DirectionalLight(0xfff2d6, 2.4);
-sun.position.set(-260, 400, 180);
+// Lighting — warm low afternoon sun + cool sky fill
+const sun = new THREE.DirectionalLight(0xffe3b3, 3.2);
+sun.position.set(-260, 300, 180);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.near = 10; sun.shadow.camera.far = 1200;
@@ -166,17 +176,35 @@ sun.shadow.camera.left = -220; sun.shadow.camera.right = 220;
 sun.shadow.camera.top = 220; sun.shadow.camera.bottom = -220;
 sun.shadow.bias = -0.0004;
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x4a6b3a, 1.0));
+scene.add(sun.target);
+scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x55663a, 0.5));
 
-// Gradient sky dome
+// Image-based ambient + specular from a procedural environment (no external files)
 {
-  const geo = new THREE.SphereGeometry(4000, 32, 16);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+}
+
+// Sky dome — warm horizon glow, cool zenith, soft sun bloom
+{
+  const geo = new THREE.SphereGeometry(4600, 40, 20);
   const mat = new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false,
-    uniforms: { top: { value: skyTop }, bot: { value: skyBot } },
-    vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: `varying vec3 vP; uniform vec3 top; uniform vec3 bot;
-      void main(){ float h = clamp(vP.y/2600.0*0.5+0.5,0.0,1.0); gl_FragColor = vec4(mix(bot, top, pow(h,0.8)),1.0); }`
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {
+      zenith:  { value: skyZenith },
+      horizon: { value: skyHorizon },
+      sunDir:  { value: new THREE.Vector3(-0.6, 0.32, 0.5).normalize() },
+    },
+    vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader: `varying vec3 vP; uniform vec3 zenith; uniform vec3 horizon; uniform vec3 sunDir;
+      void main(){
+        float h = clamp(vP.y * 0.5 + 0.5, 0.0, 1.0);
+        vec3 col = mix(horizon, zenith, pow(h, 0.55));
+        float s = max(dot(normalize(vP), normalize(sunDir)), 0.0);
+        col += vec3(1.0, 0.8, 0.5)  * pow(s, 8.0)   * 0.55;   // warm sky glow around the sun
+        col += vec3(1.0, 0.85, 0.6) * pow(s, 200.0) * 1.6;    // bright sun disc
+        gl_FragColor = vec4(col, 1.0);
+      }`
   });
   scene.add(new THREE.Mesh(geo, mat));
 }
@@ -188,17 +216,17 @@ const ROAD_HALF_WIDTH = 9;
 
 function buildRoadPoints() {
   const pts = [];
-  let x = 0, z = 0, y = 900;
-  const N = 90;
+  const N = 170;
   for (let i = 0; i < N; i++) {
     const t = i / (N - 1);
-    // descend, with the drop easing off toward the bottom
-    y = 900 * (1 - t) * (1 - t * 0.15);
-    // winding: layered sines so curves feel organic, tighter near the middle
-    const wind = Math.sin(t * Math.PI * 6.0) * 120 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2.3))
-               + Math.sin(t * Math.PI * 2.1 + 1.3) * 180;
-    x = wind;
-    z = -t * 5200; // overall run heads into -Z
+    // long descent with rolling elevation — a few short rises break up the drop
+    const y = 1150 * (1 - t) - 70 * Math.sin(t * Math.PI * 6.0) - 35 * Math.sin(t * Math.PI * 12.0 + 1.7);
+    // winding: layered sines across several frequencies = big sweepers + tight kinks
+    const x = Math.sin(t * Math.PI * 3.4 + 0.2) * 250
+            + Math.sin(t * Math.PI * 6.9 + 1.2) * 120
+            + Math.sin(t * Math.PI * 1.6 + 0.5) * 175
+            + Math.sin(t * Math.PI * 10.5 + 2.0) * 55;
+    const z = -t * 7000; // overall run heads into -Z
     pts.push(new THREE.Vector3(x, y, z));
   }
   return pts;
@@ -219,6 +247,26 @@ for (let i = 0; i <= SAMPLES; i++) {
   const realUp = new THREE.Vector3().crossVectors(tan, side).normalize();
   frames.push({ p, tan, side, up: realUp });
 }
+
+// Banking — roll each frame so the surface leans INTO its curve (superelevation).
+// Direction is derived geometrically, so it always banks the right way; only the
+// amount is tunable via BANK_GAIN / MAX_BANK.
+const BANK_GAIN = 1.4, MAX_BANK = 0.30;
+for (let i = 0; i < frames.length; i++) {
+  const prev = frames[Math.max(0, i - 2)].tan;
+  const next = frames[Math.min(SAMPLES, i + 2)].tan;
+  const dTan = next.clone().sub(prev); dTan.y = 0;      // horizontal turn vector (points to inside of curve)
+  const turn = dTan.length();
+  if (turn < 1e-6) continue;
+  const c = dTan.normalize();
+  const ang = Math.min(turn * BANK_GAIN, MAX_BANK);
+  const tan = frames[i].tan;
+  const test = frames[i].up.clone().applyAxisAngle(tan, ang);
+  const sign = (test.x * c.x + test.z * c.z) >= 0 ? 1 : -1; // lean the up-vector toward the inside
+  frames[i].side.applyAxisAngle(tan, sign * ang).normalize();
+  frames[i].up.applyAxisAngle(tan, sign * ang).normalize();
+}
+
 function frameAt(u) {
   u = ((u % 1) + 1) % 1;
   const f = u * SAMPLES;
@@ -258,8 +306,8 @@ function frameAt(u) {
     const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0 }));
     m.receiveShadow = true; return m;
   };
-  scene.add(mk(grass, grassIdx, 0x5c8a3a, 1.0));
-  scene.add(mk(road,  roadIdx,  0x33373d, 0.95));
+  scene.add(mk(grass, grassIdx, 0x4f7233, 1.0));
+  scene.add(mk(road,  roadIdx,  0x2b2e35, 0.92));
 
   // center dashes
   const dashMat = new THREE.MeshStandardMaterial({ color: 0xf4d03f, roughness: .6 });
@@ -311,15 +359,41 @@ function frameAt(u) {
   }
   scene.add(posts);
 
-  // crude distant mountains
-  const mMat = new THREE.MeshStandardMaterial({ color: 0x6b7f8f, roughness: 1, flatShading: true });
-  for (let i = 0; i < 14; i++) {
-    const m = new THREE.Mesh(new THREE.ConeGeometry(300 + Math.random() * 500, 500 + Math.random() * 700, 5), mMat);
-    const a = Math.random() * Math.PI * 2, r = 2200 + Math.random() * 1200;
-    m.position.set(Math.cos(a) * r, 100, -2600 + Math.sin(a) * r);
-    m.rotation.y = Math.random() * Math.PI;
-    scene.add(m);
+  // Layered ridgelines encircling the run — each band hazier than the last (aerial perspective)
+  const center = new THREE.Vector3(0, 0, -3000);
+  function ridgeRing(radius, minH, maxH, color, seed) {
+    const seg = 170, verts = [], idx = [];
+    let rng = seed;
+    const rnd = () => (rng = (rng * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i <= seg; i++) {
+      const a = (i / seg) * Math.PI * 2;
+      const jag = (Math.sin(a * 6 + seed) * 0.5 + 0.5) * (0.35 + rnd() * 0.65)
+                + (Math.sin(a * 17 + seed) * 0.5 + 0.5) * 0.25;
+      const h = minH + (maxH - minH) * Math.min(1, jag);
+      const x = center.x + Math.cos(a) * radius, z = center.z + Math.sin(a) * radius;
+      verts.push(x, -400, z, x, h, z);
+      if (i < seg) { const b = i * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, fog: false }));
+    m.renderOrder = -1; scene.add(m);
   }
+  const rock = new THREE.Color(0x53637a);
+  [ { r: 2400, min: 300, max: 800,  f: 0.25 },
+    { r: 3300, min: 380, max: 1000, f: 0.45 },
+    { r: 4200, min: 460, max: 1150, f: 0.65 },
+    { r: 5200, min: 520, max: 1250, f: 0.82 },
+  ].forEach((b, i) => ridgeRing(b.r, b.min, b.max, rock.clone().lerp(skyHorizon, b.f), i * 137 + 7));
+
+  // Distant valley floor far below the road — sells the height/exposure
+  const valley = new THREE.Mesh(
+    new THREE.CircleGeometry(6000, 48),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6f7d55).lerp(hazeColor, 0.35), fog: true })
+  );
+  valley.rotation.x = -Math.PI / 2; valley.position.set(center.x, -260, center.z);
+  scene.add(valley);
 }
 
 // ------------------------------------------------------------------
@@ -351,6 +425,38 @@ skater.add(lean);
   lean.add(deck, leg, leg2, torso, head);
 }
 scene.add(skater);
+
+// Wind streaks — 3D motion lines that stream past the rider; intensity scales with speed
+const wind = (() => {
+  const N = 140, span = 90;
+  const positions = new Float32Array(N * 6);
+  const seeds = [];
+  for (let i = 0; i < N; i++) {
+    const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 15;
+    seeds.push({ x: Math.cos(a) * r, y: Math.sin(a) * r * 0.7 + 1.5, z: Math.random() * span });
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
+  const seg = new THREE.LineSegments(geo, mat); seg.frustumCulled = false;
+  const grp = new THREE.Group(); grp.add(seg); scene.add(grp);
+  let scroll = 0;
+  return function updateWind(pos, quat, speed, speedT, dt) {
+    grp.position.copy(pos); grp.quaternion.copy(quat);
+    mat.opacity = Math.max(0, speedT - 0.15) * 0.5;
+    if (mat.opacity <= 0.001) return;
+    scroll = (scroll + speed * dt) % span;
+    const len = 2 + speedT * 9;
+    for (let i = 0; i < N; i++) {
+      const s = seeds[i];
+      let z = ((s.z - scroll) % span + span) % span - 12; // wrap into -12 .. span-12
+      const o = i * 6;
+      positions[o] = s.x; positions[o + 1] = s.y; positions[o + 2] = z;
+      positions[o + 3] = s.x; positions[o + 4] = s.y; positions[o + 5] = z + len;
+    }
+    geo.attributes.position.needsUpdate = true;
+  };
+})();
 
 // ------------------------------------------------------------------
 // Input — keyboard + gamepad
@@ -515,9 +621,17 @@ function place(info) {
   camera.lookAt(camLook);
 
   // FOV kick for sense of speed
-  const targetFov = 66 + speedT * 26 + (info.tuck ? 4 : 0);
+  const targetFov = 64 + speedT * 34 + (info.tuck ? 6 : 0);
   camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 3);
   camera.updateProjectionMatrix();
+
+  // speed shake — subtle camera jitter that grows with velocity
+  const shake = speedT * speedT * 0.5;
+  camera.position.x += (Math.random() - 0.5) * shake;
+  camera.position.y += (Math.random() - 0.5) * shake;
+
+  // wind streaks stream past, aligned with travel
+  wind(pos, skater.quaternion, state.speed, speedT, dt);
 
   // keep sun/shadow near the skater
   sun.position.set(pos.x - 260, pos.y + 400, pos.z + 180);
