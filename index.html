@@ -70,6 +70,44 @@
   .menu-hint { margin-top: 26px; font-size: 13px; opacity: .6; }
   .title-big { font-size: 84px; font-weight: 900; letter-spacing: 8px; text-shadow: 0 6px 30px rgba(0,0,0,.7); }
   .title-sub { font-size: 18px; opacity: .8; margin-top: 12px; }
+
+  /* results / arcade high-score board */
+  @keyframes arcadeBlink { 0%,49% { opacity: 1; } 50%,100% { opacity: .12; } }
+  .blink { animation: arcadeBlink 1s steps(1) infinite; }
+  #results {
+    position: fixed; inset: 0; z-index: 25; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #fff; user-select: none;
+    background: rgba(6,10,22,.74); backdrop-filter: blur(3px);
+    font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  #results.hidden { display: none; }
+  .rboard { width: min(520px, 92vw); }
+  .rtitle { font-size: 48px; font-weight: 900; letter-spacing: 6px; text-align: center;
+    color: #ffd23c; text-shadow: 0 0 18px rgba(255,210,60,.6); margin-bottom: 14px; }
+  .rstats { display: flex; justify-content: center; gap: 26px; font-size: 13px; letter-spacing: 2px;
+    opacity: .9; margin-bottom: 22px; text-transform: uppercase; }
+  .rstats b { color: #3ca6ff; font-size: 20px; margin-left: 8px; }
+  .rentry { text-align: center; margin-bottom: 22px; }
+  .rentry.hidden { display: none; }
+  .rentry-label { font-size: 14px; letter-spacing: 3px; color: #ff5a3c; margin-bottom: 12px; }
+  .inits { display: flex; justify-content: center; gap: 16px; margin-bottom: 10px; }
+  .inits .init {
+    width: 46px; height: 60px; line-height: 60px; text-align: center; font-size: 42px; font-weight: 900;
+    border-bottom: 4px solid rgba(255,255,255,.25); color: #fff;
+  }
+  .inits .init.cur { color: #ffd23c; border-bottom-color: #ffd23c; text-shadow: 0 0 14px rgba(255,210,60,.7); }
+  .rhead, .rlist li {
+    display: grid; grid-template-columns: 44px 1fr 128px 66px; align-items: center; padding: 0 12px;
+  }
+  .rhead { font-size: 11px; letter-spacing: 2px; opacity: .5; text-transform: uppercase; padding-bottom: 6px; }
+  .rhead span:nth-child(3), .rhead span:nth-child(4) { text-align: right; }
+  .rlist { list-style: none; margin: 0; padding: 0; }
+  .rlist li { font-size: 20px; font-weight: 700; padding-top: 6px; padding-bottom: 6px; border-radius: 6px; opacity: .85; }
+  .rlist li .rk { color: #ffd23c; }
+  .rlist li .tm { text-align: right; color: #3ca6ff; }
+  .rlist li .sp { text-align: right; opacity: .8; }
+  .rlist li.me { background: rgba(255,210,60,.16); opacity: 1; }
+  .rhint { margin-top: 22px; font-size: 13px; letter-spacing: 2px; opacity: .7; text-align: center; }
 </style>
 </head>
 <body>
@@ -129,6 +167,29 @@
 <div id="title" class="hidden">
   <div class="title-big">DOWNHILL</div>
   <div class="title-sub">Press Enter / click to ride</div>
+</div>
+
+<div id="results" class="hidden">
+  <div class="rboard">
+    <div class="rtitle blink">FINISH!</div>
+    <div class="rstats">
+      <span>Time<b id="r-time">0:00.000</b></span>
+      <span>Top<b id="r-top">0</b></span>
+      <span>Dist<b id="r-dist">0</b></span>
+    </div>
+    <div id="rentry" class="rentry hidden">
+      <div class="rentry-label blink">NEW RECORD — ENTER INITIALS</div>
+      <div class="inits">
+        <span class="init" data-i="0">A</span>
+        <span class="init" data-i="1">A</span>
+        <span class="init" data-i="2">A</span>
+      </div>
+      <div class="rhint">↑ ↓ letter · ← → move · type A–Z · Enter / A to confirm</div>
+    </div>
+    <div class="rhead"><span>#</span><span>Name</span><span>Time</span><span>Mph</span></div>
+    <ol id="rlist" class="rlist"></ol>
+    <div id="rcontinue" class="rhint blink">Enter / A / click — ride again</div>
+  </div>
 </div>
 
 <script type="importmap">
@@ -462,7 +523,7 @@ const wind = (() => {
 // Input — keyboard + gamepad
 // ------------------------------------------------------------------
 const keys = {};
-addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyR') resetRun(); });
+addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyR' && gameState === 'PLAYING') resetRun(); });
 addEventListener('keyup', e => { keys[e.code] = false; });
 
 // Free-look: mouse orbits the camera around the skater, then eases back to center.
@@ -511,7 +572,10 @@ const state = {
   airborne: false,
   steerSmooth: 0,
 };
-let topSpeed = 0;
+let topSpeed = 0;                              // session best, shown in the HUD
+
+// Per-run stats that feed the results board (time / top speed / distance travelled).
+const run = { t: 0, topSpeed: 0, dist: 0 };
 
 const G = 26;              // gravity pull along slope
 const DRAG_TUCK = 0.00055; // aero drag tucked
@@ -519,12 +583,20 @@ const DRAG_UP   = 0.0022;  // aero drag standing
 const ROLL = 1.2;          // rolling resistance
 const TURN_RATE = 1.7;     // how fast heading responds
 const MAX_HEADING = 0.62;
-const CARVE_SCRUB = 2.6;   // speed lost while carving hard
+// Carve scrub — a hard carve bleeds a little speed (tire scrub + longer line + rolling
+// resistance). Applied below as accel -= |heading| * speed * (CARVE_SCRUB/100), so the
+// loss scales with both turn sharpness and speed. Real carving (not sliding) is gentle:
+// linked S-turns can roughly hold speed against gravity on a steep grade but clearly bleed
+// it on mellow ground. Calibrated so a full-lock carve at cruising speed loses ~3–6%/sec:
+// steer authority drops with speed, so at ~60–80 u/s the reachable heading is ~0.45 and
+// loss ≈ 0.45 * 9/100 ≈ 4%/sec. A stand-up slide (out of scope) would be far harsher.
+const CARVE_SCRUB = 9.0;   // speed lost while carving hard
 const OFFROAD_DRAG = 9.0;
 
 function resetRun() {
   state.u = 0.001; state.lateral = 0; state.speed = 8;
   state.heading = 0; state.height = 0; state.vy = 0; state.airborne = false;
+  run.t = 0; run.topSpeed = 0; run.dist = 0;
 }
 
 function update(dt) {
@@ -565,11 +637,17 @@ function update(dt) {
   state.u += (forward * dt) / TOTAL_LEN;
   state.lateral += strafe * dt;
 
+  // per-run stats (feed the results board). Track real distance travelled, not a
+  // constant, so a future crash-to-end can make it vary between runs.
+  run.t += dt;
+  run.dist += Math.abs(forward) * dt;
+  run.topSpeed = Math.max(run.topSpeed, state.speed);
+
   // soft wall at shoulder edge
   const limit = ROAD_HALF_WIDTH + 45;
   if (Math.abs(state.lateral) > limit) { state.lateral = Math.sign(state.lateral) * limit; state.heading *= -0.3; state.speed *= 0.6; }
 
-  if (state.u >= 0.999) resetRun(); // loop back to the top
+  if (state.u >= 0.999) finishRun('end'); // reached the bottom — results board, then loop back up
 
   topSpeed = Math.max(topSpeed, state.speed);
   return { f, slope, offroad, tuck: inp.tuck, carving: Math.abs(state.steerSmooth) > 0.25 };
@@ -781,6 +859,8 @@ function menuNav(code) {
 // Global game/menu key handling
 addEventListener('keydown', e => {
   if (gameState === 'TITLE') { if (e.code === 'Enter' || e.code === 'Space') startFromTitle(); return; }
+  if (gameState === 'ENTRY') { e.preventDefault(); handleEntryKey(e.code); return; }
+  if (gameState === 'RESULTS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') rideAgain(); return; }
   if (e.code === 'Escape') {
     if (gameState === 'PLAYING') openMenu();
     else if (gameState === 'SETTINGS') backToMain();
@@ -816,6 +896,21 @@ function pollMenuGamepad(dt) {
   const up = padEdge(p, 12), dn = padEdge(p, 13), lf = padEdge(p, 14), rt = padEdge(p, 15);
   const a = padEdge(p, 0), b = padEdge(p, 1); // consume edges regardless of state
   if (gameState === 'TITLE') { if (a) startFromTitle(); return; }
+  if (gameState === 'RESULTS') { if (a || b) rideAgain(); return; }
+  if (gameState === 'ENTRY') {
+    if (up) entryLetter(1); if (dn) entryLetter(-1);
+    if (lf) entryMove(-1);  if (rt) entryMove(1);
+    if (a) submitInitials();
+    padCooldown -= dt;
+    if (padCooldown <= 0) {
+      const ay = p.axes[1] || 0, ax = p.axes[0] || 0;
+      if (ay < -0.6)      { entryLetter(1);  padCooldown = 0.18; }
+      else if (ay > 0.6)  { entryLetter(-1); padCooldown = 0.18; }
+      else if (ax < -0.6) { entryMove(-1);   padCooldown = 0.18; }
+      else if (ax > 0.6)  { entryMove(1);    padCooldown = 0.18; }
+    }
+    return;
+  }
   if (!inMenu) return;
 
   if (up) menuNav('ArrowUp'); if (dn) menuNav('ArrowDown');
@@ -832,6 +927,133 @@ function pollMenuGamepad(dt) {
     else if (ax > 0.6) { menuNav('ArrowRight'); padCooldown = 0.18; }
   }
 }
+
+// ------------------------------------------------------------------
+// Results board + arcade high scores — shown at the bottom of every run.
+// Ranked by fastest completion time for now; each entry also stores top speed,
+// distance and score so a future rank-toggle can sort by any metric via compareBy[].
+// ------------------------------------------------------------------
+const LB_KEY = 'downhill.scores';      // localStorage key for the leaderboard
+const NAME_KEY = 'downhill.initials';  // last initials the player entered
+const LB_MAX = 8;                      // rows kept on the board
+const ENTRY_LEN = 3;                   // arcade initials
+
+// Sort seams — only `time` is wired up today; the rest are ready for a rank toggle.
+const compareBy = {
+  time:  (a, b) => a.timeS - b.timeS,      // fastest first
+  score: (a, b) => b.score - a.score,
+  top:   (a, b) => b.topSpeed - a.topSpeed,
+  dist:  (a, b) => b.dist - a.dist,
+};
+
+function loadScores() { try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; } catch { return []; } }
+function saveScores(s) { try { localStorage.setItem(LB_KEY, JSON.stringify(s)); } catch {} }
+
+let lastInitials = 'AAA';
+try { lastInitials = ((localStorage.getItem(NAME_KEY) || 'AAA') + 'AAA').slice(0, 3).toUpperCase(); } catch {}
+
+const results = {
+  el:    document.getElementById('results'),
+  entry: document.getElementById('rentry'),
+  list:  document.getElementById('rlist'),
+  cont:  document.getElementById('rcontinue'),
+  time:  document.getElementById('r-time'),
+  top:   document.getElementById('r-top'),
+  dist:  document.getElementById('r-dist'),
+  inits: document.querySelectorAll('#rentry .init'),
+};
+
+let lastRun = null;                            // snapshot of the run being shown
+const entry = { slots: ['A', 'A', 'A'], pos: 0 };
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60), ms = Math.floor((s * 1000) % 1000);
+  return `${m}:${String(sec).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+}
+
+// One entry point for "the run is over" — reached the end today; a crash could call this later.
+function finishRun(reason) {
+  lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, score: 0, reason, rank: -1 };
+  document.exitPointerLock?.();
+  results.time.textContent = fmtTime(lastRun.timeS);
+  results.top.textContent  = Math.round(lastRun.topSpeed * MPH);
+  results.dist.textContent = Math.round(lastRun.dist);
+
+  const scores = loadScores().sort(compareBy.time);
+  const qualifies = scores.length < LB_MAX || run.t < scores[scores.length - 1].timeS;
+  results.el.classList.remove('hidden');
+  if (qualifies) startEntry(scores); else showBoard(scores);
+}
+
+function renderBoard(scores) {
+  results.list.innerHTML = '';
+  scores.forEach((s, i) => {
+    const li = document.createElement('li');
+    if (lastRun && i === lastRun.rank) li.classList.add('me');
+    li.innerHTML = `<span class="rk">${i + 1}</span><span class="nm">${s.name}</span>`
+      + `<span class="tm">${fmtTime(s.timeS)}</span><span class="sp">${Math.round(s.topSpeed * MPH)}</span>`;
+    results.list.appendChild(li);
+  });
+}
+function renderEntry() {
+  results.inits.forEach((el, i) => { el.textContent = entry.slots[i]; el.classList.toggle('cur', i === entry.pos); });
+}
+
+function startEntry(scores) {   // arcade initials — only when the run placed
+  gameState = 'ENTRY';
+  entry.slots = lastInitials.split('');
+  entry.pos = 0;
+  results.entry.classList.remove('hidden');
+  results.cont.classList.add('hidden');
+  renderEntry();
+  renderBoard(scores);          // show the standing board while the player types
+}
+function showBoard(scores) {
+  gameState = 'RESULTS';
+  results.entry.classList.add('hidden');
+  results.cont.classList.remove('hidden');
+  renderBoard(scores);
+}
+
+function entryLetter(d) {
+  const c = entry.slots[entry.pos].charCodeAt(0) - 65;
+  entry.slots[entry.pos] = String.fromCharCode(65 + ((c + d + 26) % 26));
+  renderEntry();
+}
+function entryMove(d) { entry.pos = (entry.pos + d + ENTRY_LEN) % ENTRY_LEN; renderEntry(); }
+function setLetter(ch) { entry.slots[entry.pos] = ch; if (entry.pos < ENTRY_LEN - 1) entryMove(1); else renderEntry(); }
+
+function submitInitials() {
+  const name = entry.slots.join('');
+  lastInitials = name;
+  try { localStorage.setItem(NAME_KEY, name); } catch {}
+  const rec = { name, timeS: lastRun.timeS, topSpeed: lastRun.topSpeed, dist: lastRun.dist, score: lastRun.score };
+  const scores = loadScores();
+  scores.push(rec);
+  scores.sort(compareBy.time);
+  if (scores.length > LB_MAX) scores.length = LB_MAX;
+  saveScores(scores);
+  lastRun.rank = scores.indexOf(rec);   // highlight the player's row
+  showBoard(scores);
+}
+
+function rideAgain() {
+  results.el.classList.add('hidden');
+  resetRun();
+  gameState = 'PLAYING';
+}
+
+function handleEntryKey(code) {
+  if (/^Key[A-Z]$/.test(code)) { setLetter(code.slice(3)); return; }
+  if (code === 'ArrowUp')        entryLetter(1);
+  else if (code === 'ArrowDown') entryLetter(-1);
+  else if (code === 'ArrowLeft') entryMove(-1);
+  else if (code === 'ArrowRight')entryMove(1);
+  else if (code === 'Backspace') { entry.slots[entry.pos] = 'A'; entryMove(-1); }
+  else if (code === 'Enter' || code === 'Space') submitInitials();
+}
+
+results.el.addEventListener('click', () => { if (gameState === 'RESULTS') rideAgain(); });
 
 // ------------------------------------------------------------------
 // Loop
