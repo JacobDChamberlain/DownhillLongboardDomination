@@ -20,9 +20,23 @@
   .tag.carve.on { background: #3ca6ff; }
   .tag.air.on  { background: #ffd23c; color:#222; }
   .tag.off.on  { background: #9a6b3f; }
+  #kickwrap { width: 180px; height: 10px; border-radius: 6px; background: rgba(255,255,255,.15); margin: 12px 0 6px; overflow: hidden; }
+  #kickbar { height: 100%; width: 100%; background: linear-gradient(90deg,#3ca6ff,#8ce0ff); border-radius: 6px; transition: width .08s; }
+  #kickwrap.endur #kickbar { background: linear-gradient(90deg,#39d353,#b6ff9e); box-shadow: 0 0 10px #39d353; }
+  #scoreline { font-size: 15px; font-weight: 800; letter-spacing: 1px; opacity: .9; }
+  #scoreline span { color: #ffd23c; font-size: 22px; margin-left: 4px; }
+  #powerups { position: fixed; right: 24px; top: 132px; text-align: right; user-select: none; pointer-events: none; }
+  #powerups .pu { display: inline-block; margin-left: 6px; padding: 4px 10px; border-radius: 16px; font-size: 13px; font-weight: 800;
+    background: rgba(10,16,32,.55); color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+  #powerups .pu.endur { color: #b6ff9e; } #powerups .pu.death { color: #fff; } #powerups .pu.weap { color: #ff9b8a; }
+  #trickpop { position: fixed; left: 50%; top: 34%; transform: translateX(-50%); opacity: 0;
+    font-size: 34px; font-weight: 900; letter-spacing: 2px; color: #ffd23c; text-shadow: 0 0 18px rgba(255,210,60,.7);
+    pointer-events: none; user-select: none; font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
   #best { position: fixed; right: 24px; top: 20px; color:#fff; text-align:right; text-shadow:0 2px 8px rgba(0,0,0,.6); user-select:none;}
   #best .lbl { font-size: 13px; opacity:.7; letter-spacing:2px; text-transform:uppercase;}
+  #best .lbl.sub { margin-top: 10px; }
   #best .val { font-size: 34px; font-weight:800; }
+  #best small { font-size: 16px; font-weight:700; opacity:.6; margin-left:3px; }
   #help {
     position: fixed; left: 24px; top: 20px; color:#cfe3ff; font-size: 13px; line-height: 1.7;
     background: rgba(10,16,32,.45); padding: 12px 16px; border-radius: 12px; backdrop-filter: blur(6px);
@@ -97,15 +111,16 @@
   }
   .inits .init.cur { color: #ffd23c; border-bottom-color: #ffd23c; text-shadow: 0 0 14px rgba(255,210,60,.7); }
   .rhead, .rlist li {
-    display: grid; grid-template-columns: 44px 1fr 128px 66px; align-items: center; padding: 0 12px;
+    display: grid; grid-template-columns: 40px 1fr 108px 52px 56px; align-items: center; padding: 0 12px;
   }
   .rhead { font-size: 11px; letter-spacing: 2px; opacity: .5; text-transform: uppercase; padding-bottom: 6px; }
-  .rhead span:nth-child(3), .rhead span:nth-child(4) { text-align: right; }
+  .rhead span:nth-child(3), .rhead span:nth-child(4), .rhead span:nth-child(5) { text-align: right; }
   .rlist { list-style: none; margin: 0; padding: 0; }
   .rlist li { font-size: 20px; font-weight: 700; padding-top: 6px; padding-bottom: 6px; border-radius: 6px; opacity: .85; }
   .rlist li .rk { color: #ffd23c; }
   .rlist li .tm { text-align: right; color: #3ca6ff; }
   .rlist li .sp { text-align: right; opacity: .8; }
+  .rlist li .ht { text-align: right; color: #ffd23c; opacity: .85; }
   .rlist li.me { background: rgba(255,210,60,.16); opacity: 1; }
   .rhint { margin-top: 22px; font-size: 13px; letter-spacing: 2px; opacity: .7; text-align: center; }
 </style>
@@ -116,15 +131,21 @@
   <b>DOWNHILL — prototype</b><br>
   <kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd> <kbd>→</kbd> — carve<br>
   <kbd>Shift</kbd> hold — tuck (go faster)<br>
-  <kbd>Space</kbd> — ollie / jump<br>
+  <kbd>W</kbd>/<kbd>↑</kbd> — kick-push (build speed)<br>
+  <kbd>Space</kbd> — ollie · +steer/tuck for tricks<br>
   <kbd>Mouse</kbd> — look around (click to lock)<br>
   <kbd>Esc</kbd> — pause menu · <kbd>R</kbd> — reset<br>
   <kbd>M</kbd> — music on/off · <kbd>,</kbd> <kbd>.</kbd> — prev/next track<br>
-  <span style="opacity:.7">🎮 Stick carve · RT/A tuck · X jump · ☰ pause</span>
+  <span style="opacity:.7">🎮 Stick carve · RT/A tuck · X jump · B kick · ☰ pause</span>
 </div>
-<div id="best"><div class="lbl">Top speed</div><div class="val" id="bestval">0</div></div>
+<div id="best">
+  <div class="lbl">Top speed</div><div class="val" id="bestval">0</div>
+  <div class="lbl sub">Distance</div><div class="val"><span id="distval">0</span><small>m</small></div>
+</div>
 <div id="hud">
   <div id="speed">0<small>mph</small></div>
+  <div id="kickwrap"><div id="kickbar"></div></div>
+  <div id="scoreline">SCORE <span id="scoreval">0</span></div>
   <div id="tags">
     <span class="tag tuck">TUCK</span>
     <span class="tag carve">CARVE</span>
@@ -132,6 +153,8 @@
     <span class="tag off">OFF ROAD</span>
   </div>
 </div>
+<div id="powerups"></div>
+<div id="trickpop"></div>
 <div id="flash"></div>
 <div id="nowplaying">
   <div class="np-eyebrow">♪ Now playing</div>
@@ -176,6 +199,8 @@
       <span>Time<b id="r-time">0:00.000</b></span>
       <span>Top<b id="r-top">0</b></span>
       <span>Dist<b id="r-dist">0</b></span>
+      <span>Air<b id="r-air">0.0s</b></span>
+      <span>Score<b id="r-score">0</b></span>
     </div>
     <div id="rentry" class="rentry hidden">
       <div class="rentry-label blink">NEW RECORD — ENTER INITIALS</div>
@@ -186,7 +211,7 @@
       </div>
       <div class="rhint">↑ ↓ letter · ← → move · type A–Z · Enter / A to confirm</div>
     </div>
-    <div class="rhead"><span>#</span><span>Name</span><span>Time</span><span>Mph</span></div>
+    <div class="rhead"><span>#</span><span>Name</span><span>Time</span><span>Mph</span><span>Air</span></div>
     <ol id="rlist" class="rlist"></ol>
     <div id="rcontinue" class="rhint blink">Enter / A / click — ride again</div>
   </div>
@@ -275,19 +300,27 @@ scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x55663a, 0.5));
 // ------------------------------------------------------------------
 const ROAD_HALF_WIDTH = 9;
 
+const TRACK_LEN = 3500;   // world units the run spans in -Z (was 7000 — shorter track, scenery-first)
+const TRACK_DROP = 650;   // total vertical drop over the run
+const START_EASE = 0.15;  // first fraction of the track where the rolling rises are flattened
+                          // into a smooth, speed-building descent (no steep first hill to crest)
+
 function buildRoadPoints() {
   const pts = [];
   const N = 170;
   for (let i = 0; i < N; i++) {
     const t = i / (N - 1);
-    // long descent with rolling elevation — a few short rises break up the drop
-    const y = 1150 * (1 - t) - 70 * Math.sin(t * Math.PI * 6.0) - 35 * Math.sin(t * Math.PI * 12.0 + 1.7);
+    // rolling rises that break up the drop — eased in over START_EASE so the run opens
+    // with a clean descent that evens out from the top, then hits the fun terrain
+    const ease = Math.min(1, t / START_EASE);
+    const rises = 70 * Math.sin(t * Math.PI * 6.0) + 35 * Math.sin(t * Math.PI * 12.0 + 1.7);
+    const y = TRACK_DROP * (1 - t) - rises * ease;
     // winding: layered sines across several frequencies = big sweepers + tight kinks
     const x = Math.sin(t * Math.PI * 3.4 + 0.2) * 250
             + Math.sin(t * Math.PI * 6.9 + 1.2) * 120
             + Math.sin(t * Math.PI * 1.6 + 0.5) * 175
             + Math.sin(t * Math.PI * 10.5 + 2.0) * 55;
-    const z = -t * 7000; // overall run heads into -Z
+    const z = -t * TRACK_LEN; // overall run heads into -Z
     pts.push(new THREE.Vector3(x, y, z));
   }
   return pts;
@@ -341,6 +374,17 @@ function frameAt(u) {
   };
 }
 
+// Course features — hand-placed along the run (positions are u in [0,1]). Playtest-tunable.
+const GAPS  = [ { u0: 0.615, u1: 0.632 } ];   // road holes you must jump (a kicker sits right before)
+const RAMPS = [ 0.30, 0.47, 0.606 ];          // launch kickers; the last one feeds the gap
+const ITEMS = [                               // pickups; .mesh / .taken get attached when built
+  { u: 0.20, lat:  5, type: 'boost' },
+  { u: 0.38, lat: -6, type: 'endurance' },
+  { u: 0.55, lat:  0, type: 'freedeath' },
+  { u: 0.74, lat:  6, type: 'boost' },
+  { u: 0.86, lat: -5, type: 'weapon' },
+];
+
 // Road mesh (ribbon) + shoulders + edge lines
 {
   const road = [], grass = [], centerDash = [];
@@ -356,6 +400,8 @@ function frameAt(u) {
     grass.push(gl.x, gl.y - 0.4, gl.z, gr.x, gr.y - 0.4, gr.z);
     if (i < SAMPLES) {
       const b = i * 2;
+      const uSeg = i / SAMPLES;
+      if (GAPS.some(g => uSeg > g.u0 && uSeg < g.u1)) continue;   // leave a hole — the abyss shows through
       roadIdx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
       grassIdx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
     }
@@ -421,7 +467,7 @@ function frameAt(u) {
   scene.add(posts);
 
   // Layered ridgelines encircling the run — each band hazier than the last (aerial perspective)
-  const center = new THREE.Vector3(0, 0, -3000);
+  const center = new THREE.Vector3(0, 0, -TRACK_LEN / 2);
   function ridgeRing(radius, minH, maxH, color, seed) {
     const seg = 170, verts = [], idx = [];
     let rng = seed;
@@ -461,8 +507,10 @@ function frameAt(u) {
 // The skater (board + simple rider) — a group we place each frame
 // ------------------------------------------------------------------
 const skater = new THREE.Group();
-const lean = new THREE.Group(); // separate node so we can lean into carves
-skater.add(lean);
+const trickPivot = new THREE.Group(); // spin/flip trick rotation, kept separate from the carve lean
+const lean = new THREE.Group();       // separate node so we can lean into carves
+skater.add(trickPivot);
+trickPivot.add(lean);
 {
   const deck = new THREE.Mesh(
     new THREE.BoxGeometry(1.0, 0.12, 3.4),
@@ -520,6 +568,55 @@ const wind = (() => {
 })();
 
 // ------------------------------------------------------------------
+// Course-feature meshes — kicker ramps + floating pickups
+// ------------------------------------------------------------------
+{
+  // Kicker ramp: a wedge that rises in the travel direction. DoubleSide so winding is a non-issue.
+  const rampMat = new THREE.MeshStandardMaterial({ color: 0x9a5b2f, roughness: .85, side: THREE.DoubleSide });
+  for (const ru of RAMPS) {
+    const f = frameAt(ru);
+    const w = 6, L = 7, H = 2.6;                         // half-width, length, lip height
+    const A  = f.p.clone().addScaledVector(f.side,  w).addScaledVector(f.tan, -L / 2); // near-low (rider hits first)
+    const B  = f.p.clone().addScaledVector(f.side,  w).addScaledVector(f.tan,  L / 2); // far-low
+    const C  = B.clone().addScaledVector(f.up, H);                                      // far-high (lip)
+    const A2 = f.p.clone().addScaledVector(f.side, -w).addScaledVector(f.tan, -L / 2);
+    const B2 = f.p.clone().addScaledVector(f.side, -w).addScaledVector(f.tan,  L / 2);
+    const C2 = B2.clone().addScaledVector(f.up, H);
+    const verts = [];
+    [A, B, C, A2, B2, C2].forEach(p => verts.push(p.x, p.y, p.z));
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    g.setIndex([ 0,2,5, 0,5,3,   // ramp surface (A→C sloped face)
+                 0,1,2,          // left profile
+                 3,5,4,          // right profile
+                 0,3,4, 0,4,1,   // underside
+                 1,4,5, 1,5,2 ]);// back lip
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, rampMat); m.castShadow = true; m.receiveShadow = true;
+    scene.add(m);
+  }
+
+  // Floating pickups — colour + shape per type; bob/spin animated each frame in place().
+  const itemColor = { boost: 0xff6a00, endurance: 0x39d353, freedeath: 0xffffff, weapon: 0xff3b3b };
+  const itemGeo = {
+    boost:     new THREE.ConeGeometry(0.7, 1.8, 10),
+    endurance: new THREE.TorusGeometry(0.7, 0.24, 10, 20),
+    freedeath: new THREE.IcosahedronGeometry(0.9, 0),
+    weapon:    new THREE.BoxGeometry(1.1, 1.1, 1.1),
+  };
+  for (const it of ITEMS) {
+    const f = frameAt(it.u);
+    const pos = f.p.clone().addScaledVector(f.side, it.lat).addScaledVector(f.up, 2.4);
+    const c = itemColor[it.type];
+    const m = new THREE.Mesh(itemGeo[it.type], new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: .4, roughness: .4 }));
+    m.position.copy(pos); m.castShadow = true;
+    it.mesh = m; it.taken = false; it.basePos = pos.clone();
+    scene.add(m);
+  }
+}
+let itemSpin = 0;
+
+// ------------------------------------------------------------------
 // Input — keyboard + gamepad
 // ------------------------------------------------------------------
 const keys = {};
@@ -541,11 +638,12 @@ addEventListener('mousemove', e => {
 });
 
 function readInput() {
-  let steer = 0, tuck = 0, jump = false;
+  let steer = 0, tuck = 0, jump = false, kick = false;
   if (keys['KeyA'] || keys['ArrowLeft'])  steer -= 1;
   if (keys['KeyD'] || keys['ArrowRight']) steer += 1;
   if (keys['ShiftLeft'] || keys['ShiftRight']) tuck = 1;
   if (keys['Space']) jump = true;
+  if (keys['KeyW'] || keys['ArrowUp']) kick = true;
 
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   for (const p of pads) {
@@ -554,9 +652,10 @@ function readInput() {
     if (Math.abs(ax) > 0.12) steer += ax;
     if ((p.buttons[7] && p.buttons[7].value > 0.2) || (p.buttons[0] && p.buttons[0].pressed)) tuck = 1; // RT or A
     if (p.buttons[2] && p.buttons[2].pressed) jump = true; // X
+    if (p.buttons[1] && p.buttons[1].pressed) kick = true; // B
     break;
   }
-  return { steer: THREE.MathUtils.clamp(steer, -1, 1), tuck, jump };
+  return { steer: THREE.MathUtils.clamp(steer, -1, 1), tuck, jump, kick };
 }
 
 // ------------------------------------------------------------------
@@ -574,8 +673,8 @@ const state = {
 };
 let topSpeed = 0;                              // session best, shown in the HUD
 
-// Per-run stats that feed the results board (time / top speed / distance travelled).
-const run = { t: 0, topSpeed: 0, dist: 0 };
+// Per-run stats that feed the results board (time / top speed / distance / hangtime / score).
+const run = { t: 0, topSpeed: 0, dist: 0, airTime: 0, score: 0 };
 
 const G = 26;              // gravity pull along slope
 const DRAG_TUCK = 0.00055; // aero drag tucked
@@ -593,14 +692,82 @@ const MAX_HEADING = 0.62;
 const CARVE_SCRUB = 9.0;   // speed lost while carving hard
 const OFFROAD_DRAG = 9.0;
 
+// --- Kick-push: tap to add speed. Costs stamina, has a cooldown, and does nothing
+//     above KICK_MAX_SPEED (aero/tuck takes over) so you can't kick-push forever.
+const KICK_IMPULSE   = 6;      // speed (u/s) added per push
+const KICK_COST      = 0.28;   // stamina spent per push (meter is 0..1)
+const KICK_REGEN     = 0.35;   // stamina regained per second
+const KICK_CD        = 0.32;   // min seconds between pushes
+const KICK_MAX_SPEED = 55;     // above this, kicking does nothing
+const push = { meter: 1, cd: 0 };
+let kickWasDown = false;
+
+// --- Tricks: jump + a held direction/tuck picks a trick; points scored on landing.
+const SPIN_RATE = 7.5;         // radians/sec while spinning in the air
+const trick = { type: null, spin: 0, dir: 1, air: 0 };
+
+// --- Ramps / gaps: a kicker launches you; you need speed to clear a gap or you fall.
+const RAMP_BASE   = 6;         // base launch vy off a kicker
+const RAMP_FACTOR = 0.30;      // + this * speed (need speed to clear gaps)
+
+// --- Power-ups
+const ROCKET_BOOST   = 22;     // instant speed added by a boost pickup
+const ENDURANCE_SECS = 10;     // kick-push stamina won't drain for this long
+const ITEM_PICK_R    = 3.5;    // lateral grab radius for pickups
+const WEAPONS = ['FIST', 'STICK', 'WATER BOTTLE', 'ROCK']; // combat — stubbed until multiplayer
+let enduranceT = 0, freeDeath = false, weaponTier = 0;
+let curInput = { steer: 0, tuck: 0, jump: false, kick: false };
+
 function resetRun() {
   state.u = 0.001; state.lateral = 0; state.speed = 8;
   state.heading = 0; state.height = 0; state.vy = 0; state.airborne = false;
-  run.t = 0; run.topSpeed = 0; run.dist = 0;
+  run.t = 0; run.topSpeed = 0; run.dist = 0; run.airTime = 0; run.score = 0;
+  push.meter = 1; push.cd = 0; kickWasDown = false;
+  trick.type = null; trick.spin = 0; trick.air = 0;
+  enduranceT = 0; freeDeath = false; weaponTier = 0;
+  for (const it of ITEMS) { if (it.mesh) it.mesh.visible = true; it.taken = false; }
+}
+
+// Gameplay actions (declarations hoist, so update() can call these).
+function takeoff(vy) { if (state.airborne) return; state.airborne = true; state.vy = vy; armTrick(); }
+function armTrick() {
+  trick.spin = 0; trick.air = 0;
+  if (Math.abs(state.steerSmooth) > 0.35) { trick.type = 'spin'; trick.dir = Math.sign(state.steerSmooth); }
+  else if (curInput.tuck) trick.type = 'grab';
+  else trick.type = 'ollie';
+}
+function scoreTrick() {
+  if (!trick.type) return;
+  let pts = 0, label = '';
+  if (trick.type === 'spin') {
+    const halves = Math.round(Math.abs(trick.spin) / Math.PI);   // count 180s landed
+    if (halves >= 1) { pts = halves * 150; label = (halves * 180) + '° SPIN'; }
+  } else if (trick.type === 'grab' && trick.air > 0.35) {
+    pts = Math.round(trick.air * 400); label = 'GRAB';
+  } else if (trick.air > 0.45) {
+    pts = Math.round(trick.air * 120); label = 'BIG AIR';
+  }
+  trick.type = null;
+  if (pts > 0) { run.score += pts; showTrick(label + '  +' + pts); }
+}
+function collectItem(it) {
+  it.taken = true; it.mesh.visible = false;
+  if (it.type === 'boost')          { state.speed += ROCKET_BOOST; flash(0.25); showTrick('ROCKET BOOST!'); }
+  else if (it.type === 'endurance') { enduranceT = ENDURANCE_SECS; showTrick('ENDURANCE +'); }
+  else if (it.type === 'freedeath') { freeDeath = true; showTrick('FREE DEATH'); }
+  else if (it.type === 'weapon')    { weaponTier = Math.min(weaponTier + 1, WEAPONS.length - 1); showTrick('GOT ' + WEAPONS[weaponTier]); }
+}
+function fallInGap(g) {
+  if (freeDeath) { freeDeath = false; state.u = g.u1 + 0.004; state.height = 0; state.airborne = false; state.vy = 0; showTrick('FREE DEATH USED'); flash(0.2); return; }
+  state.u = Math.max(0.001, g.u0 - 0.03);   // respawn just before the kicker so you can retry
+  state.lateral *= 0.3; state.speed *= 0.5;
+  state.height = 0; state.airborne = false; state.vy = 0;
+  flash(0.4);
 }
 
 function update(dt) {
   const inp = readInput();
+  curInput = inp;
   state.steerSmooth += (inp.steer - state.steerSmooth) * Math.min(1, dt * 12);
 
   const f = frameAt(state.u);
@@ -623,19 +790,40 @@ function update(dt) {
 
   state.speed = Math.max(0, state.speed + accel * dt);
 
-  // jump / air
-  if (inp.jump && !state.airborne) { state.airborne = true; state.vy = Math.min(14, 8 + state.speed * 0.04); }
+  // kick-push — tap adds speed; costs stamina, has a cooldown, and does nothing at high speed
+  push.cd = Math.max(0, push.cd - dt);
+  enduranceT = Math.max(0, enduranceT - dt);
+  push.meter = enduranceT > 0 ? 1 : Math.min(1, push.meter + KICK_REGEN * dt);
+  const kickPressed = inp.kick && !kickWasDown; kickWasDown = inp.kick;
+  if (kickPressed && !state.airborne && push.cd <= 0 && state.speed < KICK_MAX_SPEED
+      && (enduranceT > 0 || push.meter >= KICK_COST)) {
+    state.speed += KICK_IMPULSE;
+    if (enduranceT <= 0) push.meter -= KICK_COST;
+    push.cd = KICK_CD;
+  }
+
+  // jump / air + tricks
+  if (inp.jump) takeoff(Math.min(14, 8 + state.speed * 0.04));
   if (state.airborne) {
+    run.airTime += dt;   // hangtime — wheels off the ground
+    trick.air += dt;
+    if (trick.type === 'spin') trick.spin += SPIN_RATE * trick.dir * dt;
     state.vy -= 34 * dt;
     state.height += state.vy * dt;
-    if (state.height <= 0) { state.height = 0; state.airborne = false; state.vy = 0; if (state.speed > 4) flash(0.15); }
+    if (state.height <= 0) { state.height = 0; state.airborne = false; state.vy = 0; scoreTrick(); if (state.speed > 4) flash(0.15); }
   }
 
   // advance along road + lateral, projected onto tangent/side
   const forward = state.speed * Math.cos(state.heading);
   const strafe  = state.speed * Math.sin(state.heading);
+  const uPrev = state.u;
   state.u += (forward * dt) / TOTAL_LEN;
   state.lateral += strafe * dt;
+
+  // course features crossed this step (ramps / pickups), then gap check on the new position
+  for (const ru of RAMPS) if (uPrev < ru && state.u >= ru && !state.airborne) takeoff(RAMP_BASE + state.speed * RAMP_FACTOR);
+  for (const it of ITEMS) if (!it.taken && uPrev < it.u && state.u >= it.u && Math.abs(state.lateral - it.lat) < ITEM_PICK_R) collectItem(it);
+  for (const g of GAPS) if (!state.airborne && state.height <= 0.1 && state.u > g.u0 && state.u < g.u1) { fallInGap(g); break; }
 
   // per-run stats (feed the results board). Track real distance travelled, not a
   // constant, so a future crash-to-end can make it vary between runs.
@@ -672,6 +860,22 @@ function place(info) {
   // lean into the carve
   lean.rotation.z = -state.steerSmooth * 0.5;
   lean.rotation.x = info.tuck ? 0.18 : 0;
+
+  // trick pose in the air (spin about up, grab = tuck-and-hold); settle back on the ground
+  if (state.airborne) {
+    trickPivot.rotation.y = trick.spin;
+    trickPivot.rotation.x = trick.type === 'grab' ? 0.5 : 0;
+  } else {
+    trickPivot.rotation.y *= 0.7;
+    trickPivot.rotation.x *= 0.7;
+  }
+
+  // floating pickups bob and spin
+  itemSpin += dt;
+  for (const it of ITEMS) {
+    const m = it.mesh;
+    if (m && m.visible) { m.rotation.y = itemSpin * 2; m.position.y = it.basePos.y + Math.sin(itemSpin * 3 + it.u * 12) * 0.3; }
+  }
 
   // chase camera
   const speedT = THREE.MathUtils.clamp(state.speed / 130, 0, 1);
@@ -726,18 +930,40 @@ const el = {
   carve: document.querySelector('.tag.carve'),
   air: document.querySelector('.tag.air'),
   off: document.querySelector('.tag.off'),
+  dist: document.getElementById('distval'),
+  score: document.getElementById('scoreval'),
+  kickwrap: document.getElementById('kickwrap'),
+  kickbar: document.getElementById('kickbar'),
+  powerups: document.getElementById('powerups'),
+  trickpop: document.getElementById('trickpop'),
   flash: document.getElementById('flash'),
 };
 const MPH = 1.15; // units/sec -> "mph" fudge for readout
-let flashT = 0;
+let flashT = 0, trickPopT = 0;
 function flash(v) { flashT = v; }
+function showTrick(text) { el.trickpop.textContent = text; trickPopT = 1.4; }
 function drawHud(info) {
   el.speed.innerHTML = Math.round(state.speed * MPH) + '<small>mph</small>';
   el.best.textContent = Math.round(topSpeed * MPH);
+  el.dist.textContent = Math.round(run.dist);
+  el.score.textContent = run.score;
   el.tuck.classList.toggle('on', !!info.tuck);
   el.carve.classList.toggle('on', info.carving);
   el.air.classList.toggle('on', state.airborne);
   el.off.classList.toggle('on', info.offroad);
+
+  // kick-push stamina meter + active power-ups
+  el.kickbar.style.width = (push.meter * 100) + '%';
+  el.kickwrap.classList.toggle('endur', enduranceT > 0);
+  let pu = '';
+  if (enduranceT > 0) pu += `<span class="pu endur">⚡ ${enduranceT.toFixed(1)}s</span>`;
+  if (freeDeath)      pu += `<span class="pu death">💀 FREE</span>`;
+  if (weaponTier > 0) pu += `<span class="pu weap">${WEAPONS[weaponTier]}</span>`;
+  el.powerups.innerHTML = pu;
+
+  // trick popup fade
+  if (trickPopT > 0) { trickPopT = Math.max(0, trickPopT - dt); el.trickpop.style.opacity = Math.min(1, trickPopT); }
+
   if (flashT > 0) { flashT = Math.max(0, flashT - dt); }
   el.flash.style.boxShadow = `inset 0 0 220px rgba(255,255,255,${flashT})`;
 }
@@ -944,6 +1170,7 @@ const compareBy = {
   score: (a, b) => b.score - a.score,
   top:   (a, b) => b.topSpeed - a.topSpeed,
   dist:  (a, b) => b.dist - a.dist,
+  air:   (a, b) => (b.airTime || 0) - (a.airTime || 0),
 };
 
 function loadScores() { try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; } catch { return []; } }
@@ -960,6 +1187,8 @@ const results = {
   time:  document.getElementById('r-time'),
   top:   document.getElementById('r-top'),
   dist:  document.getElementById('r-dist'),
+  air:   document.getElementById('r-air'),
+  score: document.getElementById('r-score'),
   inits: document.querySelectorAll('#rentry .init'),
 };
 
@@ -973,11 +1202,13 @@ function fmtTime(s) {
 
 // One entry point for "the run is over" — reached the end today; a crash could call this later.
 function finishRun(reason) {
-  lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, score: 0, reason, rank: -1 };
+  lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, reason, rank: -1 };
   document.exitPointerLock?.();
   results.time.textContent = fmtTime(lastRun.timeS);
   results.top.textContent  = Math.round(lastRun.topSpeed * MPH);
   results.dist.textContent = Math.round(lastRun.dist);
+  results.air.textContent  = lastRun.airTime.toFixed(1) + 's';
+  results.score.textContent = lastRun.score;
 
   const scores = loadScores().sort(compareBy.time);
   const qualifies = scores.length < LB_MAX || run.t < scores[scores.length - 1].timeS;
@@ -991,7 +1222,8 @@ function renderBoard(scores) {
     const li = document.createElement('li');
     if (lastRun && i === lastRun.rank) li.classList.add('me');
     li.innerHTML = `<span class="rk">${i + 1}</span><span class="nm">${s.name}</span>`
-      + `<span class="tm">${fmtTime(s.timeS)}</span><span class="sp">${Math.round(s.topSpeed * MPH)}</span>`;
+      + `<span class="tm">${fmtTime(s.timeS)}</span><span class="sp">${Math.round(s.topSpeed * MPH)}</span>`
+      + `<span class="ht">${(s.airTime || 0).toFixed(1)}s</span>`;
     results.list.appendChild(li);
   });
 }
@@ -1027,7 +1259,7 @@ function submitInitials() {
   const name = entry.slots.join('');
   lastInitials = name;
   try { localStorage.setItem(NAME_KEY, name); } catch {}
-  const rec = { name, timeS: lastRun.timeS, topSpeed: lastRun.topSpeed, dist: lastRun.dist, score: lastRun.score };
+  const rec = { name, timeS: lastRun.timeS, topSpeed: lastRun.topSpeed, dist: lastRun.dist, airTime: lastRun.airTime, score: lastRun.score };
   const scores = loadScores();
   scores.push(rec);
   scores.sort(compareBy.time);

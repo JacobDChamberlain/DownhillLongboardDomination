@@ -1,0 +1,62 @@
+# Downhill — Upgrade Roadmap
+
+Living triage of the upgrade wishlist for the `skateGame` prototype (`index.html`,
+single-file Three.js r160, no build step, deployed as a static site). Keep this
+current so any session can pick up where the last left off.
+
+The prototype's job is **fast gameplay iteration** — mechanics designed here
+transfer 1:1 to Unity/Unreal later. Graphics fidelity, character animation, and
+multiplayer do *not* transfer well and are where a real engine earns its keep, so
+we deliberately defer those.
+
+---
+
+## ✅ Already done
+- Carve scrub tuned to realistic amounts (`CARVE_SCRUB`)
+- Arcade results board + high scores (localStorage), initials entry, `finishRun()` hook
+- Distance readout under top speed (HUD)
+- First hill eased so it opens smoothly (`START_EASE`) — big drop after preserved
+- Track shortened ~half (`TRACK_LEN` / `TRACK_DROP`) — scenery-first
+- Hangtime tracked per run + shown on the scoreboard (`Air` column)
+
+---
+
+## 🟢 Do now — stays in single-file Three.js, no backend, no engine
+Kick-push, jump tricks (procedural), ramps, giant gaps + fall-reset, item pickups
+(boost/endurance/free-death), wireframe/glitch mode, blinking-chaos sky,
+audio-visualizer sky, starry/meme skies (need image assets), HUGE cliffs, bridges
+over water, carve-down-mountainside sections, crowds at start/finish, cheering SFX
+(needs audio asset), customizable board/player (colors), more detailed scenery,
+the full post-processing visual pass (bloom / vignette / motion blur / chromatic
+aberration; HDRI + textured tarmac need asset files).
+
+## 🟡 Needs a backend or a fundamental architecture change
+- **Global scoreboard** — needs a backend, *not* an engine. Cheapest: a BaaS
+  (Supabase / Firebase) or tiny serverless + KV. Worth doing even in prototype.
+- **Character animations** (walk-with-board, get-on/off, dances, polished tricks)
+  — rigged glTF + `AnimationMixer`; the authoring pipeline is the real cost.
+- **Multiplayer** — real-time netcode + server (WebSockets/WebRTC, Colyseus/
+  Geckos.io). Biggest lift; fundamental architecture change.
+- **Attack items that hit other players** — rides entirely on multiplayer.
+
+## 🔴 Engine-territory (possible in web, but don't over-invest)
+Almost nothing here is literally impossible in Three.js — 🔴 means "the web fights
+you hardest here and your Unity/Unreal endgame pays off, so don't sink effort in."
+- AAA "really beautiful graphics" (Nanite/Lumen-tier) — a quality ceiling.
+- High-quality character animation & IK — creation/blending/retargeting tooling.
+- The whole system at shippable quality at once (MP + combat + physics + animation
+  + content pipeline).
+
+---
+
+## Build order (checked off as completed)
+
+- [x] **1. Gameplay mechanics** — kick-push + meter/cooldown, procedural jump-tricks
+  wired to score, ramps, giant gaps with fall-reset, item-pickup framework
+  (rocket boost / endurance+ / free-death; attack items stubbed for multiplayer).
+- [ ] **2. Visual-chaos toys** — wireframe/glitch mode, blinking-chaos sky,
+  audio-visualizer sky, starry/meme skies (image ones need asset files).
+- [ ] **3. World & scenery** — HUGE cliffs, bridges over water,
+  carve-down-mountainside sections, crowds at start/finish, more detail.
+- [ ] **4. Full visual pass** — post-processing (bloom, vignette, motion blur,
+  chromatic aberration); HDRI + textured tarmac need asset files added.
