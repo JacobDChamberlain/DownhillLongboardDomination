@@ -17,7 +17,15 @@ was split out on purpose. Everything from the lean pass stays — this is additi
 
 ## Scope — what the full pass adds
 
-### 1. Post-processing stack (`EffectComposer`)
+### 1. Post-processing stack (`EffectComposer`)  ✅ done
+Landed: half-res bloom, radial speed blur + chromatic aberration aimed at the travel
+direction, grade/vignette/grain/letterbox in one finish pass (tone mapping folded in, no
+`OutputPass`). Tunables at the top of the "Post-processing" block: `BLOOM_STRENGTH`,
+`BLOOM_THRESHOLD`, `MOTION_BLUR`, `CHROMA_MAX`, `VIGNETTE`, `GRAIN`. Also added trailer
+cameras (`C`: chase / drone / trackside), clean-HUD + 2.39:1 letterbox (`H`), and a
+Settings → Cinematic FX toggle. Perf note: MSAA on the half-float target cost ~35fps at
+2x DPR, so it's only enabled on 1x displays.
+
 - `RenderPass` → `UnrealBloomPass` (subtle bloom on sun/highlights)
 - Vignette (darkened edges to focus the frame)
 - **Motion blur** and/or radial blur scaled by `speedT` — the biggest speed upgrade

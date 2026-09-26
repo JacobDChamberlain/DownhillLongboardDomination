@@ -43,6 +43,8 @@
     user-select:none; max-width: 260px;
   }
   #help b { color:#fff; }
+  body.clean #help, body.clean #best, body.clean #hud, body.clean #powerups,
+  body.clean #nowplaying, body.clean #transport { display: none; }
   kbd { background:#223; border:1px solid #456; border-bottom-width:2px; border-radius:5px; padding:1px 6px; font-size:12px; }
   #flash { position: fixed; inset:0; pointer-events:none; box-shadow: inset 0 0 220px rgba(255,255,255,0); transition: box-shadow .3s; }
   #nowplaying {
@@ -136,6 +138,7 @@
   <kbd>Mouse</kbd> — look around (click to lock)<br>
   <kbd>Esc</kbd> — pause menu · <kbd>R</kbd> — reset<br>
   <kbd>M</kbd> — music on/off · <kbd>,</kbd> <kbd>.</kbd> — prev/next track<br>
+  <kbd>C</kbd> — camera (chase / drone / trackside) · <kbd>H</kbd> — hide HUD / letterbox<br>
   <span style="opacity:.7">🎮 Stick carve · RT/A tuck · X jump · B kick · ☰ pause</span>
 </div>
 <div id="best">
@@ -181,6 +184,7 @@
     <ul class="menu-list">
       <li data-setting="volume">Music Volume <span class="val">70</span></li>
       <li data-setting="sens">Look Sensitivity <span class="val">100</span></li>
+      <li data-setting="fx">Cinematic FX <span class="val">ON</span></li>
       <li data-action="back">Back</li>
     </ul>
     <div class="menu-hint">← → to adjust · Enter / A to confirm · Esc to go back</div>
@@ -227,6 +231,10 @@
 <script type="module">
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 // ------------------------------------------------------------------
 // Scene, camera, renderer
@@ -256,7 +264,7 @@ const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 60
 const sun = new THREE.DirectionalLight(0xffe3b3, 3.2);
 sun.position.set(-260, 300, 180);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(4096, 4096);   // crisper rider/tree shadows
 sun.shadow.camera.near = 10; sun.shadow.camera.far = 1200;
 sun.shadow.camera.left = -220; sun.shadow.camera.right = 220;
 sun.shadow.camera.top = 220; sun.shadow.camera.bottom = -220;
@@ -293,6 +301,119 @@ scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x55663a, 0.5));
       }`
   });
   scene.add(new THREE.Mesh(geo, mat));
+}
+
+
+// ------------------------------------------------------------------
+// Post-processing — cinematic pass
+//   HDR scene → bloom → speed blur + chromatic aberration (linear) →
+//   finish: tone map + sRGB, then grade, vignette, grain, letterbox (one pass)
+// ------------------------------------------------------------------
+const BLOOM_STRENGTH  = 0.35;   // glow on sun / highlights / pickups
+const BLOOM_THRESHOLD = 1.0;    // only HDR-bright pixels bloom (linear, pre-tonemap)
+const MOTION_BLUR     = 1.0;    // radial speed-blur multiplier (0 = off)
+const CHROMA_MAX      = 0.006;  // chromatic aberration at top speed
+const VIGNETTE        = 0.38;   // edge darkening
+const GRAIN           = 0.022;  // film grain amplitude
+
+// MSAA on a half-float target is the single most expensive thing here (~60→25fps at 2x on
+// an M-series Mac). On retina the 2x pixel ratio already hides stair-stepping, so only 1x
+// displays pay for 4x MSAA.
+const composerRT = new THREE.WebGLRenderTarget(1, 1, {
+  type: THREE.HalfFloatType, samples: renderer.getPixelRatio() >= 2 ? 0 : 4 });
+const composer = new EffectComposer(renderer, composerRT);
+composer.setPixelRatio(renderer.getPixelRatio());
+composer.setSize(innerWidth, innerHeight);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), BLOOM_STRENGTH, 0.6, BLOOM_THRESHOLD);
+{ // bloom at half resolution — it's a soft glow anyway, and it's ~4x cheaper
+  const setSize = bloomPass.setSize.bind(bloomPass);
+  bloomPass.setSize = (w, h) => setSize(Math.round(w / 2), Math.round(h / 2));
+}
+composer.addPass(bloomPass);
+
+const speedPass = new ShaderPass({
+  uniforms: {
+    tDiffuse: { value: null },
+    uCenter:  { value: new THREE.Vector2(0.5, 0.5) },
+    uAmount:  { value: 0 },
+    uCA:      { value: 0 },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform vec2 uCenter; uniform float uAmount; uniform float uCA;
+    varying vec2 vUv;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      vec2 dir = vUv - uCenter;
+      float d = length(dir);
+      float mask = smoothstep(0.06, 0.6, d);          // rider / vanishing point stay sharp
+      float blur = uAmount * mask * 0.11;
+      float ca = uCA * d;
+      float j = hash(vUv * 731.0);                     // jitter hides sample banding
+      vec3 acc = vec3(0.0);
+      const int N = 8;
+      for (int i = 0; i < N; i++) {
+        float s = 1.0 - blur * (float(i) + j) / float(N);
+        acc.r += texture2D(tDiffuse, uCenter + dir * (s + ca)).r;
+        acc.g += texture2D(tDiffuse, uCenter + dir * s).g;
+        acc.b += texture2D(tDiffuse, uCenter + dir * (s - ca)).b;
+      }
+      gl_FragColor = vec4(acc / float(N), 1.0);
+    }`,
+});
+composer.addPass(speedPass);
+
+const finishPass = new ShaderPass({
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime:    { value: 0 },
+    uVig:     { value: VIGNETTE },
+    uGrain:   { value: GRAIN },
+    uBars:    { value: 0 },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float uTime, uVig, uGrain, uBars;
+    varying vec2 vUv;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      // the finish pass draws to the screen, so three injects renderer.toneMapping (ACES) +
+      // exposure and the sRGB output transform for these includes — no separate OutputPass
+      gl_FragColor = vec4(texture2D(tDiffuse, vUv).rgb, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      vec3 col = gl_FragColor.rgb;
+      // grade: gentle saturation lift + warm highlights / cool shadows
+      float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      col = mix(vec3(l), col, 1.08);
+      col *= mix(vec3(0.97, 0.99, 1.03), vec3(1.03, 1.0, 0.96), smoothstep(0.2, 0.8, l));
+      // vignette
+      float r = length((vUv - 0.5) * vec2(1.0, 0.85));
+      col *= 1.0 - uVig * smoothstep(0.3, 0.85, r);
+      // film grain (display space, strongest in mids)
+      float g = hash(vUv * 1024.0 + fract(uTime) * 97.0) - 0.5;
+      col += g * uGrain * (1.0 - abs(l - 0.5) * 1.2);
+      // cinema letterbox
+      if (vUv.y < uBars || vUv.y > 1.0 - uBars) col = vec3(0.0);
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+});
+composer.addPass(finishPass);
+
+const fx = { on: true, bars: 0, barsTarget: 0 };
+const _proj = new THREE.Vector3();
+// Aim the radial blur at the point we're travelling toward, scaled by speed.
+function setSpeedFx(pos, dir, speedT, blurMul) {
+  _proj.copy(pos).addScaledVector(dir, 200).project(camera);
+  speedPass.uniforms.uCenter.value.set(
+    THREE.MathUtils.clamp(_proj.x * 0.5 + 0.5, 0.2, 0.8),
+    THREE.MathUtils.clamp(_proj.y * 0.5 + 0.5, 0.2, 0.8));
+  const t = Math.max(0, speedT - 0.3) / 0.7;       // kicks in above ~40 mph
+  speedPass.uniforms.uAmount.value = t * t * MOTION_BLUR * blurMul;
+  speedPass.uniforms.uCA.value = t * t * CHROMA_MAX * blurMul;
+  speedPass.enabled = t > 0 && blurMul > 0;         // skip the pass entirely when idle
 }
 
 // ------------------------------------------------------------------
@@ -386,6 +507,7 @@ const ITEMS = [                               // pickups; .mesh / .taken get att
 ];
 
 // Road mesh (ribbon) + shoulders + edge lines
+const groundMeshes = [];
 {
   const road = [], grass = [], centerDash = [];
   const roadIdx = [], grassIdx = [];
@@ -413,8 +535,9 @@ const ITEMS = [                               // pickups; .mesh / .taken get att
     const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0 }));
     m.receiveShadow = true; return m;
   };
-  scene.add(mk(grass, grassIdx, 0x4f7233, 1.0));
-  scene.add(mk(road,  roadIdx,  0x2b2e35, 0.92));
+  const grassMesh = mk(grass, grassIdx, 0x4f7233, 1.0), roadMesh = mk(road, roadIdx, 0x2b2e35, 0.92);
+  scene.add(grassMesh, roadMesh);
+  groundMeshes.push(grassMesh, roadMesh);   // trackside cam line-of-sight checks
 
   // center dashes
   const dashMat = new THREE.MeshStandardMaterial({ color: 0xf4d03f, roughness: .6 });
@@ -608,7 +731,7 @@ const wind = (() => {
     const f = frameAt(it.u);
     const pos = f.p.clone().addScaledVector(f.side, it.lat).addScaledVector(f.up, 2.4);
     const c = itemColor[it.type];
-    const m = new THREE.Mesh(itemGeo[it.type], new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: .4, roughness: .4 }));
+    const m = new THREE.Mesh(itemGeo[it.type], new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.6, roughness: .4 }));
     m.position.copy(pos); m.castShadow = true;
     it.mesh = m; it.taken = false; it.basePos = pos.clone();
     scene.add(m);
@@ -620,7 +743,13 @@ let itemSpin = 0;
 // Input — keyboard + gamepad
 // ------------------------------------------------------------------
 const keys = {};
-addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyR' && gameState === 'PLAYING') resetRun(); });
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (gameState !== 'PLAYING' || e.repeat) return;
+  if (e.code === 'KeyR') resetRun();
+  else if (e.code === 'KeyC') cycleCam();
+  else if (e.code === 'KeyH') cycleHud();
+});
 addEventListener('keyup', e => { keys[e.code] = false; });
 
 // Free-look: mouse orbits the camera around the skater, then eases back to center.
@@ -846,6 +975,23 @@ function update(dt) {
 // ------------------------------------------------------------------
 const camPos = new THREE.Vector3(0, 200, 200);
 const camLook = new THREE.Vector3();
+// Camera modes — C cycles. 'drone' and 'trackside' are for capturing trailer footage.
+const CAM_MODES = ['chase', 'drone', 'trackside'];
+let camMode = 'chase';
+const cine = { t: 0, u: 0, spot: null, side: 0, off: null, losT: 0, blocked: 0 };
+const losRay = new THREE.Raycaster();
+function cycleCam() {
+  camMode = CAM_MODES[(CAM_MODES.indexOf(camMode) + 1) % CAM_MODES.length];
+  cine.spot = null; cine.off = null;
+  showTrick('CAM: ' + camMode.toUpperCase());
+}
+// H cycles: HUD → clean (no HUD) → clean + 2.39:1 letterbox
+let hudMode = 0;
+function cycleHud() {
+  hudMode = (hudMode + 1) % 3;
+  document.body.classList.toggle('clean', hudMode > 0);
+  fx.barsTarget = hudMode === 2 ? 1 : 0;
+}
 
 function place(info) {
   const f = frameAt(state.u);
@@ -897,20 +1043,61 @@ function place(info) {
     lookTarget = pos.clone().add(lookTarget.sub(pos).applyQuaternion(q));
   }
 
-  camPos.lerp(want, Math.min(1, dt * 4));
-  camLook.lerp(lookTarget, Math.min(1, dt * 6));
+  let targetFov = 64 + speedT * 34 + (info.tuck ? 6 : 0);
+  let shake = speedT * speedT * 0.5, blurMul = 1;
+  if (camMode === 'drone') {
+    // low, wide, slowly drifting orbit off the rider's shoulder — heavy smoothing, no shake
+    cine.t += dt;
+    const ang = 0.55 + Math.sin(cine.t * 0.18) * 0.45;
+    const off = dir.clone().multiplyScalar(-Math.cos(ang) * 16).addScaledVector(f.side, Math.sin(ang) * 16);
+    off.addScaledVector(f.up, 3 + Math.sin(cine.t * 0.11) * 1.5);
+    // smooth the offset (not the world position) so the rider stays framed at any speed
+    if (!cine.off) cine.off = camPos.clone().sub(pos);
+    cine.off.lerp(off, Math.min(1, dt * 1.6));
+    camPos.copy(pos).add(cine.off);
+    camLook.copy(pos).addScaledVector(dir, 6).addScaledVector(f.up, 1.2);
+    targetFov = 50 + speedT * 12; shake = 0; blurMul = 0.5;
+  } else if (camMode === 'trackside') {
+    // TV-broadcast style: a fixed camera beside the road ahead; hop to a new spot once passed
+    const du = (state.u - cine.u) * TOTAL_LEN;
+    // re-check line of sight a few times a second; hop early if a crest hides the rider
+    cine.losT -= dt;
+    if (cine.spot && cine.losT <= 0) {
+      cine.losT = 0.2;
+      const toRider = pos.clone().addScaledVector(f.up, 1).sub(cine.spot);
+      losRay.set(cine.spot, toRider.clone().normalize());
+      losRay.far = toRider.length() - 1.5;
+      cine.blocked = losRay.intersectObjects(groundMeshes, false).length ? cine.blocked + 1 : 0;
+    }
+    if (!cine.spot || du > 25 || du < -400 || cine.blocked >= 3) {
+      cine.u = state.u + (40 + Math.random() * 35) / TOTAL_LEN;
+      const g = frameAt(cine.u);
+      cine.side = cine.side ? -cine.side : 1;
+      cine.spot = g.p.clone().addScaledVector(g.side, cine.side * (ROAD_HALF_WIDTH + 3 + Math.random() * 6)).addScaledVector(g.up, 4 + Math.random() * 6);
+      cine.blocked = 0; cine.losT = 0.4;
+      camPos.copy(cine.spot); camLook.copy(pos);
+    }
+    camPos.copy(cine.spot);
+    camLook.lerp(pos.clone().addScaledVector(f.up, 1.2), Math.min(1, dt * 8));
+    const dist = camPos.distanceTo(pos);
+    targetFov = THREE.MathUtils.clamp(900 / Math.max(dist, 1), 18, 60);   // zoom lens tracks the rider
+    shake = 0; blurMul = 0;
+  } else {
+    camPos.lerp(want, Math.min(1, dt * 4));
+    camLook.lerp(lookTarget, Math.min(1, dt * 6));
+  }
   camera.position.copy(camPos);
   camera.lookAt(camLook);
 
   // FOV kick for sense of speed
-  const targetFov = 64 + speedT * 34 + (info.tuck ? 6 : 0);
   camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 3);
   camera.updateProjectionMatrix();
 
   // speed shake — subtle camera jitter that grows with velocity
-  const shake = speedT * speedT * 0.5;
   camera.position.x += (Math.random() - 0.5) * shake;
   camera.position.y += (Math.random() - 0.5) * shake;
+  camera.updateMatrixWorld();
+  setSpeedFx(pos, dir, speedT, blurMul);
 
   // wind streaks stream past, aligned with travel
   wind(pos, skater.quaternion, state.speed, speedT, dt);
@@ -1042,7 +1229,7 @@ audio.volume = settings.volume / 100;
 
 const menuEl = document.getElementById('menu');
 const titleEl = document.getElementById('title');
-const items = { main: ['resume', 'settings', 'quit'], settings: ['volume', 'sens', 'back'] };
+const items = { main: ['resume', 'settings', 'quit'], settings: ['volume', 'sens', 'fx', 'back'] };
 const curScreen = () => (gameState === 'SETTINGS' ? 'settings' : 'main');
 const curItems = () => items[curScreen()];
 
@@ -1056,6 +1243,7 @@ function renderMenu() {
 function renderValues() {
   menuEl.querySelector('[data-setting="volume"] .val').textContent = settings.volume;
   menuEl.querySelector('[data-setting="sens"] .val').textContent = settings.sens;
+  menuEl.querySelector('[data-setting="fx"] .val').textContent = fx.on ? 'ON' : 'OFF';
 }
 
 function openMenu()  { gameState = 'PAUSED'; menuIndex = 0; document.exitPointerLock?.(); menuEl.classList.remove('hidden'); showPanel('main'); renderMenu(); }
@@ -1071,6 +1259,7 @@ function activate(item) {
 function adjustSetting(item, dir) {
   if (item === 'volume') { settings.volume = THREE.MathUtils.clamp(settings.volume + dir * 5, 0, 100); audio.volume = settings.volume / 100; }
   else if (item === 'sens') { settings.sens = THREE.MathUtils.clamp(settings.sens + dir * 5, 25, 300); lookSensMul = settings.sens / 100; }
+  else if (item === 'fx') fx.on = !fx.on;
   renderValues();
 }
 function menuNav(code) {
@@ -1300,7 +1489,14 @@ function frame(now) {
   }
   updateRadio();
   pollMenuGamepad(dt);
-  renderer.render(scene, camera);
+  if (fx.on) {
+    fx.bars += (fx.barsTarget - fx.bars) * Math.min(1, dt * 4);
+    finishPass.uniforms.uBars.value = fx.bars * Math.max(0, (1 - camera.aspect / 2.39) / 2);
+    finishPass.uniforms.uTime.value = now / 1000;
+    composer.render(dt);
+  } else {
+    renderer.render(scene, camera);
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -1308,6 +1504,7 @@ requestAnimationFrame(frame);
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
 });
 </script>
 </body>
