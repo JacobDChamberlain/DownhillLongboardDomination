@@ -606,10 +606,6 @@ const hazeMats = [];
 {
   const postMat = new THREE.MeshStandardMaterial({ color: 0xcfcfcf, roughness: .6, metalness: .3 });
   const postGeo = new THREE.CylinderGeometry(0.18, 0.18, 1.5, 6);
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5b3d24, roughness: 1 });
-  const leafMat  = new THREE.MeshStandardMaterial({ color: 0x2f6d34, roughness: 1 });
-  const trunkGeo = new THREE.CylinderGeometry(0.5, 0.8, 6, 6);
-  const leafGeo  = new THREE.ConeGeometry(4, 12, 7);
   const posts = new THREE.InstancedMesh(postGeo, postMat, Math.floor(SAMPLES / 6) * 2);
   const dummy = new THREE.Object3D(); let pc = 0;
   for (let i = 0; i < SAMPLES; i += 6) {
@@ -618,16 +614,6 @@ const hazeMats = [];
       dummy.position.copy(f.p).addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 0.8)).addScaledVector(f.up, 0.7);
       dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
       posts.setMatrixAt(pc++, dummy.matrix);
-    }
-    // occasional tree further out
-    if (i % 30 === 0) {
-      for (const s of [1, -1]) {
-        if (Math.random() < 0.6) continue;
-        const base = f.p.clone().addScaledVector(f.side, s * (30 + Math.random() * 40));
-        const trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.copy(base).setY(base.y + 3); trunk.castShadow = true;
-        const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.copy(base).setY(base.y + 12); leaf.castShadow = true;
-        scene.add(trunk, leaf);
-      }
     }
   }
   scene.add(posts);
@@ -674,6 +660,86 @@ const hazeMats = [];
   hazeMats.push({ mat: valley.material, base: new THREE.Color(0x34432a), f: 0.45, noFog: true });
 }
 
+
+// ------------------------------------------------------------------
+// Roadside forest — Quaternius stylized pines (CC0, 3 variants in one GLB), instanced.
+// Placements are computed once; cone trees stand in until the GLB loads (or for file://).
+// ------------------------------------------------------------------
+const TREE_SPACING  = 5;     // try a tree every N road samples, per side
+const TREE_CHANCE   = 0.55;  // probability each try places one
+const TREE_MIN_H = 14, TREE_MAX_H = 26;   // world units (rider is 2.5)
+const TREE_CHUNK = 12;   // trees per instanced draw (per variant) — the unit of frustum culling
+const trees = [];
+{
+  let seed = 1337;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const SHOULDER = 60;   // grass ribbon half-width — trees past it would float over the valley
+  for (let i = 0; i < SAMPLES; i += TREE_SPACING) {
+    const f = frames[i];
+    if (GAPS.some(g => i / SAMPLES > g.u0 - 0.01 && i / SAMPLES < g.u1 + 0.01)) continue;
+    for (const s of [1, -1]) {
+      if (rnd() > TREE_CHANCE) continue;
+      const d = ROAD_HALF_WIDTH + 6 + rnd() * (SHOULDER - ROAD_HALF_WIDTH - 10);
+      const p = f.p.clone().addScaledVector(f.side, s * d);
+      p.y -= 0.7;                                          // grass sits 0.4 below; sink the base a bit
+      // keep clear of any other stretch of road that winds back nearby
+      let clear = true;
+      for (let j = Math.max(0, i - 400); j <= Math.min(SAMPLES, i + 400) && clear; j += 4) {
+        const q = frames[j].p;
+        if (Math.hypot(q.x - p.x, q.z - p.z) < ROAD_HALF_WIDTH + 5 && Math.abs(q.y - p.y) < 30) clear = false;
+      }
+      if (clear) trees.push({ p, h: TREE_MIN_H + rnd() * (TREE_MAX_H - TREE_MIN_H), yaw: rnd() * Math.PI * 2, v: Math.floor(rnd() * 3) });
+    }
+  }
+
+  // fallback cones (instanced)
+  const coneTrunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.5, 0.8, 6, 6),
+    new THREE.MeshStandardMaterial({ color: 0x5b3d24, roughness: 1 }), trees.length);
+  const coneLeaf = new THREE.InstancedMesh(new THREE.ConeGeometry(4, 12, 7),
+    new THREE.MeshStandardMaterial({ color: 0x2f6d34, roughness: 1 }), trees.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+  trees.forEach((t, i) => {
+    const k = t.h / 18;
+    sc.setScalar(k);
+    coneTrunk.setMatrixAt(i, m.compose(t.p.clone().setY(t.p.y + 3 * k), q, sc));
+    coneLeaf.setMatrixAt(i, m.compose(t.p.clone().setY(t.p.y + 12 * k), q, sc));
+  });
+  for (const c of [coneTrunk, coneLeaf]) { c.castShadow = true; scene.add(c); }
+
+  new GLTFLoader().loadAsync('assets/models/pines.glb').then(g => {
+    const up = new THREE.Vector3(0, 1, 0);
+    g.scenes.forEach((variant, v) => {
+      variant.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(variant);
+      const nativeH = box.max.y - box.min.y;
+      const mine = trees.filter(t => t.v === v);
+      variant.traverse(o => {
+        if (!o.isMesh) return;
+        const mat = o.material;
+        if (mat.transparent || mat.alphaMode === 'BLEND' || /Leaves/.test(mat.name)) {
+          // cutout instead of blending: correct sorting for hundreds of instances + leaf-shaped shadows
+          Object.assign(mat, { transparent: false, alphaTest: 0.45, depthWrite: true, side: THREE.DoubleSide });
+        }
+        mat.envMapIntensity = ENV_INTENSITY;
+        const geo = o.geometry.clone().applyMatrix4(o.matrixWorld).translate(0, -box.min.y, 0);
+        // chunks of consecutive trees along the road, so frustum culling (main + shadow pass)
+        // skips everything off-screen instead of drawing the whole forest every frame
+        for (let c0 = 0; c0 < mine.length; c0 += TREE_CHUNK) {
+          const chunk = mine.slice(c0, c0 + TREE_CHUNK);
+          const inst = new THREE.InstancedMesh(geo, mat, chunk.length);
+          chunk.forEach((t, i) => {
+            sc.setScalar(t.h / nativeH);
+            inst.setMatrixAt(i, m.compose(t.p, q.setFromAxisAngle(up, t.yaw), sc));
+          });
+          inst.computeBoundingSphere();
+          inst.castShadow = true; inst.receiveShadow = true;
+          scene.add(inst);
+        }
+      });
+    });
+    coneTrunk.visible = coneLeaf.visible = false;
+  }).catch(e => console.warn('[assets] pine models unavailable, keeping cone trees:', e?.message || e));
+}
 
 // ------------------------------------------------------------------
 // Real-world assets — HDRI sky + lighting, PBR tarmac and grass (Poly Haven, CC0)
@@ -1483,6 +1549,7 @@ function drawHud(info) {
 // Radio — cycles tracks; title/artist fade in at the start & end of each song
 // ------------------------------------------------------------------
 const playlist = [
+  { title: 'Bios',           artist: 'Zorrovian',                src: 'audio/bios.mp3' },   // plays first
   { title: 'No Heart',       artist: '21 Savage & Metro Boomin', src: 'audio/no-heart.mp3' },
   { title: 'Move That Dope', artist: 'Future',                   src: 'audio/move-that-dope.mp3' },
   { title: 'Nocturnal',      artist: 'Cmillz',                   src: 'audio/nocturnal.mp3' },

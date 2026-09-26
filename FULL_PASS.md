@@ -50,7 +50,8 @@ flat pale band at the horizon.
 ### 3. Higher-detail geometry & materials  🟡 partly done
 Landed: PBR asphalt + grass (1k, Poly Haven) with arc-length UVs (`ASPHALT_TILE`,
 `GRASS_TILE`), grass anti-tiling blend, painted edge lines as real strips, continuous
-guardrail beam. Still open: tree models/imposters, scattered detail, LOD.
+guardrail beam, roadside forest of instanced Quaternius pines (`TREE_*` tunables; chunked
+per `TREE_CHUNK` so frustum culling works). Still open: scattered detail (rocks, shrubs), LOD.
 Perf: adaptive resolution (`RES_STEPS`) drops render scale when fps < 50 and climbs back.
 
 - **Textured tarmac**: albedo + normal + roughness maps on the road ribbon (with
