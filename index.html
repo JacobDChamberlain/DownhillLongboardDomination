@@ -231,6 +231,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -258,7 +259,7 @@ const FOG_DENSITY = 0.0004;                     // lower = distant ridgelines st
 scene.background = hazeColor.clone();
 scene.fog = new THREE.FogExp2(hazeColor.getHex(), FOG_DENSITY);
 
-const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 6000);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.3, 14000);  // far must clear the ridges/valley (~7000 away)
 
 // Lighting — warm low afternoon sun + cool sky fill
 const sun = new THREE.DirectionalLight(0xffe3b3, 3.2);
@@ -271,7 +272,15 @@ sun.shadow.camera.top = 220; sun.shadow.camera.bottom = -220;
 sun.shadow.bias = -0.0004;
 scene.add(sun);
 scene.add(sun.target);
-scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x55663a, 0.5));
+const hemi = new THREE.HemisphereLight(0xbcd6ff, 0x55663a, 0.5);
+scene.add(hemi);
+// Where the sun sits. The HDRI is rotated at load so its sun lands on SUN_AZIMUTH; the
+// shadow-casting light uses the same bearing but a higher elevation — the photographed sun
+// is ~5° up, and a light that low would bury the course in terrain shadow.
+const SUN_AZIMUTH = new THREE.Vector2(-0.6, -0.8).normalize();   // (x, z): ahead-left of the run
+const SUN_LIGHT_ELEV = 0.38;                                     // radians (~22°)
+const SUN_LIGHT_DIR = new THREE.Vector3(
+  SUN_AZIMUTH.x * Math.cos(SUN_LIGHT_ELEV), Math.sin(SUN_LIGHT_ELEV), SUN_AZIMUTH.y * Math.cos(SUN_LIGHT_ELEV));
 
 // Image-based ambient + specular from a procedural environment (no external files)
 {
@@ -279,7 +288,9 @@ scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x55663a, 0.5));
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 }
 
-// Sky dome — warm horizon glow, cool zenith, soft sun bloom
+// Sky dome — warm horizon glow, cool zenith, soft sun bloom. This is the fallback look: it
+// shows until the HDRI loads, and stays if assets can't load (e.g. opened via file://).
+let skyDome;
 {
   const geo = new THREE.SphereGeometry(4600, 40, 20);
   const mat = new THREE.ShaderMaterial({
@@ -300,7 +311,8 @@ scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x55663a, 0.5));
         gl_FragColor = vec4(col, 1.0);
       }`
   });
-  scene.add(new THREE.Mesh(geo, mat));
+  skyDome = new THREE.Mesh(geo, mat);
+  scene.add(skyDome);
 }
 
 
@@ -310,7 +322,7 @@ scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x55663a, 0.5));
 //   finish: tone map + sRGB, then grade, vignette, grain, letterbox (one pass)
 // ------------------------------------------------------------------
 const BLOOM_STRENGTH  = 0.35;   // glow on sun / highlights / pickups
-const BLOOM_THRESHOLD = 1.0;    // only HDR-bright pixels bloom (linear, pre-tonemap)
+const BLOOM_THRESHOLD = 1.6;    // only HDR-bright pixels bloom (linear, pre-tonemap); the HDRI sky near the sun is ~1–3
 const MOTION_BLUR     = 1.0;    // radial speed-blur multiplier (0 = off)
 const CHROMA_MAX      = 0.006;  // chromatic aberration at top speed
 const VIGNETTE        = 0.38;   // edge darkening
@@ -508,12 +520,20 @@ const ITEMS = [                               // pickups; .mesh / .taken get att
 
 // Road mesh (ribbon) + shoulders + edge lines
 const groundMeshes = [];
+let railMat;
+const ASPHALT_TILE = 6;    // world units per asphalt texture repeat
+const GRASS_TILE   = 22;   // world units per grass texture repeat
 {
   const road = [], grass = [], centerDash = [];
   const roadIdx = [], grassIdx = [];
+  const roadUV = [], grassUV = [];
   const GW = ROAD_HALF_WIDTH, SW = 60; // shoulder width
+  let along = 0;                        // arc length, for UVs that run down the road
   for (let i = 0; i <= SAMPLES; i++) {
     const f = frames[i];
+    if (i > 0) along += f.p.distanceTo(frames[i - 1].p);
+    roadUV.push(0, along / ASPHALT_TILE, (2 * GW) / ASPHALT_TILE, along / ASPHALT_TILE);
+    grassUV.push(0, along / GRASS_TILE, (2 * SW) / GRASS_TILE, along / GRASS_TILE);
     const l = f.p.clone().addScaledVector(f.side,  GW);
     const r = f.p.clone().addScaledVector(f.side, -GW);
     road.push(l.x, l.y + 0.05, l.z, r.x, r.y + 0.05, r.z);
@@ -528,14 +548,15 @@ const groundMeshes = [];
       grassIdx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
     }
   }
-  const mk = (verts, idx, color, rough) => {
+  const mk = (verts, idx, color, rough, uvs) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     g.setIndex(idx); g.computeVertexNormals();
     const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0 }));
     m.receiveShadow = true; return m;
   };
-  const grassMesh = mk(grass, grassIdx, 0x4f7233, 1.0), roadMesh = mk(road, roadIdx, 0x2b2e35, 0.92);
+  const grassMesh = mk(grass, grassIdx, 0x4f7233, 1.0, grassUV), roadMesh = mk(road, roadIdx, 0x2b2e35, 0.92, roadUV);
   scene.add(grassMesh, roadMesh);
   groundMeshes.push(grassMesh, roadMesh);   // trackside cam line-of-sight checks
 
@@ -549,17 +570,38 @@ const groundMeshes = [];
     dash.rotateX(-Math.PI / 2);
     scene.add(dash);
   }
-  // white edge lines
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0xffffff });
-  for (const s of [1, -1]) {
-    const g = new THREE.BufferGeometry().setFromPoints(
-      frames.map(f => f.p.clone().addScaledVector(f.side, s * (GW - 0.6)).addScaledVector(f.up, 0.12))
-    );
-    scene.add(new THREE.Line(g, edgeMat));
+  // Strip along the road between two (side, up) offsets in each frame — painted edge lines
+  // (same height, flat) and the guardrail beam (same side offset, vertical). Skips the gap.
+  function strip(a0, a1, mat) {
+    const v = [], idx = [];
+    for (let i = 0; i <= SAMPLES; i++) {
+      const f = frames[i];
+      const p0 = f.p.clone().addScaledVector(f.side, a0.s).addScaledVector(f.up, a0.u);
+      const p1 = f.p.clone().addScaledVector(f.side, a1.s).addScaledVector(f.up, a1.u);
+      v.push(p0.x, p0.y, p0.z, p1.x, p1.y, p1.z);
+      if (i < SAMPLES && !GAPS.some(g => i / SAMPLES > g.u0 && i / SAMPLES < g.u1)) {
+        const b = i * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); m.receiveShadow = true;
+    scene.add(m); return m;
   }
+  // painted white edge lines (real width instead of 1px lines)
+  const paintMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e0, roughness: .7, side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  for (const s of [1, -1]) strip({ s: s * (GW - 0.75), u: 0.07 }, { s: s * (GW - 0.45), u: 0.07 }, paintMat);
+  // guardrail beam along the posts — turns galvanized metal once the HDRI loads (full metal
+  // reflecting the procedural environment reads as a black band)
+  railMat = new THREE.MeshStandardMaterial({ color: 0xb8bcc0, roughness: .5, metalness: .2, side: THREE.DoubleSide });
+  for (const s of [1, -1]) strip({ s: s * (GW + 0.62), u: 0.72 }, { s: s * (GW + 0.62), u: 1.12 }, railMat).castShadow = true;
 }
 
 // Guardrail posts + roadside trees + distant mountains
+// far scenery tinted toward the horizon color; re-tinted with factor `f` when the HDRI loads
+const hazeMats = [];
 {
   const postMat = new THREE.MeshStandardMaterial({ color: 0xcfcfcf, roughness: .6, metalness: .3 });
   const postGeo = new THREE.CylinderGeometry(0.18, 0.18, 1.5, 6);
@@ -609,13 +651,15 @@ const groundMeshes = [];
     g.setIndex(idx); g.computeVertexNormals();
     const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, fog: false }));
     m.renderOrder = -1; scene.add(m);
+    return m.material;
   }
   const rock = new THREE.Color(0x53637a);
   [ { r: 2400, min: 300, max: 800,  f: 0.25 },
     { r: 3300, min: 380, max: 1000, f: 0.45 },
     { r: 4200, min: 460, max: 1150, f: 0.65 },
     { r: 5200, min: 520, max: 1250, f: 0.82 },
-  ].forEach((b, i) => ridgeRing(b.r, b.min, b.max, rock.clone().lerp(skyHorizon, b.f), i * 137 + 7));
+  ].forEach((b, i) => hazeMats.push({
+    mat: ridgeRing(b.r, b.min, b.max, rock.clone().lerp(skyHorizon, b.f), i * 137 + 7), base: rock, f: b.f * 0.7 }));
 
   // Distant valley floor far below the road — sells the height/exposure
   const valley = new THREE.Mesh(
@@ -624,7 +668,109 @@ const groundMeshes = [];
   );
   valley.rotation.x = -Math.PI / 2; valley.position.set(center.x, -260, center.z);
   scene.add(valley);
+  // with the HDRI: a darker green seen through haze, tinted by hand — full fog at this range
+  // turned it into a flat white void
+  hazeMats.push({ mat: valley.material, base: new THREE.Color(0x34432a), f: 0.45, noFog: true });
 }
+
+
+// ------------------------------------------------------------------
+// Real-world assets — HDRI sky + lighting, PBR tarmac and grass (Poly Haven, CC0)
+// Fetched, so they need a local server; from file:// the procedural look above stays.
+// ------------------------------------------------------------------
+const HDRI_URL       = 'assets/hdri/kloppenheim_06_puresky_2k.hdr';
+const HDRI_EXPOSURE  = 1.0;    // sky brightness (background)
+const ENV_INTENSITY  = 0.8;    // how much the HDRI lights / reflects on materials
+const texLoader = new THREE.TextureLoader();
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+function loadTex(url, srgb) {
+  return texLoader.loadAsync(url).then(t => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = maxAniso;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+}
+async function applyPBR(mat, name, tint) {
+  const [map, normalMap, arm] = await Promise.all([
+    loadTex(`assets/textures/${name}_diff_1k.jpg`, true),
+    loadTex(`assets/textures/${name}_nor_1k.jpg`, false),
+    loadTex(`assets/textures/${name}_arm_1k.jpg`, false),
+  ]);
+  Object.assign(mat, { map, normalMap, roughnessMap: arm, aoMap: arm, roughness: 1, aoMapIntensity: 0.8 });
+  mat.color.set(tint);
+  mat.needsUpdate = true;
+}
+
+// Rotate an equirect image (RGBA float rows) so its brightest pixel — the sun — sits at azimuth
+// `az` (x, z). Returns the haze color: the band just above the horizon, averaged over the half
+// of the sky facing away from the sun (the sun side is a warm glare, not the color of distance).
+function aimHdri(tex, az) {
+  const { data, width: W, height: H } = tex.image;
+  let best = -1, bx = 0;
+  for (let y = 0; y < H / 2; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4, l = data[i] * .2126 + data[i + 1] * .7152 + data[i + 2] * .0722;
+    if (l > best) { best = l; bx = x; }
+  }
+  // three's equirect lookup: u = atan(dir.z, dir.x) / 2π + 0.5
+  const targetU = Math.atan2(az.y, az.x) / (Math.PI * 2) + 0.5;
+  const shift = Math.round(targetU * W - (bx + 0.5)) % W;
+  const out = new Float32Array(data.length);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const src = (y * W + x) * 4, dst = (y * W + ((x + shift) % W + W) % W) * 4;
+    out[dst] = data[src]; out[dst + 1] = data[src + 1]; out[dst + 2] = data[src + 2]; out[dst + 3] = 1;
+  }
+  tex.image.data = out; tex.needsUpdate = true;
+  // row 0 is the zenith, so rows just above H/2 are the band just above the horizon
+  const sunX = Math.round(targetU * W - 0.5);
+  const horizon = new THREE.Color(0, 0, 0); let n = 0;
+  for (let y = Math.floor(H * (0.5 - 4 / 180)); y < H / 2; y++) for (let x = 0; x < W; x += 4) {
+    const dx = Math.abs(((x - sunX) % W + W + W / 2) % W - W / 2);
+    if (dx < W / 4) continue;
+    const i = (y * W + x) * 4; horizon.r += out[i]; horizon.g += out[i + 1]; horizon.b += out[i + 2]; n++;
+  }
+  return horizon.multiplyScalar(1 / n);
+}
+
+(async () => {
+  try {
+    const hdr = await new RGBELoader().setDataType(THREE.FloatType).loadAsync(HDRI_URL);
+    const horizon = aimHdri(hdr, SUN_AZIMUTH);
+    hdr.mapping = THREE.EquirectangularReflectionMapping;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const env = pmrem.fromEquirectangular(hdr).texture;
+    pmrem.dispose();
+    scene.environment = env;
+    scene.background = hdr;
+    scene.backgroundIntensity = HDRI_EXPOSURE;
+    scene.remove(skyDome);
+    hemi.intensity = 0.15;               // the HDRI now supplies the sky fill
+    Object.assign(railMat, { metalness: 0.85, roughness: 0.32 });
+    scene.traverse(o => { if (o.material?.isMeshStandardMaterial) o.material.envMapIntensity = ENV_INTENSITY; });
+    // haze + far scenery pick up the photographed horizon so distance melts into the sky
+    const haze = horizon;
+    scene.fog.color.copy(haze);
+    for (const h of hazeMats) {
+      h.mat.color.copy(h.base).lerp(haze, h.f);
+      if (h.noFog) { h.mat.fog = false; h.mat.needsUpdate = true; }
+    }
+  } catch (e) {
+    console.warn('[assets] HDRI unavailable, keeping procedural sky:', e?.message || e);
+  }
+})();
+applyPBR(groundMeshes[1].material, 'asphalt', 0xffffff)
+  .catch(e => console.warn('[assets] asphalt textures unavailable:', e?.message || e));
+applyPBR(groundMeshes[0].material, 'grass', 0xd2e6a0).then(() => {
+  // anti-tiling: blend in the same texture at a much larger scale so the repeat doesn't read
+  groundMeshes[0].material.onBeforeCompile = sh => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `
+      vec4 texA = texture2D( map, vMapUv );
+      vec4 texB = texture2D( map, vMapUv * 0.117 + vec2(0.31, 0.57) );
+      diffuseColor *= mix( texA, texB, 0.45 ) * (0.85 + 0.3 * texB.g);`);
+  };
+  groundMeshes[0].material.needsUpdate = true;
+}).catch(e => console.warn('[assets] grass textures unavailable:', e?.message || e));
 
 // ------------------------------------------------------------------
 // The skater (board + simple rider) — a group we place each frame
@@ -1103,7 +1249,7 @@ function place(info) {
   wind(pos, skater.quaternion, state.speed, speedT, dt);
 
   // keep sun/shadow near the skater
-  sun.position.set(pos.x - 260, pos.y + 400, pos.z + 180);
+  sun.position.copy(pos).addScaledVector(SUN_LIGHT_DIR, 500);
   sun.target.position.copy(pos); sun.target.updateMatrixWorld();
 }
 
@@ -1479,9 +1625,33 @@ results.el.addEventListener('click', () => { if (gameState === 'RESULTS') rideAg
 // ------------------------------------------------------------------
 // Loop
 // ------------------------------------------------------------------
+// Adaptive resolution — hold the frame rate by trading render resolution. Steps down when the
+// frame rate sags; steps back up after a long stretch at full speed (backing off further each
+// time a step up doesn't hold, so it settles instead of bouncing).
+const RES_STEPS = [1, 0.85, 0.7, 0.6].map(k => k * Math.min(devicePixelRatio, 2));
+const res = { i: 0, frames: 0, t: 0, good: 0, upWait: 10 };
+function setRes(i) {
+  res.i = i;
+  renderer.setPixelRatio(RES_STEPS[i]);
+  composer.setPixelRatio(RES_STEPS[i]);
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+}
+function adaptRes(rawDt) {
+  if (gameState !== 'PLAYING' || document.hidden) { res.frames = 0; res.t = 0; return; }
+  res.frames++; res.t += rawDt;
+  if (res.t < 1.5) return;
+  const fps = res.frames / res.t; res.frames = 0; res.t = 0;
+  if (fps < 50 && res.i < RES_STEPS.length - 1) { setRes(res.i + 1); res.good = 0; res.upWait = Math.min(res.upWait * 2, 120); }
+  else if (fps > 58) { res.good += 1.5; if (res.good >= res.upWait && res.i > 0) { setRes(res.i - 1); res.good = 0; } }
+  else res.good = 0;
+}
+
 let dt = 0, last = performance.now();
 function frame(now) {
-  dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const rawDt = (now - last) / 1000;
+  dt = Math.min(0.05, rawDt); last = now;
+  adaptRes(rawDt);
   if (gameState === 'PLAYING') {
     const info = update(dt);
     place(info);

@@ -34,13 +34,25 @@ Settings → Cinematic FX toggle. Perf note: MSAA on the half-float target cost 
 - Addons live at `three/addons/postprocessing/*` (import map already points at
   `three@0.160.0/examples/jsm/`)
 
-### 2. HDRI / image-based lighting
+### 2. HDRI / image-based lighting  ✅ done
+Landed: `kloppenheim_06_puresky` (2k) as background + PMREM environment. At load it's rotated
+so its sun sits on `SUN_AZIMUTH`; the shadow light shares that bearing at `SUN_LIGHT_ELEV`.
+Fog + far-ridge haze come from the HDRI's horizon (away-from-sun half). Tunables:
+`HDRI_EXPOSURE`, `ENV_INTENSITY`. Falls back to the procedural sky if assets can't load
+(file://). Camera far plane raised to 14000 — the old 6000 clipped the valley/ridges into the
+flat pale band at the horizon.
+
 - Replace the procedural `RoomEnvironment` with a real outdoor **HDRI** loaded via
   `RGBELoader` + `PMREMGenerator` for believable ambient light and reflections
 - Optionally use the HDRI as the skybox instead of the shader dome
 - Pick a golden-hour / mountain-pass `.hdr` (e.g. from Poly Haven)
 
-### 3. Higher-detail geometry & materials
+### 3. Higher-detail geometry & materials  🟡 partly done
+Landed: PBR asphalt + grass (1k, Poly Haven) with arc-length UVs (`ASPHALT_TILE`,
+`GRASS_TILE`), grass anti-tiling blend, painted edge lines as real strips, continuous
+guardrail beam. Still open: tree models/imposters, scattered detail, LOD.
+Perf: adaptive resolution (`RES_STEPS`) drops render scale when fps < 50 and climbs back.
+
 - **Textured tarmac**: albedo + normal + roughness maps on the road ribbon (with
   proper UVs along the spline); painted lines as texture rather than geometry
 - **Continuous metal guardrail** mesh (currently just posts)
