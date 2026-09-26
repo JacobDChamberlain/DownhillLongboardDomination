@@ -232,6 +232,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -804,6 +805,174 @@ trickPivot.add(lean);
 }
 scene.add(skater);
 
+
+// ------------------------------------------------------------------
+// Rider model — Quaternius "Casual Character" on a longboard (both CC0), posed procedurally:
+// two-bone IK plants the feet on the deck; crouch, spine bend/twist, head look and arm poses
+// are driven by tuck / air / grab each frame. Until the models load (or if they can't, e.g.
+// file://) the box rider above stays.
+// ------------------------------------------------------------------
+const RIDER_HEIGHT = 2.5;   // world units, standing
+const BOARD_LEN    = 1.8;   // longboard length (world units)
+const STANCE       = 0.4;   // half the distance between the feet along the board
+const rig = { ready: false, crouch: 0.3, grab: 0 };
+{
+  const boxParts = [...lean.children];
+  const gltf = new GLTFLoader();
+  Promise.all([gltf.loadAsync('assets/models/skater.glb'), gltf.loadAsync('assets/models/longboard.glb')])
+    .then(([ch, bd]) => buildRig(ch.scene, bd.scene, boxParts))
+    .catch(e => console.warn('[assets] rider models unavailable, keeping box rider:', e?.message || e));
+}
+
+function buildRig(charScene, boardScene, boxParts) {
+  const prep = o => o.traverse(m => {
+    if (!m.isMesh) return;
+    m.castShadow = true; m.frustumCulled = false;
+    if (m.material) m.material.envMapIntensity = ENV_INTENSITY;
+  });
+  prep(charScene); prep(boardScene);
+
+  // board: model's long axis is X — turn it down the travel axis (+Z), wheels on the ground
+  const bb = new THREE.Box3().setFromObject(boardScene), bsz = bb.getSize(new THREE.Vector3());
+  const bs = BOARD_LEN / bsz.x;
+  const board = new THREE.Group();
+  boardScene.scale.setScalar(bs);
+  boardScene.position.set(-(bb.min.x + bsz.x / 2) * bs, -bb.min.y * bs, -(bb.min.z + bsz.z / 2) * bs);
+  board.add(boardScene); board.rotation.y = Math.PI / 2;
+  rig.deckTop = bsz.y * bs * 0.92;
+
+  // rider: sideways, regular stance (left foot toward the nose) — the model faces +Z, so turn it
+  // to face -X; `root` is the node we raise/lower for crouch
+  charScene.updateMatrixWorld(true);   // skinned bounds need current bone matrices
+  const cb = new THREE.Box3().setFromObject(charScene), csz = cb.getSize(new THREE.Vector3());
+  const cs = RIDER_HEIGHT / csz.y;
+  charScene.scale.setScalar(cs);
+  charScene.position.set(-(cb.min.x + csz.x / 2) * cs, -cb.min.y * cs, -(cb.min.z + csz.z / 2) * cs);
+  const root = new THREE.Group();
+  root.add(charScene); root.rotation.y = -Math.PI / 2;
+
+  for (const p of boxParts) p.visible = false;
+  lean.add(board, root);
+  skater.updateMatrixWorld(true);
+
+  // three strips '.' from node names ("UpperArm.L" → "UpperArmL")
+  const B = n => charScene.getObjectByName(n.replace('.', ''));
+  Object.assign(rig, {
+    root, board,
+    hips: B('Hips'), abdomen: B('Abdomen'), torso: B('Torso'), chest: B('Chest'), neck: B('Neck'), head: B('Head'),
+    arm: { L: [B('UpperArm.L'), B('LowerArm.L'), B('Wrist.L')], R: [B('UpperArm.R'), B('LowerArm.R'), B('Wrist.R')] },
+    leg: { L: [B('UpperLeg.L'), B('LowerLeg.L'), B('LowerLeg.L_end')], R: [B('UpperLeg.R'), B('LowerLeg.R'), B('LowerLeg.R_end')] },
+    foot: { L: B('Foot.L'), R: B('Foot.R') },
+  });
+  rig.bones = [];
+  charScene.traverse(o => { if (o.isBone) rig.bones.push([o, o.position.clone(), o.quaternion.clone()]); });
+
+  // rest measurements in lean space
+  const inLean = o => lean.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
+  rig.ankleH = inLean(rig.leg.L[2]).y;                        // ankle above the soles
+  rig.hipH = inLean(rig.leg.L[0]).y;
+  rig.legLen = rig.hipH - rig.ankleH;
+  for (const s of ['L', 'R']) {                               // foot bone offset from the ankle
+    rig.foot[s].userData.off = inLean(rig.foot[s]).sub(inLean(rig.leg[s][2]));
+  }
+  // chest orientation relative to lean at rest — arm poses ride along with the chest's change from it
+  rig.chestRest = lean.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(rig.chest.getWorldQuaternion(new THREE.Quaternion()));
+  rig.ready = true;
+}
+
+// --- small world-space bone helpers (work regardless of each bone's local axes) ---
+const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
+function rotateWorld(bone, q) {
+  bone.parent.getWorldQuaternion(_q2);
+  bone.getWorldQuaternion(_q);
+  bone.quaternion.copy(_q2.invert().multiply(q.clone().multiply(_q)));
+  bone.updateMatrixWorld(true);
+}
+function turnWorld(bone, axisW, ang) { rotateWorld(bone, new THREE.Quaternion().setFromAxisAngle(axisW, ang)); }
+function aimWorld(bone, child, dirW) {
+  const cur = child.getWorldPosition(_v).sub(bone.getWorldPosition(_v2)).normalize();
+  rotateWorld(bone, new THREE.Quaternion().setFromUnitVectors(cur, dirW.clone().normalize()));
+}
+// two-bone IK: bend a–b–c so c reaches `target`, bending toward `pole` (all world space)
+function ik2(a, b, c, target, pole) {
+  const pa = a.getWorldPosition(new THREE.Vector3()), pb = b.getWorldPosition(new THREE.Vector3());
+  const pc = c.getWorldPosition(new THREE.Vector3());
+  const l1 = pa.distanceTo(pb), l2 = pb.distanceTo(pc);
+  const toT = target.clone().sub(pa);
+  const d = THREE.MathUtils.clamp(toT.length(), Math.abs(l1 - l2) + 1e-4, l1 + l2 - 1e-4);
+  const dir = toT.normalize();
+  const bend = pole.clone().sub(dir.clone().multiplyScalar(pole.dot(dir))).normalize();
+  const cosA = (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d);
+  const knee = pa.clone().addScaledVector(dir, l1 * cosA).addScaledVector(bend, l1 * Math.sqrt(Math.max(0, 1 - cosA * cosA)));
+  aimWorld(a, b, knee.clone().sub(pa));
+  aimWorld(b, c, pa.addScaledVector(dir, d).sub(knee));
+}
+
+// Pose the rider for this frame. Axes are in lean space: +Z = down the road, +Y = up,
+// the rider faces -X (toe side).
+function poseRider(info, dt) {
+  const k = Math.min(1, dt * 8);
+  const grab = state.airborne && trick.type === 'grab' ? 1 : 0;
+  const target = grab ? 0.85 : state.airborne ? 0.5 : info.tuck ? 0.8 : 0.3;
+  rig.crouch += (target - rig.crouch) * k;
+  rig.grab += (grab - rig.grab) * k;
+  const c = rig.crouch;
+
+  for (const [b, p, q] of rig.bones) { b.position.copy(p); b.quaternion.copy(q); }
+  // lower the body; shift the hips a touch heelside as they sink, and into carves
+  rig.root.position.set(c * 0.18 - state.steerSmooth * 0.12, rig.deckTop - c * 0.5 * rig.legLen, 0);
+  skater.updateMatrixWorld(true);
+
+  const leanQ = lean.getWorldQuaternion(new THREE.Quaternion());
+  const L = v => v.clone().applyQuaternion(leanQ);                        // lean vector → world (keeps length)
+  const P = v => lean.localToWorld(v.clone());                            // lean point → world
+  const X = L(new THREE.Vector3(1, 0, 0)), Y = L(new THREE.Vector3(0, 1, 0)), Z = L(new THREE.Vector3(0, 0, 1));
+
+  // legs: ankles on the deck, knees driven toward the toe side and slightly apart
+  for (const [s, z] of [['L', STANCE], ['R', -STANCE]]) {
+    const [a, b, e] = rig.leg[s];
+    ik2(a, b, e, P(new THREE.Vector3(0.06, rig.deckTop + rig.ankleH, z)),
+        L(new THREE.Vector3(-1, 0.2, z > 0 ? 0.5 : -0.3)));
+    const f = rig.foot[s];
+    f.position.copy(f.parent.worldToLocal(e.getWorldPosition(new THREE.Vector3()).add(L(f.userData.off))));
+    f.updateMatrixWorld(true);
+    turnWorld(f, Y, z > 0 ? 0.55 : 0.2);                                 // front foot angled to the nose
+  }
+
+  // spine: bend toward the toe side with the crouch, twist the chest down the hill
+  const bendAng = 0.1 + c * c * 1.1;                                    // deep chest-to-knees tuck at full crouch
+  turnWorld(rig.abdomen, Z, bendAng * 0.5);
+  turnWorld(rig.torso, Z, bendAng * 0.5);
+  const twist = 0.3 + c * 0.25;
+  turnWorld(rig.chest, Y, twist);
+  // head: finish turning to look down the road, and lift against the bend
+  turnWorld(rig.neck, Y, (Math.PI / 2 - twist) * 0.5);
+  turnWorld(rig.head, Y, (Math.PI / 2 - twist) * 0.5);
+  turnWorld(rig.head, X, -bendAng * 0.7);
+
+  // arms: loose balance pose ↔ downhill tuck (hands clasped at the small of the back); grab
+  // reaches the toe edge. Directions are given for an upright body, then carried through the
+  // chest's actual rotation from rest so they stay attached to the torso.
+  const t = THREE.MathUtils.smoothstep(c, 0.45, 0.8);
+  const bodyQ = leanQ.clone().invert().multiply(rig.chest.getWorldQuaternion(new THREE.Quaternion()))
+    .multiply(rig.chestRest.clone().invert());
+  const lowBack = lean.worldToLocal(rig.hips.getWorldPosition(new THREE.Vector3())).add(new THREE.Vector3(0.14, 0.18, 0));
+  for (const [s, z] of [['L', 1], ['R', -1]]) {
+    const [ua, la, hand] = rig.arm[s];
+    aimWorld(ua, la, L(new THREE.Vector3(-0.2, -0.85, 0.4 * z).applyQuaternion(bodyQ)));
+    aimWorld(la, hand, L(new THREE.Vector3(-0.5, -0.5, 0.3 * z).applyQuaternion(bodyQ)));
+    if (t > 0.01) {   // tuck: hands to the small of the back, elbows back and out
+      const cur = hand.getWorldPosition(new THREE.Vector3());
+      ik2(ua, la, hand, cur.lerp(P(lowBack.clone().add(new THREE.Vector3(0, 0, 0.04 * z))), t), L(new THREE.Vector3(1, 0.3, 0.8 * z)));
+    }
+    if (s === 'L' && rig.grab > 0.01) {
+      const reach = P(new THREE.Vector3(-0.3, rig.deckTop, 0.15));
+      const cur = hand.getWorldPosition(new THREE.Vector3());
+      ik2(ua, la, hand, cur.lerp(reach, rig.grab), L(new THREE.Vector3(0.3, 1, 0)));
+    }
+  }
+}
+
 // Wind streaks — 3D motion lines that stream past the rider; intensity scales with speed
 const wind = (() => {
   const N = 140, span = 90;
@@ -1125,10 +1294,11 @@ const camLook = new THREE.Vector3();
 const CAM_MODES = ['chase', 'drone', 'trackside'];
 let camMode = 'chase';
 const cine = { t: 0, u: 0, spot: null, side: 0, off: null, losT: 0, blocked: 0 };
+const chaseOff = { cam: new THREE.Vector3(), look: new THREE.Vector3(), set: false };
 const losRay = new THREE.Raycaster();
 function cycleCam() {
   camMode = CAM_MODES[(CAM_MODES.indexOf(camMode) + 1) % CAM_MODES.length];
-  cine.spot = null; cine.off = null;
+  cine.spot = null; cine.off = null; chaseOff.set = false;
   showTrick('CAM: ' + camMode.toUpperCase());
 }
 // H cycles: HUD → clean (no HUD) → clean + 2.39:1 letterbox
@@ -1151,12 +1321,12 @@ function place(info) {
 
   // lean into the carve
   lean.rotation.z = -state.steerSmooth * 0.5;
-  lean.rotation.x = info.tuck ? 0.18 : 0;
+  lean.rotation.x = !rig.ready && info.tuck ? 0.18 : 0;   // the rigged rider tucks with its body instead
 
   // trick pose in the air (spin about up, grab = tuck-and-hold); settle back on the ground
   if (state.airborne) {
     trickPivot.rotation.y = trick.spin;
-    trickPivot.rotation.x = trick.type === 'grab' ? 0.5 : 0;
+    trickPivot.rotation.x = trick.type === 'grab' && !rig.ready ? 0.5 : 0;
   } else {
     trickPivot.rotation.y *= 0.7;
     trickPivot.rotation.x *= 0.7;
@@ -1195,8 +1365,8 @@ function place(info) {
     // low, wide, slowly drifting orbit off the rider's shoulder — heavy smoothing, no shake
     cine.t += dt;
     const ang = 0.55 + Math.sin(cine.t * 0.18) * 0.45;
-    const off = dir.clone().multiplyScalar(-Math.cos(ang) * 16).addScaledVector(f.side, Math.sin(ang) * 16);
-    off.addScaledVector(f.up, 3 + Math.sin(cine.t * 0.11) * 1.5);
+    const off = dir.clone().multiplyScalar(-Math.cos(ang) * 10).addScaledVector(f.side, Math.sin(ang) * 10);
+    off.addScaledVector(f.up, 2.2 + Math.sin(cine.t * 0.11) * 1.2);
     // smooth the offset (not the world position) so the rider stays framed at any speed
     if (!cine.off) cine.off = camPos.clone().sub(pos);
     cine.off.lerp(off, Math.min(1, dt * 1.6));
@@ -1226,11 +1396,17 @@ function place(info) {
     camPos.copy(cine.spot);
     camLook.lerp(pos.clone().addScaledVector(f.up, 1.2), Math.min(1, dt * 8));
     const dist = camPos.distanceTo(pos);
-    targetFov = THREE.MathUtils.clamp(900 / Math.max(dist, 1), 18, 60);   // zoom lens tracks the rider
+    targetFov = THREE.MathUtils.clamp(650 / Math.max(dist, 1), 14, 55);   // zoom lens tracks the rider
     shake = 0; blurMul = 0;
   } else {
-    camPos.lerp(want, Math.min(1, dt * 4));
-    camLook.lerp(lookTarget, Math.min(1, dt * 6));
+    // smooth the camera's offset from the rider, not its world position — lerping the world
+    // position made the camera trail ~25 units further back than `back` at top speed
+    const off = want.sub(pos), lookOff = lookTarget.sub(pos);
+    if (!chaseOff.set) { chaseOff.cam.copy(camPos).sub(pos); chaseOff.look.copy(camLook).sub(pos); chaseOff.set = true; }
+    chaseOff.cam.lerp(off, Math.min(1, dt * 4));
+    chaseOff.look.lerp(lookOff, Math.min(1, dt * 6));
+    camPos.copy(pos).add(chaseOff.cam);
+    camLook.copy(pos).add(chaseOff.look);
   }
   camera.position.copy(camPos);
   camera.lookAt(camLook);
@@ -1246,6 +1422,8 @@ function place(info) {
   setSpeedFx(pos, dir, speedT, blurMul);
 
   // wind streaks stream past, aligned with travel
+  if (rig.ready) poseRider(info, dt);
+
   wind(pos, skater.quaternion, state.speed, speedT, dt);
 
   // keep sun/shadow near the skater

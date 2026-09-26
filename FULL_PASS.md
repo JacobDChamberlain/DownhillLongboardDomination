@@ -67,6 +67,15 @@ Perf: adaptive resolution (`RES_STEPS`) drops render scale when fps < 50 and cli
 
 ---
 
+### 5. Rider model  ✅ done
+Quaternius "Casual Character" + CC0 longboard (`assets/models/`), posed procedurally in
+`poseRider()`: two-bone IK plants the feet on the deck (regular stance), crouch depth follows
+tuck / air, spine bends + twists downhill, head looks down the road, arms go from a loose
+balance pose to hands-behind-the-back in the tuck, front hand reaches the toe edge on grabs.
+Tunables: `RIDER_HEIGHT`, `BOARD_LEN`, `STANCE`. Box rider remains as the file:// fallback.
+Chase + drone cams now smooth their offset from the rider (no more trailing lag at speed).
+Next step for the rider: real animation clips (push, carve, slide) via `AnimationMixer`.
+
 ## Dependencies / serving (IMPORTANT)
 - HDRIs and texture files are **fetched**, which browsers block from `file://`.
   Once the full pass lands you'll need a local server, e.g.:

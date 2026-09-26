@@ -58,5 +58,5 @@ you hardest here and your Unity/Unreal endgame pays off, so don't sink effort in
   audio-visualizer sky, starry/meme skies (image ones need asset files).
 - [ ] **3. World & scenery** — HUGE cliffs, bridges over water,
   carve-down-mountainside sections, crowds at start/finish, more detail.
-- [ ] **4. Full visual pass** — *post-processing, trailer cams, HDRI sky, PBR road/grass done; trees/detail/LOD next* — post-processing (bloom, vignette, motion blur,
+- [ ] **4. Full visual pass** — *post-processing, trailer cams, HDRI sky, PBR road/grass, rigged rider done; trees/detail/LOD next* — post-processing (bloom, vignette, motion blur,
   chromatic aberration); HDRI + textured tarmac need asset files added.
