@@ -17,7 +17,15 @@ was split out on purpose. Everything from the lean pass stays — this is additi
 
 ## Scope — what the full pass adds
 
-### 1. Post-processing stack (`EffectComposer`)
+### 1. Post-processing stack (`EffectComposer`)  ✅ done
+Landed: half-res bloom, radial speed blur + chromatic aberration aimed at the travel
+direction, grade/vignette/grain/letterbox in one finish pass (tone mapping folded in, no
+`OutputPass`). Tunables at the top of the "Post-processing" block: `BLOOM_STRENGTH`,
+`BLOOM_THRESHOLD`, `MOTION_BLUR`, `CHROMA_MAX`, `VIGNETTE`, `GRAIN`. Also added trailer
+cameras (`C`: chase / drone / trackside), clean-HUD + 2.39:1 letterbox (`H`), and a
+Settings → Cinematic FX toggle. Perf note: MSAA on the half-float target cost ~35fps at
+2x DPR, so it's only enabled on 1x displays.
+
 - `RenderPass` → `UnrealBloomPass` (subtle bloom on sun/highlights)
 - Vignette (darkened edges to focus the frame)
 - **Motion blur** and/or radial blur scaled by `speedT` — the biggest speed upgrade
@@ -26,13 +34,26 @@ was split out on purpose. Everything from the lean pass stays — this is additi
 - Addons live at `three/addons/postprocessing/*` (import map already points at
   `three@0.160.0/examples/jsm/`)
 
-### 2. HDRI / image-based lighting
+### 2. HDRI / image-based lighting  ✅ done
+Landed: `kloppenheim_06_puresky` (2k) as background + PMREM environment. At load it's rotated
+so its sun sits on `SUN_AZIMUTH`; the shadow light shares that bearing at `SUN_LIGHT_ELEV`.
+Fog + far-ridge haze come from the HDRI's horizon (away-from-sun half). Tunables:
+`HDRI_EXPOSURE`, `ENV_INTENSITY`. Falls back to the procedural sky if assets can't load
+(file://). Camera far plane raised to 14000 — the old 6000 clipped the valley/ridges into the
+flat pale band at the horizon.
+
 - Replace the procedural `RoomEnvironment` with a real outdoor **HDRI** loaded via
   `RGBELoader` + `PMREMGenerator` for believable ambient light and reflections
 - Optionally use the HDRI as the skybox instead of the shader dome
 - Pick a golden-hour / mountain-pass `.hdr` (e.g. from Poly Haven)
 
-### 3. Higher-detail geometry & materials
+### 3. Higher-detail geometry & materials  🟡 partly done
+Landed: PBR asphalt + grass (1k, Poly Haven) with arc-length UVs (`ASPHALT_TILE`,
+`GRASS_TILE`), grass anti-tiling blend, painted edge lines as real strips, continuous
+guardrail beam, roadside forest of instanced Quaternius pines (`TREE_*` tunables; chunked
+per `TREE_CHUNK` so frustum culling works). Still open: scattered detail (rocks, shrubs), LOD.
+Perf: adaptive resolution (`RES_STEPS`) drops render scale when fps < 50 and climbs back.
+
 - **Textured tarmac**: albedo + normal + roughness maps on the road ribbon (with
   proper UVs along the spline); painted lines as texture rather than geometry
 - **Continuous metal guardrail** mesh (currently just posts)
@@ -46,6 +67,15 @@ was split out on purpose. Everything from the lean pass stays — this is additi
 - Dynamic time-of-day
 
 ---
+
+### 5. Rider model  ✅ done
+Quaternius "Casual Character" + CC0 longboard (`assets/models/`), posed procedurally in
+`poseRider()`: two-bone IK plants the feet on the deck (regular stance), crouch depth follows
+tuck / air, spine bends + twists downhill, head looks down the road, arms go from a loose
+balance pose to hands-behind-the-back in the tuck, front hand reaches the toe edge on grabs.
+Tunables: `RIDER_HEIGHT`, `BOARD_LEN`, `STANCE`. Box rider remains as the file:// fallback.
+Chase + drone cams now smooth their offset from the rider (no more trailing lag at speed).
+Next step for the rider: real animation clips (push, carve, slide) via `AnimationMixer`.
 
 ## Dependencies / serving (IMPORTANT)
 - HDRIs and texture files are **fetched**, which browsers block from `file://`.
