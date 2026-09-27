@@ -1884,13 +1884,32 @@ function toggleMusic() {
 function nextTrack() { if (!radioStarted) { radioStarted = true; playTrack(0); } else playTrack(track + 1); }
 function prevTrack() { if (!radioStarted) { radioStarted = true; playTrack(0); } else playTrack(track - 1); }
 
+// Music is on by default. Browsers block audio until the player first interacts, so start it
+// now and, if that's refused, again on the first key / click / tap. The music keys and the
+// transport buttons are left to their own handlers (otherwise they'd start it, then toggle it off).
+radioStarted = true;
+playTrack(0);
+function unlockAudio(e) {
+  if (e.type === 'keydown' && ['KeyM', 'Period', 'Comma'].includes(e.code)) return;
+  if (e.target?.closest?.('#transport')) return;
+  if (audio.paused) audio.play().catch(() => {});
+}
+function stopUnlocking() {
+  removeEventListener('keydown', unlockAudio, true);
+  removeEventListener('pointerdown', unlockAudio, true);
+}
+addEventListener('keydown', unlockAudio, true);
+addEventListener('pointerdown', unlockAudio, true);
+audio.addEventListener('play', stopUnlocking, { once: true });   // once it's playing, pausing is the player's call
+
 document.getElementById('transport').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
+  const b = e.target.closest('button'); if (!b || gameState === 'ENTRY') return;   // no sound changes while typing initials
   ({ toggle: toggleMusic, next: nextTrack, prev: prevTrack })[b.dataset.t]?.();
 });
 
-// Music hotkeys — active in any game state
+// Music hotkeys — active in every game state except initials entry (M is a letter there)
 addEventListener('keydown', e => {
+  if (gameState === 'ENTRY') return;
   if (e.code === 'KeyM') toggleMusic();
   else if (e.code === 'Period') nextTrack();
   else if (e.code === 'Comma') prevTrack();
