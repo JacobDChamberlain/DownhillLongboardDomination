@@ -56,7 +56,8 @@ you hardest here and your Unity/Unreal endgame pays off, so don't sink effort in
   (rocket boost / endurance+ / free-death; attack items stubbed for multiplayer).
 - [ ] **2. Visual-chaos toys** — wireframe/glitch mode, blinking-chaos sky,
   audio-visualizer sky, starry/meme skies (image ones need asset files).
-- [ ] **3. World & scenery** — HUGE cliffs, bridges over water,
-  carve-down-mountainside sections, crowds at start/finish, more detail.
+- [ ] **3. World & scenery** — *done: cliffs (road rides a ridge), bridge/viaduct over a
+  fjord, crowds + arches at start/finish.* Still open: carve-down-mountainside sections, more
+  roadside detail.
 - [ ] **4. Full visual pass** — *post-processing, trailer cams, HDRI sky, PBR road/grass, rigged rider, pine forest done; ground detail/LOD next* — post-processing (bloom, vignette, motion blur,
   chromatic aberration); HDRI + textured tarmac need asset files added.
