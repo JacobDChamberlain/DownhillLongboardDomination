@@ -21,6 +21,7 @@
   .tag.air.on  { background: #ffd23c; color:#222; }
   .tag.off.on  { background: #9a6b3f; }
   .tag.grind.on { background: #7dff3c; color:#122; }
+  .tag.brake.on { background: #ff3b3b; }
   /* grind balance meter (THPS-style): keep the needle out of the red */
   #balance { position: fixed; left: 50%; top: 62%; width: 260px; height: 14px; transform: translateX(-50%);
     border-radius: 7px; background: linear-gradient(90deg, #ff3b3b 0%, #ffb23b 22%, #7dff3c 40%, #7dff3c 60%, #ffb23b 78%, #ff3b3b 100%);
@@ -29,6 +30,14 @@
   #balneedle { position: absolute; top: -6px; left: 50%; width: 4px; height: 26px; margin-left: -2px; background: #fff;
     border-radius: 2px; box-shadow: 0 0 6px #000; }
   body.clean #balance { display: none; }
+  /* start countdown — three lights, left to right; the last is the big bright one */
+  #lights { position: fixed; left: 50%; top: 14%; transform: translateX(-50%); display: flex; gap: 22px; align-items: center;
+    padding: 14px 22px; border-radius: 40px; background: rgba(10,14,24,.6); opacity: 0; transition: opacity .25s; pointer-events: none; }
+  #lights.show { opacity: 1; }
+  #lights .lt { width: 42px; height: 42px; border-radius: 50%; background: #2a2e36; box-shadow: inset 0 0 8px #000; transition: background .06s, box-shadow .06s; }
+  #lights .lt.on { background: #ffb400; box-shadow: 0 0 22px 6px rgba(255,180,0,.7), inset 0 0 6px #fff6; }
+  #lights .lt.go { width: 56px; height: 56px; }
+  #lights .lt.go.on { background: #7dff3c; box-shadow: 0 0 40px 14px rgba(125,255,60,.85), inset 0 0 8px #fff8; }
   #kickwrap { width: 180px; height: 10px; border-radius: 6px; background: rgba(255,255,255,.15); margin: 12px 0 6px; overflow: hidden; }
   #kickbar { height: 100%; width: 100%; background: linear-gradient(90deg,#3ca6ff,#8ce0ff); border-radius: 6px; transition: width .08s; }
   #kickwrap.endur #kickbar { background: linear-gradient(90deg,#39d353,#b6ff9e); box-shadow: 0 0 10px #39d353; }
@@ -142,6 +151,14 @@
   .rlist li .sp { text-align: right; opacity: .8; }
   .rlist li .ht { text-align: right; color: #ffd23c; opacity: .85; }
   .rlist li.me { background: rgba(255,210,60,.16); opacity: 1; }
+  /* results come in stages: stats → initials → board */
+  #results[data-stage="stats"] #rentry, #results[data-stage="stats"] .rhead, #results[data-stage="stats"] #rlist,
+  #results[data-stage="stats"] #rcontinue, #results[data-stage="entry"] .rhead, #results[data-stage="entry"] #rlist,
+  #results[data-stage="entry"] #rnext, #results[data-stage="board"] #rnext { display: none; }
+  /* final screen: nothing but the choices (Restart / Quit — room for Next Race later) */
+  #results:not([data-stage="end"]) #rend { display: none; }
+  #results[data-stage="end"] .rboard > :not(#rend) { display: none; }
+  .rmenu { min-width: 320px; }
   .rhint { margin-top: 22px; font-size: 13px; letter-spacing: 2px; opacity: .7; text-align: center; }
 </style>
 </head>
@@ -162,11 +179,13 @@
     <span class="tag air">AIR</span>
     <span class="tag off">OFF ROAD</span>
     <span class="tag grind">GRIND</span>
+    <span class="tag brake">BRAKE</span>
   </div>
 </div>
 <div id="powerups"></div>
 <div id="trickpop"></div>
 <div id="balance"><div id="balneedle"></div></div>
+<div id="lights"><span class="lt"></span><span class="lt"></span><span class="lt go"></span></div>
 <div id="flash"></div>
 <div id="nowplaying">
   <div class="np-eyebrow">♪ Now playing</div>
@@ -206,6 +225,7 @@
         <dt><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></dt><dd>carve</dd>
         <dt><kbd>Shift</kbd> hold</dt><dd>tuck — go faster</dd>
         <dt><kbd>W</kbd> / <kbd>↑</kbd></dt><dd>kick-push</dd>
+        <dt><kbd>B</kbd> hold</dt><dd>brake to a stop</dd>
         <dt><kbd>0</kbd></dt><dd>reset run</dd>
       </dl></section>
       <section><h3>TRICKS — IN THE AIR</h3><dl class="tricks">
@@ -233,7 +253,7 @@
         <dt><kbd>Esc</kbd></dt><dd>pause menu</dd>
       </dl></section>
     </div>
-    <div class="controls-pad">🎮 Stick carve · RT / A tuck · X jump · B kick · Y grind · ☰ pause</div>
+    <div class="controls-pad">🎮 Stick carve · RT / A tuck · LT brake · X jump · B kick · Y grind · ☰ pause</div>
     <ul class="menu-list" style="margin-top:18px"><li data-action="back">Back</li></ul>
   </div>
 </div>
@@ -264,7 +284,12 @@
     </div>
     <div class="rhead"><span>#</span><span>Name</span><span>Time</span><span>Mph</span><span>Air</span></div>
     <ol id="rlist" class="rlist"></ol>
-    <div id="rcontinue" class="rhint blink">Enter / A / click — ride again</div>
+    <div id="rnext" class="rhint blink">Enter / A / click — continue</div>
+    <div id="rcontinue" class="rhint blink">Enter / A / click — continue</div>
+    <div id="rend">
+      <ul class="menu-list rmenu"><li data-r="restart" class="sel">Restart</li><li data-r="quit">Quit</li></ul>
+      <div class="menu-hint">↑ ↓ to choose · Enter / A to select</div>
+    </div>
   </div>
 </div>
 
@@ -505,24 +530,33 @@ const ROAD_HALF_WIDTH = 9;
 
 const TRACK_LEN = 3500;   // world units the run spans in -Z (was 7000 — shorter track, scenery-first)
 const TRACK_DROP = 650;   // total vertical drop over the run
+const END_LEVEL_T = 0.965; // the road is level (and straight) from here to the end — the finish pit
 const START_EASE = 0.15;  // first fraction of the track where the rolling rises are flattened
                           // into a smooth, speed-building descent (no steep first hill to crest)
 
 function buildRoadPoints() {
+  // rolling rises that break up the drop — eased in over START_EASE so the run opens
+  // with a clean descent that evens out from the top, then hits the fun terrain
+  const rawY = t => {
+    const ease = Math.min(1, t / START_EASE);
+    const rises = 70 * Math.sin(t * Math.PI * 6.0) + 35 * Math.sin(t * Math.PI * 12.0 + 1.7);
+    return TRACK_DROP * (1 - t) - rises * ease;
+  };
+  // winding: layered sines across several frequencies = big sweepers + tight kinks
+  const rawX = t => Math.sin(t * Math.PI * 3.4 + 0.2) * 250
+                  + Math.sin(t * Math.PI * 6.9 + 1.2) * 120
+                  + Math.sin(t * Math.PI * 1.6 + 0.5) * 175
+                  + Math.sin(t * Math.PI * 10.5 + 2.0) * 55;
+  // the last stretch levels out and straightens into the finish pit (flat, no banking)
+  const yEnd = rawY(END_LEVEL_T), xEnd = rawX(END_LEVEL_T);
   const pts = [];
   const N = 170;
   for (let i = 0; i < N; i++) {
     const t = i / (N - 1);
-    // rolling rises that break up the drop — eased in over START_EASE so the run opens
-    // with a clean descent that evens out from the top, then hits the fun terrain
-    const ease = Math.min(1, t / START_EASE);
-    const rises = 70 * Math.sin(t * Math.PI * 6.0) + 35 * Math.sin(t * Math.PI * 12.0 + 1.7);
-    const y = TRACK_DROP * (1 - t) - rises * ease;
-    // winding: layered sines across several frequencies = big sweepers + tight kinks
-    const x = Math.sin(t * Math.PI * 3.4 + 0.2) * 250
-            + Math.sin(t * Math.PI * 6.9 + 1.2) * 120
-            + Math.sin(t * Math.PI * 1.6 + 0.5) * 175
-            + Math.sin(t * Math.PI * 10.5 + 2.0) * 55;
+    const sy = THREE.MathUtils.smoothstep(t, END_LEVEL_T - 0.02, END_LEVEL_T);
+    const sx = THREE.MathUtils.smoothstep(t, END_LEVEL_T - 0.035, END_LEVEL_T);
+    const y = THREE.MathUtils.lerp(rawY(t), yEnd, sy);
+    const x = THREE.MathUtils.lerp(rawX(t), xEnd, sx);
     const z = -t * TRACK_LEN; // overall run heads into -Z
     pts.push(new THREE.Vector3(x, y, z));
   }
@@ -578,10 +612,20 @@ function frameAt(u) {
 }
 
 // Course features — hand-placed along the run (positions are u in [0,1]). Playtest-tunable.
-const GAPS  = [ { u0: 0.615, u1: 0.632 } ];   // road holes you must jump (a kicker sits right before)
-const RAMPS = [ 0.30, 0.47, 0.606 ];          // launch kickers; the last one feeds the gap
+const GAPS  = [ { u0: 0.618, u1: 0.628 } ];   // road holes you must jump (a kicker sits right before)
+const RAMPS = [ 0.30, 0.47, 0.613 ];          // launch kickers; the last one feeds the gap
 const BRIDGE = { u0: 0.665, u1: 0.725 };      // the ridge breaks here; the road crosses the gap on a viaduct
 const onBridge = u => u > BRIDGE.u0 && u < BRIDGE.u1;
+// Start / finish pits — enclosed arenas at both ends (crowd all around, no cut-off level edge)
+const FINISH_U       = 0.958;   // finish line (arch): the clock stops, controls hand over to the coast
+const FINISH_PIT_U   = 0.988;   // finish pit centre along the road
+const FINISH_PIT_R   = 80;      // floor radius (the road's end at u=1 sits inside it)
+const START_PIT_BACK = 63;      // start pit centre sits this far behind the start line (floor ends at the line)
+const START_PIT_R    = 62;
+const PIT_U0         = 0.971;   // past here the pit floor replaces grass / cliffs / rails
+const STOP_U         = 0.996;   // the far berm — you can't roll past this
+const inPit = u => u > PIT_U0;
+const START_U        = 0.0015;  // start line (arch) — you begin right on it
 const ITEMS = [                               // pickups; .mesh / .taken get attached when built
   { u: 0.20, lat:  5, type: 'boost' },
   { u: 0.38, lat: -6, type: 'endurance' },
@@ -624,7 +668,7 @@ const GRASS_TILE   = 22;   // world units per grass texture repeat
       const uSeg = i / SAMPLES;
       if (GAPS.some(g => uSeg > g.u0 && uSeg < g.u1)) continue;   // leave a hole — the abyss shows through
       roadIdx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
-      if (!onBridge(uSeg)) {
+      if (!onBridge(uSeg) && !inPit(uSeg)) {
         const c = i * 4;   // 4 grass verts per sample: left-outer, left-inner, right-inner, right-outer
         grassIdx.push(c, c + 1, c + 4, c + 1, c + 5, c + 4, c + 2, c + 3, c + 6, c + 3, c + 7, c + 6);
       }
@@ -681,7 +725,8 @@ const GRASS_TILE   = 22;   // world units per grass texture repeat
   // reflecting the procedural environment reads as a black band)
   railMat = new THREE.MeshStandardMaterial({ color: 0xb8bcc0, roughness: .5, metalness: .2, side: THREE.DoubleSide });
   glowMats.push({ mat: paintMat, color: 0xffffff, k: 1 }, { mat: railMat, color: 0xffffff, k: 0.4 });   // rail is a big surface — less, or bloom fogs the screen
-  for (const s of [1, -1]) strip({ s: s * (GW + 0.62), u: 0.72 }, { s: s * (GW + 0.62), u: 1.12 }, railMat).castShadow = true;
+  const railKeep = i => notInGap(i) && !inPit(i / SAMPLES);
+  for (const s of [1, -1]) strip({ s: s * (GW + 0.62), u: 0.72 }, { s: s * (GW + 0.62), u: 1.12 }, railMat, railKeep).castShadow = true;
 
   // bridge deck: a concrete box girder under the road across the gorge
   const onDeck = i => onBridge(i / SAMPLES) || onBridge((i + 1) / SAMPLES);
@@ -745,7 +790,7 @@ let cliffMat, waterTex;
         uvs.push(along / ROCK_TILE, drop / ROCK_TILE);
       }
       cols[s].push(col);
-      if (i > 0 && !(i - 1 >= iStart && i - 1 < iEnd)) {
+      if (i > 0 && !(i - 1 >= iStart && i - 1 < iEnd) && !inPit((i - 1) / SAMPLES)) {
         const a = cols[s][i - 1], b = col;
         for (let r = 0; r < CLIFF_ROWS; r++) idx.push(a[r], b[r], a[r + 1], b[r], b[r + 1], a[r + 1]);
       }
@@ -857,6 +902,60 @@ let cliffMat, waterTex;
   scene.add(lake);
 }
 
+// ------------------------------------------------------------------
+// Pits — an enclosed arena at each end: flat floor, a grass berm rim with an opening where the
+// road comes through, and rock walls outside dropping to the valley. The crowd rings the rim.
+// ------------------------------------------------------------------
+const ARENAS = [];   // { c: centre (floor level), R, openAng, openHalf } — crowd placement reads this
+{
+  const FLOOR_DY = -0.55;   // a hair under the grass ribbon so the two never z-fight
+  function ring(profile, c, openAng, openHalf, mat, uvFor) {
+    // lathe around c.y-axis, leaving an opening of ±openHalf around openAng (where the road passes)
+    const SEG = 72, v = [], uv = [], idx = [];
+    const a0 = openAng + openHalf, span = Math.PI * 2 - 2 * openHalf;
+    for (let k = 0; k <= SEG; k++) {
+      const a = a0 + span * k / SEG;
+      for (const [r, y] of profile) {
+        const x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
+        v.push(x, c.y + y, z); uv.push(...uvFor(x, c.y + y, z, a, r));
+      }
+    }
+    const P = profile.length;
+    for (let k = 0; k < SEG; k++) for (let j = 0; j < P - 1; j++) {
+      const A = k * P + j, B = (k + 1) * P + j;
+      idx.push(A, B, A + 1, B, B + 1, A + 1);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); m.receiveShadow = true;
+    scene.add(m);
+  }
+  const flat = v => new THREE.Vector3(v.x, 0, v.z).normalize();
+  const planarUV = (x, y, z) => [x / GRASS_TILE, z / GRASS_TILE];
+  const rockUV = (x, y, z, a, r) => [a * r / ROCK_TILE, y / ROCK_TILE];
+  function arena(c, R, towardRoad, roadThrough) {
+    const openAng = Math.atan2(towardRoad.z, towardRoad.x);
+    const openHalf = Math.atan2(ROAD_HALF_WIDTH + 52, R) * 0.9;   // wide enough for the road + shoulders
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(R + 2, 72).rotateX(-Math.PI / 2), groundMeshes[0].material);
+    const fuv = floor.geometry.attributes.uv, fp = floor.geometry.attributes.position;
+    for (let i = 0; i < fuv.count; i++) fuv.setXY(i, (fp.getX(i) + c.x) / GRASS_TILE, (fp.getZ(i) + c.z) / GRASS_TILE);
+    floor.position.set(c.x, c.y + FLOOR_DY, c.z); floor.receiveShadow = true;
+    scene.add(floor);
+    // grass berm rim, then rock walls outside down to the valley floor
+    ring([[R, FLOOR_DY], [R + 3, 0.6], [R + 7, 3.8], [R + 11, 5.2], [R + 17, 5.4]], c, openAng, openHalf, groundMeshes[0].material, planarUV);
+    ring([[R + 17, 5.4], [R + 21, 1.5], [R + 32, -45], [R + 60, -150], [R + 95, CLIFF_FLOOR - c.y]], c, openAng, openHalf, cliffMat, rockUV);
+    ARENAS.push({ c: c.clone(), R, openAng, openHalf, roadThrough });
+  }
+  // finish: centred on the level end of the road; opening faces back up the road
+  const fe = frameAt(FINISH_PIT_U);
+  arena(fe.p, FINISH_PIT_R, flat(fe.tan).negate(), true);
+  // start: behind the start line; opening faces down the road
+  const f0 = frames[0];
+  arena(f0.p.clone().addScaledVector(flat(f0.tan), -START_PIT_BACK), START_PIT_R, flat(f0.tan), false);
+}
+
 // Guardrail posts + roadside trees + distant mountains
 // far scenery tinted toward the horizon color; re-tinted with factor `f` when the HDRI loads
 const hazeMats = [];
@@ -867,6 +966,7 @@ const hazeMats = [];
   const posts = new THREE.InstancedMesh(postGeo, postMat, Math.floor(SAMPLES / 6) * 2);
   const dummy = new THREE.Object3D(); let pc = 0;
   for (let i = 0; i < SAMPLES; i += 6) {
+    if (inPit(i / SAMPLES)) continue;
     const f = frames[i];
     for (const s of [1, -1]) {
       dummy.position.copy(f.p).addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 0.8)).addScaledVector(f.up, 0.7);
@@ -936,7 +1036,7 @@ const trees = [];
     const f = frames[i];
     if (GAPS.some(g => i / SAMPLES > g.u0 - 0.01 && i / SAMPLES < g.u1 + 0.01)) continue;
     if (i / SAMPLES > BRIDGE.u0 - 0.012 && i / SAMPLES < BRIDGE.u1 + 0.012) continue;
-    if (i / SAMPLES < 0.035 || i / SAMPLES > 0.955) continue;   // leave room for the start/finish crowds
+    if (i / SAMPLES < 0.035 || i / SAMPLES > 0.918) continue;   // leave room for the start/finish crowds
     for (const s of [1, -1]) {
       if (rnd() > TREE_CHANCE) continue;
       const d = ROAD_HALF_WIDTH + 6 + rnd() * (SHOULDER - ROAD_HALF_WIDTH - 10);
@@ -1367,6 +1467,24 @@ function updateSparks(dt, pos) {
   sparkGeo.attributes.position.needsUpdate = true;
 }
 
+// Pickups glow, carry a tall light beam and a name label so you can spot them at speed
+const ITEM_GLOW   = 3.2;   // emissive strength of pickups
+const ITEM_BEAM_H = 60;    // height of the light beam above each pickup
+const ITEM_LABEL_DIST = 450; // labels show within this distance (constant on-screen size would clutter the view)
+
+// Floating text label (a camera-facing sprite) — used over pickups and course features
+function makeLabel(text, color, width = 0.2) {     // width as a fraction of screen height (constant on screen)
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
+  const cx = cv.getContext('2d');
+  cx.font = '900 68px system-ui, sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.lineWidth = 12; cx.strokeStyle = 'rgba(0,0,0,.75)'; cx.strokeText(text, 256, 66);
+  cx.fillStyle = '#' + new THREE.Color(color).getHexString(); cx.fillText(text, 256, 66);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, sizeAttenuation: false }));
+  sp.scale.set(width, width / 4, 1);
+  return sp;
+}
+
 // ------------------------------------------------------------------
 // Course-feature meshes — kicker ramps + floating pickups
 // ------------------------------------------------------------------
@@ -1404,13 +1522,23 @@ function updateSparks(dt, pos) {
     freedeath: new THREE.IcosahedronGeometry(0.9, 0),
     weapon:    new THREE.BoxGeometry(1.1, 1.1, 1.1),
   };
+  // visible from far down the road: a bright glow, a tall light beam, and a name label
+  const itemName = { boost: 'ROCKET BOOST', endurance: 'ENDURANCE', freedeath: 'FREE DEATH', weapon: 'WEAPON' };
+  const beamGeo = new THREE.CylinderGeometry(0.5, 1.4, ITEM_BEAM_H, 12, 1, true).translate(0, ITEM_BEAM_H / 2, 0);
   for (const it of ITEMS) {
     const f = frameAt(it.u);
     const pos = f.p.clone().addScaledVector(f.side, it.lat).addScaledVector(f.up, 2.4);
     const c = itemColor[it.type];
-    const m = new THREE.Mesh(itemGeo[it.type], new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.6, roughness: .4 }));
-    m.position.copy(pos); m.castShadow = true;
-    it.mesh = m; it.taken = false; it.basePos = pos.clone();
+    const m = new THREE.Mesh(itemGeo[it.type], new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: ITEM_GLOW, roughness: .4 }));
+    m.position.copy(pos); m.castShadow = true; m.scale.setScalar(1.6);
+    // normal blending, not additive — an additive beam vanishes against the bright hazy sky
+    const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.5,
+      depthWrite: false, fog: false, side: THREE.DoubleSide }));
+    m.add(beam);
+    const label = makeLabel(itemName[it.type], c);
+    label.position.y = 1.8;   // (in the pickup's 1.6× scale)
+    m.add(label);
+    it.mesh = m; it.label = label; it.taken = false; it.basePos = pos.clone();
     scene.add(m);
   }
 }
@@ -1420,10 +1548,13 @@ let itemSpin = 0;
 // Start / finish — arches over the road and cheering crowds behind the rails. Spectators are
 // clones of Quaternius "Man" (CC0) with per-person colors; mixers only tick near the camera.
 // ------------------------------------------------------------------
-const CROWD_ZONES = [ { u0: 0.004, u1: 0.03, arch: 0.014, label: 'START' },
-                      { u0: 0.962, u1: 0.994, arch: 0.985, label: 'FINISH' } ];
+const CROWD_ZONES = [ { u0: 0.006, u1: 0.034, arch: START_U, label: 'START' },
+                      { u0: 0.928, u1: 0.957, arch: FINISH_U, label: 'FINISH' } ];
 const CROWD_PER_SIDE = 16;    // spectators per side of the road, per zone
-const CROWD_ANIM_DIST = 260;  // only animate spectators this close to the camera
+const PIT_CROWD_SPACING = 5;  // world units between spectators lining the road through the finish pit
+const CROWD_START_PIT   = 45; // spectators around the start line in the start pit
+const CROWD_SHADOW_DIST = 45; // only spectators this close to the camera cast shadows
+const CROWD_ANIM_DIST = 120;  // only animate spectators this close to the camera
 const crowd = [];             // { mixer, obj }
 {
   // arches: two posts + a banner with the label painted on a canvas
@@ -1470,11 +1601,8 @@ const crowd = [];             // { mixer, obj }
     let seed = 99;
     const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const pick = a => a[Math.floor(rnd() * a.length)];
-    for (const z of CROWD_ZONES) for (const s of [1, -1]) for (let n = 0; n < CROWD_PER_SIDE; n++) {
-      const u = z.u0 + (z.u1 - z.u0) * (n + rnd() * 0.8) / CROWD_PER_SIDE;
-      const f = frameAt(u);
-      const lat = s * (ROAD_HALF_WIDTH + 2.4 + rnd() * 5);
-      const p = f.p.clone().addScaledVector(f.side, lat); p.y -= 0.4;
+    // one spectator at p, facing `face` (a world direction on the ground plane)
+    function spawn(p, face) {
       const person = SkeletonUtils.clone(g.scene);
       person.traverse(o => {
         if (!o.isMesh) return;
@@ -1485,9 +1613,7 @@ const crowd = [];             // { mixer, obj }
       });
       person.scale.setScalar(scale * (0.9 + rnd() * 0.2));
       person.position.copy(p);
-      // face the road (and a little up-hill, toward oncoming riders)
-      const toRoad = f.p.clone().sub(p).setY(0).normalize().addScaledVector(f.tan, -0.5).normalize();
-      person.rotation.y = Math.atan2(toRoad.x, toRoad.z) + (rnd() - 0.5) * 0.5;
+      person.rotation.y = Math.atan2(face.x, face.z) + (rnd() - 0.5) * 0.5;
       const mixer = new THREE.AnimationMixer(person);
       const r = rnd();
       const action = mixer.clipAction(r < 0.65 ? clips.clap : r < 0.85 ? clips.jump : clips.idle);
@@ -1495,16 +1621,65 @@ const crowd = [];             // { mixer, obj }
       action.timeScale = 0.85 + rnd() * 0.3;
       mixer.update(0);
       scene.add(person);
-      crowd.push({ mixer, obj: person });
+      const meshes = []; person.traverse(o => { if (o.isMesh) meshes.push(o); });
+      crowd.push({ mixer, obj: person, meshes, shadow: true });
+    }
+    // lining the road into the start and up to the finish line
+    for (const z of CROWD_ZONES) for (const s of [1, -1]) for (let n = 0; n < CROWD_PER_SIDE; n++) {
+      const u = z.u0 + (z.u1 - z.u0) * (n + rnd() * 0.8) / CROWD_PER_SIDE;
+      const f = frameAt(u);
+      const p = f.p.clone().addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 2.4 + rnd() * 5)); p.y -= 0.4;
+      // face the road (and a little up-hill, toward oncoming riders)
+      spawn(p, f.p.clone().sub(p).setY(0).normalize().addScaledVector(f.tan, -0.5).normalize());
+    }
+    // finish pit: lining both sides of the road through the pit (two rows, the back one patchy),
+    // then bunched up around the end of the road behind where you stop
+    for (let u = PIT_U0 + 0.002; u < 0.994; u += PIT_CROWD_SPACING / TOTAL_LEN)
+      for (const s of [1, -1]) for (let row = 0; row < 2; row++) {
+        if (row === 1 && rnd() < 0.5) continue;
+        const f = frameAt(u + (rnd() - 0.5) * 1.5 / TOTAL_LEN);
+        const p = f.p.clone().addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 3 + row * 2.4 + rnd() * 1.2)); p.y -= 0.5;
+        spawn(p, f.p.clone().sub(p).setY(0).normalize());
+      }
+    {
+      const fe = frameAt(0.999), D = new THREE.Vector3(fe.tan.x, 0, fe.tan.z).normalize();
+      for (let n = 0; n < 18; n++) {
+        const ang = Math.atan2(D.z, D.x) + (n / 17 - 0.5) * 2.6 + (rnd() - 0.5) * 0.1;
+        const dir = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang));
+        const p = fe.p.clone().addScaledVector(dir, 12 + rnd() * 7); p.y -= 0.5;
+        spawn(p, dir.clone().negate());
+      }
+    }
+    // start pit: packed around and behind the start line, facing you (the road ahead stays clear)
+    for (const a of ARENAS) {
+      if (a.roadThrough) continue;
+      const axis = new THREE.Vector3(Math.cos(a.openAng), 0, Math.sin(a.openAng));   // centre → start line
+      const riderAt = a.c.clone().addScaledVector(axis, START_PIT_BACK);
+      let placed = 0;
+      for (let tries = 0; placed < CROWD_START_PIT && tries < CROWD_START_PIT * 8; tries++) {
+        const ang = rnd() * Math.PI * 2, r = 8 + rnd() * (a.R - 11);
+        const p = a.c.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0, Math.sin(ang) * r));
+        if (p.clone().sub(a.c).dot(axis) < -a.R * 0.25) continue;          // keep them near the line
+        if (p.distanceTo(riderAt) < 7) continue;                           // not on top of the rider
+        p.y = a.c.y - 0.5;
+        spawn(p, riderAt.clone().sub(p).setY(0).normalize());
+        placed++;
+      }
     }
   }).catch(e => console.warn('[assets] spectator model unavailable, no crowds:', e?.message || e));
 }
 const CROWD_SHOW_DIST = 600;  // hide spectators entirely beyond this
+let crowdAnimT = 0;
 function updateCrowd(dt) {
+  crowdAnimT += dt;
+  const tick = crowdAnimT >= 1 / 30;           // animate the crowd at ~30 fps — plenty for clapping
+  const adt = crowdAnimT; if (tick) crowdAnimT = 0;
   for (const c of crowd) {
     const d2 = c.obj.position.distanceToSquared(camera.position);
     c.obj.visible = d2 < CROWD_SHOW_DIST * CROWD_SHOW_DIST;
-    if (d2 < CROWD_ANIM_DIST * CROWD_ANIM_DIST) c.mixer.update(dt);
+    const sh = d2 < CROWD_SHADOW_DIST * CROWD_SHADOW_DIST;
+    if (sh !== c.shadow) { c.shadow = sh; for (const m of c.meshes) m.castShadow = sh; }
+    if (tick && d2 < CROWD_ANIM_DIST * CROWD_ANIM_DIST) c.mixer.update(adt);
   }
 }
 
@@ -1518,7 +1693,7 @@ addEventListener('keydown', e => {
   if (!e.repeat) tapped[e.code] = true;
   if (gameState !== 'PLAYING' || e.repeat) return;
   if (e.code === 'KeyR' && e.shiftKey) revert();
-  else if (e.code === 'Digit0' || e.code === 'Numpad0') resetRun();
+  else if (e.code === 'Digit0' || e.code === 'Numpad0') beginRun();
   else if (e.code === 'KeyC') cycleCam();
   else if (e.code === 'KeyX') cycleChaos();
   else if (e.code === 'KeyH') cycleHud();
@@ -1540,13 +1715,14 @@ addEventListener('mousemove', e => {
 });
 
 function readInput() {
-  let steer = 0, tuck = 0, jump = false, kick = false, grindBtn = false;
+  let steer = 0, tuck = 0, jump = false, kick = false, grindBtn = false, brake = false;
   if (keys['KeyA'] || keys['ArrowLeft'])  steer -= 1;
   if (keys['KeyD'] || keys['ArrowRight']) steer += 1;
   if (keys['ShiftLeft'] || keys['ShiftRight']) tuck = 1;
   if (keys['Space'] || tapped['Space']) jump = true;
   if (keys['KeyW'] || keys['ArrowUp']) kick = true;
   if (keys['KeyI'] || tapped['KeyI']) grindBtn = true;
+  if (keys['KeyB']) brake = true;
   tapped['Space'] = tapped['KeyI'] = false;
 
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -1558,9 +1734,10 @@ function readInput() {
     if (p.buttons[2] && p.buttons[2].pressed) jump = true; // X
     if (p.buttons[1] && p.buttons[1].pressed) kick = true; // B
     if (p.buttons[3] && p.buttons[3].pressed) grindBtn = true; // Y
+    if (p.buttons[6] && p.buttons[6].value > 0.2) brake = true; // LT
     break;
   }
-  return { steer: THREE.MathUtils.clamp(steer, -1, 1), tuck, jump, kick, grind: grindBtn };
+  return { steer: THREE.MathUtils.clamp(steer, -1, 1), tuck, jump, kick, grind: grindBtn, brake };
 }
 
 // ------------------------------------------------------------------
@@ -1596,6 +1773,7 @@ const MAX_HEADING = 0.62;
 // loss ≈ 0.45 * 9/100 ≈ 4%/sec. A stand-up slide (out of scope) would be far harsher.
 const CARVE_SCRUB = 9.0;   // speed lost while carving hard
 const OFFROAD_DRAG = 9.0;
+const BRAKE_DECEL = 30;    // u/s² while braking (plus a speed-proportional part)
 
 // --- Kick-push: tap to add speed. Costs stamina, has a cooldown, and does nothing
 //     above KICK_MAX_SPEED (aero/tuck takes over) so you can't kick-push forever.
@@ -1623,11 +1801,14 @@ const BAL_TIP        = 1.4;    // how fast the needle falls away from center (gr
 const BAL_CONTROL    = 2.6;    // how hard steering pushes the needle
 const grind = { on: false, side: 1, t: 0, bal: 0, drift: 0, name: '', cd: 0, buffer: 0 };
 let jumpWasDown = false, grindWasDown = false;
-const railAt = u => !GAPS.some(g => u > g.u0 && u < g.u1);   // the beam has breaks only at the gaps
+const railAt = u => !GAPS.some(g => u > g.u0 && u < g.u1) && !inPit(u);   // breaks at the gaps; none in the pit
 
 // --- Ramps / gaps: a kicker launches you; you need speed to clear a gap or you fall.
 const RAMP_BASE   = 6;         // base launch vy off a kicker
 const RAMP_FACTOR = 0.30;      // + this * speed (need speed to clear gaps)
+const GAP_MIN_SPEED = 30;      // u/s (~35 mph) you need at a gap kicker to clear the gap
+const GAP_MARGIN    = 10;      // world units of landing room past the gap
+const GAP_MAX_VY    = 45;      // cap on the assisted launch (a big, floaty jump over the crevasse)
 
 // --- Power-ups
 const ROCKET_BOOST   = 22;     // instant speed added by a boost pickup
@@ -1638,7 +1819,7 @@ let enduranceT = 0, freeDeath = false, weaponTier = 0;
 let curInput = { steer: 0, tuck: 0, jump: false, kick: false };
 
 function resetRun() {
-  state.u = 0.001; state.lateral = 0; state.speed = 8;
+  state.u = START_U; state.lateral = 0; state.speed = 8;
   state.heading = 0; state.height = 0; state.vy = 0; state.airborne = false;
   run.t = 0; run.topSpeed = 0; run.dist = 0; run.airTime = 0; run.score = 0;
   push.meter = 1; push.cd = 0; kickWasDown = false;
@@ -1646,11 +1827,74 @@ function resetRun() {
   enduranceT = 0; freeDeath = false; weaponTier = 0;
   grind.on = false; grind.cd = 0; grind.buffer = 0;
   stance = 1; lastLandT = -1e9;
+  Object.assign(finish, { crossed: false, stopped: false, t: 0 });
   for (const it of ITEMS) { if (it.mesh) it.mesh.visible = true; it.taken = false; }
 }
 
 // Gameplay actions (declarations hoist, so update() can call these).
 function takeoff(vy) { if (state.airborne) return; state.airborne = true; state.vy = vy; armTrick(); }
+// A kicker that feeds a gap launches you far enough to clear it (with margin) as long as you're
+// rolling at GAP_MIN_SPEED or better — the road climbs into that kicker, so a speed-only launch
+// was nearly impossible. Too slow and you fall (and get told why).
+function kickerLaunch(ru) {
+  let vy = RAMP_BASE + state.speed * RAMP_FACTOR;
+  const g = GAPS.find(g => g.u0 > ru && g.u0 - ru < 0.02);
+  if (g) {
+    if (state.speed >= GAP_MIN_SPEED) {
+      const dist = (g.u1 - ru) * TOTAL_LEN + GAP_MARGIN;
+      vy = Math.max(vy, Math.min(GAP_MAX_VY, (34 * dist) / (2 * state.speed)));
+    } else showTrick('NEED SPEED!');
+  }
+  takeoff(vy);
+}
+// --- Finish: crossing FINISH_U freezes your stats and hands over control; you coast to a stop in
+//     the pit, the camera circles you for a moment, then stats → initials → scoreboard.
+const PIT_STOP_U     = 0.984;  // where you roll to rest — the middle of the finish pit
+const PIT_ROLL       = 16;     // a slow finish still rolls you in at about this speed
+const PIT_ORBIT_SECS = 4.5;   // camera circles you this long before the stats come up
+const finish = { crossed: false, stopped: false, t: 0, orbitAng: 0 };
+function crossFinish() {
+  finish.crossed = true;
+  lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, reason: 'end', rank: -1 };
+  if (grind.on) endGrind();
+  showTrick('FINISH!'); flash(0.3);
+}
+function updateCoast(dt, f, slope) {
+  if (state.airborne) {                                // finish a jump that was in progress
+    state.vy -= 34 * dt; state.height += state.vy * dt;
+    if (state.height <= 0) { state.height = 0; state.airborne = false; state.vy = 0; }
+  }
+  // controlled stop: brake exactly hard enough to come to rest at PIT_STOP_U, however fast you
+  // crossed the line; a slow finish gets rolled on in instead of stalling in the chute
+  const d = (PIT_STOP_U - state.u) * TOTAL_LEN;
+  let a = -(state.speed * state.speed) / (2 * Math.max(d, 0.5));
+  if (state.speed < PIT_ROLL && d > 25) a = 8;
+  state.speed = Math.max(0, state.speed + a * dt);
+  if (d <= 0.3) state.speed = 0;
+  state.heading *= Math.exp(-dt * 3);
+  state.steerSmooth *= Math.exp(-dt * 4);
+  state.lateral *= Math.exp(-dt * 0.8);
+  state.u = Math.min(STOP_U, state.u + (state.speed * dt) / TOTAL_LEN);
+  if (state.u >= STOP_U) state.speed = 0;               // rolled into the far berm
+  if (state.speed < 0.4 && d < 6 && !state.airborne && !finish.stopped) {
+    state.speed = 0; finish.stopped = true; finish.t = 0;
+    finish.orbitAng = Math.atan2(camera.position.z - skater.position.z, camera.position.x - skater.position.x);
+    gameState = 'PIT';
+  }
+  return { f, slope, offroad: false, tuck: false, carving: false, brake: false };
+}
+function pitCam(dt) {                                  // slow orbit around the stopped rider
+  finish.t += dt;
+  finish.orbitAng += dt * 0.32;
+  const p = skater.position;
+  const want = new THREE.Vector3(p.x + Math.cos(finish.orbitAng) * 13, p.y + 4 + Math.sin(finish.t * 0.4) * 0.8, p.z + Math.sin(finish.orbitAng) * 13);
+  camPos.lerp(want, Math.min(1, dt * 1.5));
+  camera.position.copy(camPos);
+  camera.lookAt(p.x, p.y + 1.3, p.z);
+  camera.fov += (50 - camera.fov) * Math.min(1, dt * 2); camera.updateProjectionMatrix();
+  if (gameState === 'PIT' && finish.t >= PIT_ORBIT_SECS) finishRun('end');
+}
+
 // --- Revert (Shift+R): a quick 180° pivot on the ground that switches stance (regular ↔ switch).
 //     Right after a landing it scores, like THPS's revert.
 const REVERT_WINDOW = 0.5;   // seconds after landing that a revert still counts as a trick
@@ -1713,7 +1957,7 @@ function updateGrind(dt, inp, f, slope, jumpPressed) {
   } else {
     showTrick(grind.name + '  ' + Math.round(grind.t * GRIND_PTS));
   }
-  if (state.u >= 0.999) finishRun('end');
+  if (!finish.crossed && state.u >= FINISH_U) crossFinish();
   return info;
 }
 function armTrick() {
@@ -1761,6 +2005,7 @@ function update(dt) {
 
   const f = frameAt(state.u);
   const slope = Math.max(0, -f.tan.y); // 0..1 how steeply downhill
+  if (finish.crossed) return updateCoast(dt, f, slope);
   if (grind.on) return updateGrind(dt, inp, f, slope, jumpPressed);
 
   // steering -> heading (less authority at very high speed, like real carving)
@@ -1777,6 +2022,8 @@ function update(dt) {
 
   const offroad = Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1.0;
   if (offroad && !state.airborne) accel -= OFFROAD_DRAG;
+  // brakes (B / LT): a foot-drag stop — strong enough to hold you still on the steepest pitch
+  if (inp.brake && !state.airborne) accel -= BRAKE_DECEL + state.speed * 0.3;
 
   state.speed = Math.max(0, state.speed + accel * dt);
 
@@ -1826,7 +2073,7 @@ function update(dt) {
   state.lateral += strafe * dt;
 
   // course features crossed this step (ramps / pickups), then gap check on the new position
-  for (const ru of RAMPS) if (uPrev < ru && state.u >= ru && !state.airborne) takeoff(RAMP_BASE + state.speed * RAMP_FACTOR);
+  for (const ru of RAMPS) if (uPrev < ru && state.u >= ru && !state.airborne) kickerLaunch(ru);
   for (const it of ITEMS) if (!it.taken && uPrev < it.u && state.u >= it.u && Math.abs(state.lateral - it.lat) < ITEM_PICK_R) collectItem(it);
   for (const g of GAPS) if (!state.airborne && state.height <= 0.1 && state.u > g.u0 && state.u < g.u1) { fallInGap(g); break; }
 
@@ -1845,10 +2092,10 @@ function update(dt) {
     state.lateral = Math.sign(state.lateral) * railLim; state.heading *= -0.3; state.speed *= 0.9;
   }
 
-  if (state.u >= 0.999) finishRun('end'); // reached the bottom — results board, then loop back up
+  if (!finish.crossed && state.u >= FINISH_U) crossFinish();   // over the line — coast into the pit
 
   topSpeed = Math.max(topSpeed, state.speed);
-  return { f, slope, offroad, tuck: inp.tuck, carving: Math.abs(state.steerSmooth) > 0.25 };
+  return { f, slope, offroad, tuck: inp.tuck, carving: Math.abs(state.steerSmooth) > 0.25, brake: inp.brake && !state.airborne };
 }
 
 // ------------------------------------------------------------------
@@ -1910,7 +2157,10 @@ function place(info) {
   itemSpin += dt;
   for (const it of ITEMS) {
     const m = it.mesh;
-    if (m && m.visible) { m.rotation.y = itemSpin * 2; m.position.y = it.basePos.y + Math.sin(itemSpin * 3 + it.u * 12) * 0.3; }
+    if (m && m.visible) {
+      m.rotation.y = itemSpin * 2; m.position.y = it.basePos.y + Math.sin(itemSpin * 3 + it.u * 12) * 0.3;
+      it.label.visible = m.position.distanceToSquared(camera.position) < ITEM_LABEL_DIST ** 2;   // beams carry the long range
+    }
   }
 
   // chase camera
@@ -2018,6 +2268,7 @@ const el = {
   air: document.querySelector('.tag.air'),
   off: document.querySelector('.tag.off'),
   grind: document.querySelector('.tag.grind'),
+  brake: document.querySelector('.tag.brake'),
   balance: document.getElementById('balance'),
   balneedle: document.getElementById('balneedle'),
   dist: document.getElementById('distval'),
@@ -2042,6 +2293,7 @@ function drawHud(info) {
   el.air.classList.toggle('on', state.airborne);
   el.off.classList.toggle('on', info.offroad);
   el.grind.classList.toggle('on', grind.on);
+  el.brake.classList.toggle('on', !!info.brake);
   el.balance.classList.toggle('on', grind.on);
   if (grind.on) el.balneedle.style.left = (50 + THREE.MathUtils.clamp(grind.bal, -1, 1) * 50) + '%';
 
@@ -2364,7 +2616,7 @@ function updateChaos(dt) {
 // ------------------------------------------------------------------
 // Pause menu + settings — keyboard & gamepad navigable
 // ------------------------------------------------------------------
-let gameState = 'PLAYING';   // PLAYING | PAUSED | SETTINGS | CONTROLS | TITLE | ENTRY | RESULTS
+let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TITLE
 let menuIndex = 0;
 const settings = { volume: 70, sens: 100 };
 audio.volume = settings.volume / 100;
@@ -2395,8 +2647,8 @@ function closeMenu() { gameState = 'PLAYING'; menuEl.classList.add('hidden'); }
 function openSettings() { gameState = 'SETTINGS'; menuIndex = 0; showPanel('settings'); renderValues(); renderMenu(); }
 function openControls() { gameState = 'CONTROLS'; menuIndex = 0; showPanel('controls'); renderMenu(); }
 function backToMain()   { gameState = 'PAUSED'; menuIndex = 0; showPanel('main'); renderMenu(); }
-function quitGame()  { gameState = 'TITLE'; menuEl.classList.add('hidden'); titleEl.classList.remove('hidden'); }
-function startFromTitle() { resetRun(); topSpeed = 0; gameState = 'PLAYING'; titleEl.classList.add('hidden'); }
+function quitGame()  { gameState = 'TITLE'; menuEl.classList.add('hidden'); results.el.classList.add('hidden'); titleEl.classList.remove('hidden'); }
+function startFromTitle() { topSpeed = 0; titleEl.classList.add('hidden'); beginRun(); }
 
 function activate(item) {
   ({ resume: closeMenu, settings: openSettings, controls: openControls, quit: quitGame, back: backToMain })[item]?.();
@@ -2419,8 +2671,16 @@ function menuNav(code) {
 // Global game/menu key handling
 addEventListener('keydown', e => {
   if (gameState === 'TITLE') { if (e.code === 'Enter' || e.code === 'Space') startFromTitle(); return; }
+  if (gameState === 'COUNTDOWN') { if (startSeq.phase === 'fly') skipFly(); return; }
   if (gameState === 'ENTRY') { e.preventDefault(); handleEntryKey(e.code); return; }
-  if (gameState === 'RESULTS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') rideAgain(); return; }
+  if (gameState === 'STATS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') advanceStats(); return; }
+  if (gameState === 'RESULTS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') showEnd(); return; }
+  if (gameState === 'END') {
+    if (e.code === 'ArrowUp' || e.code === 'ArrowLeft') rmenuMove(-1);
+    else if (e.code === 'ArrowDown' || e.code === 'ArrowRight') rmenuMove(1);
+    else if (e.code === 'Enter' || e.code === 'Space') rmenuPick();
+    return;
+  }
   if (e.code === 'Escape') {
     if (gameState === 'PLAYING') openMenu();
     else if (inSubmenu()) backToMain();
@@ -2455,7 +2715,13 @@ function pollMenuGamepad(dt) {
   const up = padEdge(p, 12), dn = padEdge(p, 13), lf = padEdge(p, 14), rt = padEdge(p, 15);
   const a = padEdge(p, 0), b = padEdge(p, 1); // consume edges regardless of state
   if (gameState === 'TITLE') { if (a) startFromTitle(); return; }
-  if (gameState === 'RESULTS') { if (a || b) rideAgain(); return; }
+  if (gameState === 'STATS') { if (a || b) advanceStats(); return; }
+  if (gameState === 'RESULTS') { if (a || b) showEnd(); return; }
+  if (gameState === 'END') {
+    if (up || lf) rmenuMove(-1); if (dn || rt) rmenuMove(1);
+    if (a) rmenuPick();
+    return;
+  }
   if (gameState === 'ENTRY') {
     if (up) entryLetter(1); if (dn) entryLetter(-1);
     if (lf) entryMove(-1);  if (rt) entryMove(1);
@@ -2526,6 +2792,25 @@ const results = {
 };
 
 let lastRun = null;                            // snapshot of the run being shown
+// after the board: Restart (a new run) or Quit (to the title screen)
+const rmenuItems = [...document.querySelectorAll('.rmenu li')];
+let rmenuIndex = 0;
+function renderRmenu() { rmenuItems.forEach((li, i) => li.classList.toggle('sel', i === rmenuIndex)); }
+function showEnd() {                           // 4) after everything: just the choices
+  gameState = 'END';
+  results.el.dataset.stage = 'end';
+  rmenuIndex = 0; renderRmenu();
+}
+function rmenuMove(d) { rmenuIndex = (rmenuIndex + d + rmenuItems.length) % rmenuItems.length; renderRmenu(); }
+function rmenuPick(i = rmenuIndex) {
+  results.el.classList.add('hidden');
+  if (rmenuItems[i].dataset.r === 'restart') beginRun();
+  else quitGame();
+}
+rmenuItems.forEach((li, i) => {
+  li.addEventListener('mouseenter', () => { rmenuIndex = i; renderRmenu(); });
+  li.addEventListener('click', e => { e.stopPropagation(); if (gameState === 'END') rmenuPick(i); });
+});
 const entry = { slots: ['A', 'A', 'A'], pos: 0 };
 
 function fmtTime(s) {
@@ -2535,7 +2820,7 @@ function fmtTime(s) {
 
 // One entry point for "the run is over" — reached the end today; a crash could call this later.
 function finishRun(reason) {
-  lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, reason, rank: -1 };
+  if (!lastRun || !finish.crossed) lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, reason, rank: -1 };
   document.exitPointerLock?.();
   results.time.textContent = fmtTime(lastRun.timeS);
   results.top.textContent  = Math.round(lastRun.topSpeed * MPH);
@@ -2543,9 +2828,13 @@ function finishRun(reason) {
   results.air.textContent  = lastRun.airTime.toFixed(1) + 's';
   results.score.textContent = lastRun.score;
 
-  const scores = loadScores().sort(compareBy.time);
-  const qualifies = scores.length < LB_MAX || run.t < scores[scores.length - 1].timeS;
   results.el.classList.remove('hidden');
+  gameState = 'STATS';                       // 1) stats alone, then continue →
+  results.el.dataset.stage = 'stats';
+}
+function advanceStats() {                     // 2) initials if the run placed, 3) the board
+  const scores = loadScores().sort(compareBy.time);
+  const qualifies = scores.length < LB_MAX || lastRun.timeS < scores[scores.length - 1].timeS;
   if (qualifies) startEntry(scores); else showBoard(scores);
 }
 
@@ -2566,6 +2855,7 @@ function renderEntry() {
 
 function startEntry(scores) {   // arcade initials — only when the run placed
   gameState = 'ENTRY';
+  results.el.dataset.stage = 'entry';
   entry.slots = lastInitials.split('');
   entry.pos = 0;
   results.entry.classList.remove('hidden');
@@ -2575,6 +2865,7 @@ function startEntry(scores) {   // arcade initials — only when the run placed
 }
 function showBoard(scores) {
   gameState = 'RESULTS';
+  results.el.dataset.stage = 'board';
   results.entry.classList.add('hidden');
   results.cont.classList.remove('hidden');
   renderBoard(scores);
@@ -2602,11 +2893,6 @@ function submitInitials() {
   showBoard(scores);
 }
 
-function rideAgain() {
-  results.el.classList.add('hidden');
-  resetRun();
-  gameState = 'PLAYING';
-}
 
 function handleEntryKey(code) {
   if (/^Key[A-Z]$/.test(code)) { setLetter(code.slice(3)); return; }
@@ -2618,7 +2904,80 @@ function handleEntryKey(code) {
   else if (code === 'Enter' || code === 'Space') submitInitials();
 }
 
-results.el.addEventListener('click', () => { if (gameState === 'RESULTS') rideAgain(); });
+results.el.addEventListener('click', () => { if (gameState === 'STATS') advanceStats(); else if (gameState === 'RESULTS') showEnd(); });
+
+// ------------------------------------------------------------------
+// Start — a flyover that rises from the ground in front of you (the crowd and the start pit
+// behind you) and sweeps round into the chase camera, then three lights: doot… doot… DOOOT!
+// You roll on the last one. Any key skips the flyover (not the lights).
+// ------------------------------------------------------------------
+const START_FLY_SECS = 3.8;   // flyover length
+const COUNT_STEP     = 0.85;  // seconds between countdown lights
+const LAUNCH_SPEED   = 12;    // u/s you roll off the line with
+const startSeq = { phase: 'fly', t: 0, lit: 0, wait: 0 };
+const lightsEl = document.getElementById('lights');
+const lightEls = [...lightsEl.querySelectorAll('.lt')];
+let sfxCtx = null;
+function beep(freq, dur, vol) {               // tiny synth — no audio assets needed
+  try {
+    sfxCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (sfxCtx.state === 'suspended') sfxCtx.resume();
+    const t0 = sfxCtx.currentTime, o = sfxCtx.createOscillator(), g = sfxCtx.createGain();
+    o.type = 'square'; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol * (settings.volume / 100), t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(sfxCtx.destination);
+    o.start(t0); o.stop(t0 + dur);
+  } catch {}
+}
+function beginRun() {
+  resetRun();
+  state.speed = 0;
+  Object.assign(startSeq, { phase: 'fly', t: 0, lit: 0, wait: 0 });
+  lightEls.forEach(l => l.classList.remove('on'));
+  lightsEl.classList.remove('show');
+  gameState = 'COUNTDOWN';
+}
+function skipFly() { startSeq.phase = 'count'; startSeq.t = 0; chaseOff.set = false; lightsEl.classList.add('show'); }
+const idleInfo = { tuck: false, offroad: false, carving: false, brake: false };
+function updateStart(dt) {
+  state.speed = 0;
+  place(idleInfo);                           // pose the rider; the chase camera runs underneath
+  drawHud(idleInfo);
+  if (startSeq.phase === 'fly') {
+    // hold on the first frame until the rider model is in (a couple of seconds at most)
+    if (!rig.ready && (startSeq.wait += dt) < 2.5) { startSeq.t = 0; }
+    else startSeq.t += dt;
+    const k = THREE.MathUtils.smootherstep(Math.min(1, startSeq.t / START_FLY_SECS), 0, 1);
+    const f = frameAt(state.u), P = skater.position;
+    const D = new THREE.Vector3(f.tan.x, 0, f.tan.z).normalize(), S = new THREE.Vector3(-D.z, 0, D.x);
+    const th = k * Math.PI, r = THREE.MathUtils.lerp(6, 11, k), h = THREE.MathUtils.lerp(0.5, 4.2, k);
+    camPos.copy(P).addScaledVector(D, Math.cos(th) * r).addScaledVector(S, Math.sin(th) * r * 0.9);
+    camPos.y += h;
+    const look = P.clone().add(new THREE.Vector3(0, 1.2, 0))
+      .lerp(P.clone().addScaledVector(D, 14).add(new THREE.Vector3(0, 1.5, 0)), THREE.MathUtils.smoothstep(k, 0.55, 1));
+    camLook.copy(look);
+    camera.position.copy(camPos); camera.lookAt(camLook);
+    camera.fov = THREE.MathUtils.lerp(52, 64, k); camera.updateProjectionMatrix();
+    if (startSeq.t >= START_FLY_SECS) skipFly();
+    return;
+  }
+  // countdown lights: amber, amber, then the big green one — go
+  startSeq.t += dt;
+  const want = Math.min(3, Math.floor(startSeq.t / COUNT_STEP) + 1);
+  while (startSeq.lit < want) {
+    lightEls[startSeq.lit].classList.add('on');
+    startSeq.lit++;
+    if (startSeq.lit < 3) beep(440, 0.16, 0.12);
+    else {
+      beep(880, 0.7, 0.16);
+      gameState = 'PLAYING';
+      state.speed = LAUNCH_SPEED;
+      showTrick('GO!');
+      setTimeout(() => lightsEl.classList.remove('show'), 1100);
+    }
+  }
+}
 
 // ------------------------------------------------------------------
 // Loop
@@ -2655,6 +3014,10 @@ function frame(now) {
     const info = update(dt);
     place(info);
     drawHud(info);
+  } else if (gameState === 'COUNTDOWN') {
+    updateStart(dt);
+  } else if (finish.stopped) {
+    pitCam(dt);   // PIT → STATS → ENTRY → RESULTS: keep circling the rider
   }
   updateCrowd(dt);
   updateChaos(dt);
@@ -2670,6 +3033,7 @@ function frame(now) {
   }
   requestAnimationFrame(frame);
 }
+beginRun();   // every run opens with the flyover + countdown
 requestAnimationFrame(frame);
 
 addEventListener('resize', () => {
