@@ -54,8 +54,9 @@ you hardest here and your Unity/Unreal endgame pays off, so don't sink effort in
 - [x] **1. Gameplay mechanics** — kick-push + meter/cooldown, procedural jump-tricks
   wired to score, ramps, giant gaps with fall-reset, item-pickup framework
   (rocket boost / endurance+ / free-death; attack items stubbed for multiplayer).
-- [ ] **2. Visual-chaos toys** — wireframe/glitch mode, blinking-chaos sky,
-  audio-visualizer sky, starry/meme skies (image ones need asset files).
+- [x] **2. Visual-chaos toys** — chaos mode on `X`: RAVE (strobing rainbow sky), VISUALIZER
+  (music-driven spectrum bars), STARRY (night + Milky Way), GLITCH (wireframe world + screen
+  tearing), all pulsing to the music. Meme/image skies still open (need image assets).
 - [ ] **3. World & scenery** — *done: cliffs (road rides a ridge), bridge/viaduct over a
   fjord, crowds + arches at start/finish.* Still open: carve-down-mountainside sections, more
   roadside detail.
