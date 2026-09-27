@@ -67,8 +67,14 @@ you hardest here and your Unity/Unreal endgame pays off, so don't sink effort in
   - [ ] Manuals (tip up/down on the road) to link combos between rails
   - [ ] Per-trick balance difficulty (slides harder to hold than 50-50s)
   - [ ] Grind sound + landing sound
+- [ ] **Pit brawl (future)** — after the finish, while the stats window is up, press **F + J** to
+  close it, step off the board and walk around the finish pit. Hit spectators to knock them down,
+  using whichever combat pickup you'd upgraded to when you crossed the line (fist → stick → water
+  bottle → rock), or a punch if you have none. Needs: walk/idle/punch animations on the rider
+  (the spectator model already has Punch/Death clips), a pit walk controller, crowd hit reactions.
 - [ ] **3. World & scenery** — *done: cliffs (road rides a ridge), bridge/viaduct over a
-  fjord, crowds + arches at start/finish.* Still open: carve-down-mountainside sections, more
-  roadside detail.
+  fjord, crowds + arches at start/finish, enclosed pits at both ends (crowd all round), finish
+  coast-to-a-stop + pit camera + staged results, start flyover + three-light countdown.* Still
+  open: carve-down-mountainside sections, more roadside detail.
 - [ ] **4. Full visual pass** — *post-processing, trailer cams, HDRI sky, PBR road/grass, rigged rider, pine forest done; ground detail/LOD next* — post-processing (bloom, vignette, motion blur,
   chromatic aberration); HDRI + textured tarmac need asset files added.

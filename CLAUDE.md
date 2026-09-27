@@ -45,6 +45,8 @@ Anything new placed along the course should use frames too.
   - The feet are separate bones parented to the armature root, not to the shins.
   - Skinned bounding boxes need `updateMatrixWorld(true)` before measuring.
 
+**Run flow:** `beginRun()` → COUNTDOWN (flyover + lights, `updateStart`) → PLAYING → crossing `FINISH_U` freezes `lastRun` and hands over to `updateCoast` (controlled stop at `PIT_STOP_U`) → PIT (`pitCam` orbit) → STATS → ENTRY (if placed) → RESULTS. `results.el.dataset.stage` drives which parts of the results panel show. The last stretch of `buildRoadPoints` is levelled/straightened from `END_LEVEL_T`; `inPit(u)` drops grass, cliffs and rails there in favour of the arena geometry (`ARENAS`).
+
 **Rendering pipeline:**
 - `RenderPass` → half-res `UnrealBloomPass` → `speedPass` (radial speed blur and chromatic aberration aimed at the travel direction; disabled when idle) → `finishPass`.
 - `finishPass` does ACES tone mapping and sRGB itself through `#include <tonemapping_fragment>`, then applies grade, vignette, grain and letterbox. There's intentionally **no OutputPass**.
