@@ -78,7 +78,8 @@ you hardest here and your Unity/Unreal endgame pays off, so don't sink effort in
   mountainside walls (rock face rising on the inside of two curves), roadside rocks / bushes /
   grass tufts, **level 2 "Switchback Pass"** (six traverses joined by hairpins down a
   heightfield mountain face, `?level=2`), per-level leaderboards, **Next Race** on the final
-  screen (music carries over).* Ideas: a proper level-select on the title screen, more levels,
+  screen (music carries over), **Track Select** in the Esc menu.* Ideas: a fleshed-out track select
+  (previews, best times, on the title screen), more levels,
   keep the rider out of the mountain on level 1.
 - [ ] **4. Full visual pass** — *post-processing, trailer cams, HDRI sky, PBR road/grass, rigged rider, pine forest, ground detail (grass tufts, rocks, bushes) + distance LOD done* — post-processing (bloom, vignette, motion blur,
   chromatic aberration); HDRI + textured tarmac need asset files added.

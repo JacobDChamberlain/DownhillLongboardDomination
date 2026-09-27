@@ -110,6 +110,7 @@
   }
   .menu-list li.sel { opacity: 1; background: rgba(60,166,255,.22); border-color: rgba(60,166,255,.7); }
   .menu-list li .val { font-size: 18px; font-weight: 800; color: #ffd23c; }
+  .menu-list li .val.dim { color: #8fb8ff; }
   .menu-hint { margin-top: 26px; font-size: 13px; opacity: .6; }
   .title-big { font-size: 84px; font-weight: 900; letter-spacing: 8px; text-shadow: 0 6px 30px rgba(0,0,0,.7); }
   .title-sub { font-size: 18px; opacity: .8; margin-top: 12px; }
@@ -202,11 +203,17 @@
     <div class="menu-title">PAUSED</div>
     <ul class="menu-list">
       <li data-action="resume">Resume</li>
+      <li data-action="tracks">Track Select</li>
       <li data-action="settings">Settings</li>
       <li data-action="controls">Controls</li>
       <li data-action="quit">Quit</li>
     </ul>
     <div class="menu-hint">↑ ↓ / stick to move · Enter / A to select · Esc to resume</div>
+  </div>
+  <div class="menu-panel hidden" data-screen="tracks">
+    <div class="menu-title">TRACK SELECT</div>
+    <ul class="menu-list" id="track-list"><li data-action="back">Back</li></ul>
+    <div class="menu-hint">↑ ↓ to choose · Enter / A to ride · Esc to go back</div>
   </div>
   <div class="menu-panel hidden" data-screen="settings">
     <div class="menu-title">SETTINGS</div>
@@ -992,6 +999,12 @@ function nearestRoad(x, z, maxR = 40) {       // → { d, i }: horizontal distan
   return { d, i: bi };
 }
 // level 2: how steep the ground is at (x, z) — rise per unit run; things don't stand on cliffs
+// cameras never dip under level 2's hillside (from inside, its back faces cull and the ground vanishes)
+const CAM_GROUND_CLEAR = 1.8;
+function keepAboveGround(v) {
+  if (terrainHeightAt) v.y = Math.max(v.y, terrainHeightAt(v.x, v.z) + CAM_GROUND_CLEAR);
+  return v;
+}
 function steepAt(x, z) {
   if (!terrainHeightAt) return 0;
   return Math.hypot(terrainHeightAt(x + 1.5, z) - terrainHeightAt(x - 1.5, z), terrainHeightAt(x, z + 1.5) - terrainHeightAt(x, z - 1.5)) / 3;
@@ -1032,14 +1045,14 @@ if (IS_SWITCH) {
     }
     const edge = Math.abs(x) - (SB.W + SB.DZ / 2 + 25);          // past the hairpins the mountain falls away
     if (edge > 0) h -= edge * 0.7 + vn(x * 0.02, z * 0.02) * Math.min(edge, 60) * 0.3;
-    const nr = nearestRoad(x, z, 36);                             // carve the road's shelf
-    if (nr.i >= 0 && nr.d < ROAD_HALF_WIDTH + 14) {
-      const f = frames[nr.i], shelf = f.p.y - 0.45 - Math.abs(f.side.y) * ROAD_HALF_WIDTH;
-      h = THREE.MathUtils.lerp(shelf, h, THREE.MathUtils.smoothstep(nr.d, ROAD_HALF_WIDTH + 2.5, ROAD_HALF_WIDTH + 14));
-    }
     for (const pt of pits) {                                       // flatten both pits
       const d = Math.hypot(x - pt.c.x, z - pt.c.z);
       h = THREE.MathUtils.lerp(pt.c.y - 0.6, h, THREE.MathUtils.smoothstep(d, pt.R + 16, pt.R + 130));   // wide blend: no plateau cliff
+    }
+    const nr = nearestRoad(x, z, 36);                             // carve the road's shelf last, so the pit blend can't bury the road
+    if (nr.i >= 0 && nr.d < ROAD_HALF_WIDTH + 14) {
+      const f = frames[nr.i], shelf = f.p.y - 0.45 - Math.abs(f.side.y) * ROAD_HALF_WIDTH;
+      h = THREE.MathUtils.lerp(shelf, h, THREE.MathUtils.smoothstep(nr.d, ROAD_HALF_WIDTH + 2.5, ROAD_HALF_WIDTH + 14));
     }
     const border = Math.min(i, j, nx - i, nz - j) * TERRAIN_STEP;       // slope down to the valley at the edges
     h = THREE.MathUtils.lerp(CLIFF_FLOOR, h, THREE.MathUtils.smoothstep(border, 0, TERRAIN_FALLOFF));
@@ -1054,7 +1067,7 @@ if (IS_SWITCH) {
   for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
     const n = j * (nx + 1) + i, x = x0 + i * TERRAIN_STEP, z = z0 - j * TERRAIN_STEP;
     pos.set([x, H[n], z], n * 3); uv.set([x / GRASS_TILE, (z + H[n]) / GRASS_TILE], n * 2);   // v follows the slope — no stretching on steep faces
-    if (i < nx && j < nz) { const a = n, b = n + 1, c = n + nx + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+    if (i < nx && j < nz) { const a = n, b = n + 1, c = n + nx + 1, d = c + 1; idx.push(a, b, c, b, d, c); }   // z runs -j, so this winding faces up
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -2289,7 +2302,7 @@ function pitCam(dt) {                                  // slow orbit around the 
   const p = skater.position;
   const want = new THREE.Vector3(p.x + Math.cos(finish.orbitAng) * 13, p.y + 4 + Math.sin(finish.t * 0.4) * 0.8, p.z + Math.sin(finish.orbitAng) * 13);
   camPos.lerp(want, Math.min(1, dt * 1.5));
-  camera.position.copy(camPos);
+  camera.position.copy(keepAboveGround(camPos));
   camera.lookAt(p.x, p.y + 1.3, p.z);
   camera.fov += (50 - camera.fov) * Math.min(1, dt * 2); camera.updateProjectionMatrix();
   if (gameState === 'PIT' && finish.t >= PIT_ORBIT_SECS) finishRun('end');
@@ -2636,7 +2649,7 @@ function place(info) {
     camPos.copy(pos).add(chaseOff.cam);
     camLook.copy(pos).add(chaseOff.look);
   }
-  camera.position.copy(camPos);
+  camera.position.copy(keepAboveGround(camPos));
   camera.lookAt(camLook);
 
   if (chaos.mode) targetFov += chaos.beat * 9;   // chaos modes punch the lens on the beat
@@ -3028,17 +3041,21 @@ function updateChaos(dt) {
 // ------------------------------------------------------------------
 // Pause menu + settings — keyboard & gamepad navigable
 // ------------------------------------------------------------------
-let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TITLE
+let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE
 let menuIndex = 0;
 const settings = { volume: 70, sens: 100 };
 audio.volume = settings.volume / 100;
 
 const menuEl = document.getElementById('menu');
 const titleEl = document.getElementById('title');
-const items = { main: ['resume', 'settings', 'controls', 'quit'], settings: ['volume', 'sens', 'fx', 'back'], controls: ['back'] };
-const inSubmenu = () => gameState === 'SETTINGS' || gameState === 'CONTROLS';
+const items = { main: ['resume', 'tracks', 'settings', 'controls', 'quit'], settings: ['volume', 'sens', 'fx', 'back'], controls: ['back'],
+                tracks: [...LEVELS.map((_, i) => 'level-' + (i + 1)), 'back'] };
+// Track Select: one row per course (the one loaded is marked); picking one reloads into it
+document.getElementById('track-list').insertAdjacentHTML('afterbegin', LEVELS.map((lv, i) =>
+  `<li data-action="level-${i + 1}">${i + 1}. ${lv.name}${i === LEVEL_IDX ? ' <span class="val dim">CURRENT</span>' : ''}</li>`).join(''));
+const inSubmenu = () => gameState === 'SETTINGS' || gameState === 'CONTROLS' || gameState === 'TRACKS';
 const inMenu = () => gameState === 'PAUSED' || inSubmenu();
-const curScreen = () => (gameState === 'SETTINGS' ? 'settings' : gameState === 'CONTROLS' ? 'controls' : 'main');
+const curScreen = () => (gameState === 'SETTINGS' ? 'settings' : gameState === 'CONTROLS' ? 'controls' : gameState === 'TRACKS' ? 'tracks' : 'main');
 const curItems = () => items[curScreen()];
 
 function showPanel(name) {
@@ -3057,13 +3074,20 @@ function renderValues() {
 function openMenu()  { gameState = 'PAUSED'; menuIndex = 0; document.exitPointerLock?.(); menuEl.classList.remove('hidden'); showPanel('main'); renderMenu(); }
 function closeMenu() { gameState = 'PLAYING'; menuEl.classList.add('hidden'); }
 function openSettings() { gameState = 'SETTINGS'; menuIndex = 0; showPanel('settings'); renderValues(); renderMenu(); }
+function openTracks()   { gameState = 'TRACKS'; menuIndex = LEVEL_IDX; showPanel('tracks'); renderMenu(); }
+// reload into course n (1-based); the song carries over
+function gotoLevel(n) {
+  try { sessionStorage.setItem('downhill.radio', JSON.stringify({ track, time: audio.currentTime, playing: !audio.paused })); } catch {}
+  location.search = '?level=' + n;
+}
 function openControls() { gameState = 'CONTROLS'; menuIndex = 0; showPanel('controls'); renderMenu(); }
 function backToMain()   { gameState = 'PAUSED'; menuIndex = 0; showPanel('main'); renderMenu(); }
 function quitGame()  { gameState = 'TITLE'; menuEl.classList.add('hidden'); results.el.classList.add('hidden'); titleEl.classList.remove('hidden'); }
 function startFromTitle() { topSpeed = 0; titleEl.classList.add('hidden'); beginRun(); }
 
 function activate(item) {
-  ({ resume: closeMenu, settings: openSettings, controls: openControls, quit: quitGame, back: backToMain })[item]?.();
+  if (item.startsWith('level-')) return gotoLevel(+item.slice(6));
+  ({ resume: closeMenu, tracks: openTracks, settings: openSettings, controls: openControls, quit: quitGame, back: backToMain })[item]?.();
 }
 function adjustSetting(item, dir) {
   if (item === 'volume') { settings.volume = THREE.MathUtils.clamp(settings.volume + dir * 5, 0, 100); audio.volume = settings.volume / 100; }
@@ -3219,8 +3243,7 @@ rmenuItems.find(li => li.dataset.r === 'next').textContent = 'Next Race: ' + LEV
 function rmenuPick(i = rmenuIndex) {
   const r = rmenuItems[i].dataset.r;
   if (r === 'next') {                          // reload into the next course; the song carries over
-    try { sessionStorage.setItem('downhill.radio', JSON.stringify({ track, time: audio.currentTime, playing: !audio.paused })); } catch {}
-    location.search = '?level=' + (NEXT_LEVEL + 1);
+    gotoLevel(NEXT_LEVEL + 1);
     return;
   }
   results.el.classList.add('hidden');
@@ -3378,7 +3401,7 @@ function updateStart(dt) {
     const look = P.clone().add(new THREE.Vector3(0, 1.2, 0))
       .lerp(P.clone().addScaledVector(D, 14).add(new THREE.Vector3(0, 1.5, 0)), THREE.MathUtils.smoothstep(k, 0.55, 1));
     camLook.copy(look);
-    camera.position.copy(camPos); camera.lookAt(camLook);
+    camera.position.copy(keepAboveGround(camPos)); camera.lookAt(camLook);
     camera.fov = THREE.MathUtils.lerp(52, 64, k); camera.updateProjectionMatrix();
     if (startSeq.t >= START_FLY_SECS) skipFly();
     return;
