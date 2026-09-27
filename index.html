@@ -306,6 +306,18 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+// ------------------------------------------------------------------
+// Levels — ?level=N picks the course (1 = Ridge Run, 2 = Switchback Pass). "Next Race" on the
+// final screen reloads into the next one, carrying the song + playback position across.
+// ------------------------------------------------------------------
+const LEVELS = [
+  { id: 'ridge',  name: 'RIDGE RUN',       lbKey: 'downhill.scores' },
+  { id: 'switch', name: 'SWITCHBACK PASS', lbKey: 'downhill.scores.switchback' },
+];
+const LEVEL_IDX = THREE.MathUtils.clamp((parseInt(new URLSearchParams(location.search).get('level'), 10) || 1) - 1, 0, LEVELS.length - 1);
+const LV = LEVELS[LEVEL_IDX];
+const IS_SWITCH = LV.id === 'switch';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -534,7 +546,41 @@ const END_LEVEL_T = 0.965; // the road is level (and straight) from here to the 
 const START_EASE = 0.15;  // first fraction of the track where the rolling rises are flattened
                           // into a smooth, speed-building descent (no steep first hill to crest)
 
+// Level 2 — Switchback Pass: traverses across a steep mountain face joined by hairpins, a level
+// approach from the start pit and a level run-out into the finish pit.
+const SB = { W: 300, DZ: 95, LEGS: 6, GRADE: 0.13, Y0: 720, APPROACH: 70, RUNOUT: 260 };
+const sbLegs = [];   // { z, dir, s0 } — arc length where each traverse starts (terrain + features read this)
+function buildSwitchbackPoints() {
+  const raw = []; let s = 0, last = null;
+  const push = (x, z) => { const p = new THREE.Vector3(x, 0, z); if (last) s += p.distanceTo(last); last = p; raw.push({ p, s }); };
+  for (let x = -SB.W - SB.APPROACH; x < -SB.W; x += 14) push(x, 0);
+  for (let leg = 0; leg < SB.LEGS; leg++) {
+    const dir = leg % 2 === 0 ? 1 : -1, z = -leg * SB.DZ;
+    for (let k = 0; k <= 30; k++) { push(-dir * SB.W + dir * 2 * SB.W * k / 30, z); if (k === 0) sbLegs.push({ z, dir, s0: s }); }
+    if (leg < SB.LEGS - 1) {                   // hairpin: a semicircle down to the next traverse
+      const cx = dir * SB.W, cz = z - SB.DZ / 2, r = SB.DZ / 2;
+      for (let k = 1; k < 12; k++) { const a = Math.PI / 2 - Math.PI * k / 12; push(cx + dir * Math.cos(a) * r, cz + Math.sin(a) * r); }
+    }
+  }
+  const lastDir = sbLegs[SB.LEGS - 1].dir, zl = sbLegs[SB.LEGS - 1].z;
+  const roStart = s;
+  for (let d = 20; d <= SB.RUNOUT; d += 20) push(lastDir * (SB.W + d), zl);
+  // grade: level approach, steady descent, level run-out (kinks rounded by a small moving average)
+  const flatStart = SB.APPROACH * 0.5;
+  const yRaw = raw.map(o => SB.Y0 - SB.GRADE * THREE.MathUtils.clamp(o.s - flatStart, 0, roStart - flatStart));
+  const ys = yRaw.map((y, i) => { let a = 0, n = 0; for (let j = Math.max(0, i - 3); j <= Math.min(yRaw.length - 1, i + 3); j++) { a += yRaw[j]; n++; } return a / n; });
+  SB.len = s; SB.roStart = roStart;
+  return raw.map((o, i) => new THREE.Vector3(o.p.x, ys[i], o.p.z));
+}
+// road height along a traverse at world x (clamped to the traverse) — the terrain reads this
+function sbLegY(i, x) {
+  const L = sbLegs[THREE.MathUtils.clamp(i, 0, sbLegs.length - 1)];
+  const sAt = L.s0 + L.dir * THREE.MathUtils.clamp(x, -SB.W, SB.W) + SB.W;
+  return SB.Y0 - SB.GRADE * THREE.MathUtils.clamp(sAt - SB.APPROACH * 0.5, 0, SB.roStart - SB.APPROACH * 0.5);
+}
+
 function buildRoadPoints() {
+  if (IS_SWITCH) return buildSwitchbackPoints();
   // rolling rises that break up the drop — eased in over START_EASE so the run opens
   // with a clean descent that evens out from the top, then hits the fun terrain
   const rawY = t => {
@@ -582,7 +628,7 @@ for (let i = 0; i <= SAMPLES; i++) {
 // Banking — roll each frame so the surface leans INTO its curve (superelevation).
 // Direction is derived geometrically, so it always banks the right way; only the
 // amount is tunable via BANK_GAIN / MAX_BANK.
-const BANK_GAIN = 1.4, MAX_BANK = 0.30;
+const BANK_GAIN = 1.4, MAX_BANK = IS_SWITCH ? 0.12 : 0.30;   // hairpins bank less — the road is cut into a slope
 for (let i = 0; i < frames.length; i++) {
   const prev = frames[Math.max(0, i - 2)].tan;
   const next = frames[Math.min(SAMPLES, i + 2)].tan;
@@ -598,6 +644,9 @@ for (let i = 0; i < frames.length; i++) {
   frames[i].up.applyAxisAngle(tan, sign * ang).normalize();
 }
 
+// middle of the course on the ground plane — distant scenery and the lake centre on it
+const TRACK_CENTER = (() => { const b = new THREE.Box3(); frames.forEach(f => b.expandByPoint(f.p)); const c = b.getCenter(new THREE.Vector3()); c.y = 0; return c; })();
+
 function frameAt(u) {
   u = ((u % 1) + 1) % 1;
   const f = u * SAMPLES;
@@ -612,21 +661,32 @@ function frameAt(u) {
 }
 
 // Course features — hand-placed along the run (positions are u in [0,1]). Playtest-tunable.
-const GAPS  = [ { u0: 0.618, u1: 0.628 } ];   // road holes you must jump (a kicker sits right before)
-const RAMPS = [ 0.30, 0.47, 0.613 ];          // launch kickers; the last one feeds the gap
-const BRIDGE = { u0: 0.665, u1: 0.725 };      // the ridge breaks here; the road crosses the gap on a viaduct
+// Level 2 places things at the middle of its traverses (never in a hairpin)
+const sbMidU = (leg, off = 0) => (sbLegs[leg].s0 + SB.W + off) / SB.len;
+const GAPS  = IS_SWITCH ? [] : [ { u0: 0.618, u1: 0.628 } ];   // road holes you must jump (a kicker sits right before)
+const RAMPS = IS_SWITCH ? [ sbMidU(1, -60), sbMidU(3, 80), sbMidU(4, -40) ]
+                        : [ 0.30, 0.47, 0.613 ];          // launch kickers; the last one feeds the gap
+const BRIDGE = IS_SWITCH ? { u0: -1, u1: -1 } : { u0: 0.665, u1: 0.725 };   // the ridge breaks here; the road crosses the gap on a viaduct
 const onBridge = u => u > BRIDGE.u0 && u < BRIDGE.u1;
 // Start / finish pits — enclosed arenas at both ends (crowd all around, no cut-off level edge)
-const FINISH_U       = 0.958;   // finish line (arch): the clock stops, controls hand over to the coast
-const FINISH_PIT_U   = 0.988;   // finish pit centre along the road
+// (level 1's values are hand-tuned; level 2 derives the same distances from its own length)
+const fromEnd = d => 1 - d / TOTAL_LEN;
+const FINISH_U       = IS_SWITCH ? fromEnd(188) : 0.958;   // finish line (arch): the clock stops, controls hand over to the coast
+const FINISH_PIT_U   = IS_SWITCH ? fromEnd(54)  : 0.988;   // finish pit centre along the road
 const FINISH_PIT_R   = 80;      // floor radius (the road's end at u=1 sits inside it)
 const START_PIT_BACK = 63;      // start pit centre sits this far behind the start line (floor ends at the line)
 const START_PIT_R    = 62;
-const PIT_U0         = 0.971;   // past here the pit floor replaces grass / cliffs / rails
-const STOP_U         = 0.996;   // the far berm — you can't roll past this
+const PIT_U0         = IS_SWITCH ? fromEnd(125) : 0.971;   // past here the pit floor replaces grass / cliffs / rails
+const STOP_U         = IS_SWITCH ? fromEnd(18)  : 0.996;   // the far berm — you can't roll past this
 const inPit = u => u > PIT_U0;
 const START_U        = 0.0015;  // start line (arch) — you begin right on it
-const ITEMS = [                               // pickups; .mesh / .taken get attached when built
+const ITEMS = IS_SWITCH ? [
+  { u: sbMidU(0, 120),  lat:  4, type: 'boost' },
+  { u: sbMidU(2, -120), lat: -5, type: 'endurance' },
+  { u: sbMidU(3, -150), lat:  0, type: 'freedeath' },
+  { u: sbMidU(4, 180),  lat:  5, type: 'boost' },
+  { u: sbMidU(5, 0),    lat: -4, type: 'weapon' },
+] : [                                        // pickups; .mesh / .taken get attached when built
   { u: 0.20, lat:  5, type: 'boost' },
   { u: 0.38, lat: -6, type: 'endurance' },
   { u: 0.55, lat:  0, type: 'freedeath' },
