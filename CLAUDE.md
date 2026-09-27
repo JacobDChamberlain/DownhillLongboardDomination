@@ -51,6 +51,8 @@ Anything new placed along the course should use frames too.
 - MSAA is only enabled at pixel ratio below 2; it cost ~35fps on the half-float target.
 - `adaptRes()` steps the pixel ratio through `RES_STEPS` to hold the frame rate.
 
+**Terrain:** everything is generated from `frames[]`. The road runs on a ridge: the grass shoulders are two strips per side (never one sheet under the road, which pokes through where the banking twists), and rock cliff walls hang off each grass edge down to `CLIFF_FLOOR`. `BRIDGE` (a `u` range, tested with `onBridge(u)`) removes grass and cliffs, adds gorge walls, deck girder and piers, and physics clamps the rider inside the rails there. Water fills the valley at `LAKE_Y`. The huge surfaces (cliff chunks, lake) set a high `renderOrder` so near geometry draws first and the depth test skips hidden pixels.
+
 **Lighting/sky:**
 - The HDRI is rotated at load (`aimHdri`) so its sun sits on `SUN_AZIMUTH`. The shadow light uses the same bearing at `SUN_LIGHT_ELEV`.
 - Fog and far-scenery colors (`hazeMats`) are re-derived from the HDRI's away-from-sun horizon once it loads.

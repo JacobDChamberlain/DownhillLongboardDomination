@@ -233,6 +233,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -511,6 +512,8 @@ function frameAt(u) {
 // Course features — hand-placed along the run (positions are u in [0,1]). Playtest-tunable.
 const GAPS  = [ { u0: 0.615, u1: 0.632 } ];   // road holes you must jump (a kicker sits right before)
 const RAMPS = [ 0.30, 0.47, 0.606 ];          // launch kickers; the last one feeds the gap
+const BRIDGE = { u0: 0.665, u1: 0.725 };      // the ridge breaks here; the road crosses the gap on a viaduct
+const onBridge = u => u > BRIDGE.u0 && u < BRIDGE.u1;
 const ITEMS = [                               // pickups; .mesh / .taken get attached when built
   { u: 0.20, lat:  5, type: 'boost' },
   { u: 0.38, lat: -6, type: 'endurance' },
@@ -522,6 +525,8 @@ const ITEMS = [                               // pickups; .mesh / .taken get att
 // Road mesh (ribbon) + shoulders + edge lines
 const groundMeshes = [];
 let railMat;
+const DECK_DEPTH = 2.6;    // bridge girder depth below the road surface
+const concreteMat = new THREE.MeshStandardMaterial({ color: 0x8e8b84, roughness: 0.9, side: THREE.DoubleSide });
 const ASPHALT_TILE = 6;    // world units per asphalt texture repeat
 const GRASS_TILE   = 22;   // world units per grass texture repeat
 {
@@ -534,19 +539,26 @@ const GRASS_TILE   = 22;   // world units per grass texture repeat
     const f = frames[i];
     if (i > 0) along += f.p.distanceTo(frames[i - 1].p);
     roadUV.push(0, along / ASPHALT_TILE, (2 * GW) / ASPHALT_TILE, along / ASPHALT_TILE);
-    grassUV.push(0, along / GRASS_TILE, (2 * SW) / GRASS_TILE, along / GRASS_TILE);
+    // shoulders only — a single sheet under the road poked up through it wherever the banking
+    // twists quickly (a 120-wide quad bends out of plane more than the 0.4 gap below the road)
+    const gin = (SW - GW + 0.5) / GRASS_TILE;
+    grassUV.push(0, along / GRASS_TILE, gin, along / GRASS_TILE, gin, along / GRASS_TILE, 0, along / GRASS_TILE);
     const l = f.p.clone().addScaledVector(f.side,  GW);
     const r = f.p.clone().addScaledVector(f.side, -GW);
     road.push(l.x, l.y + 0.05, l.z, r.x, r.y + 0.05, r.z);
-    const gl = f.p.clone().addScaledVector(f.side,  SW);
-    const gr = f.p.clone().addScaledVector(f.side, -SW);
-    grass.push(gl.x, gl.y - 0.4, gl.z, gr.x, gr.y - 0.4, gr.z);
+    for (const d of [SW, GW - 0.5, -(GW - 0.5), -SW]) {
+      const q = f.p.clone().addScaledVector(f.side, d);
+      grass.push(q.x, q.y - 0.4, q.z);
+    }
     if (i < SAMPLES) {
       const b = i * 2;
       const uSeg = i / SAMPLES;
       if (GAPS.some(g => uSeg > g.u0 && uSeg < g.u1)) continue;   // leave a hole — the abyss shows through
       roadIdx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
-      grassIdx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+      if (!onBridge(uSeg)) {
+        const c = i * 4;   // 4 grass verts per sample: left-outer, left-inner, right-inner, right-outer
+        grassIdx.push(c, c + 1, c + 4, c + 1, c + 5, c + 4, c + 2, c + 3, c + 6, c + 3, c + 7, c + 6);
+      }
     }
   }
   const mk = (verts, idx, color, rough, uvs) => {
@@ -573,14 +585,15 @@ const GRASS_TILE   = 22;   // world units per grass texture repeat
   }
   // Strip along the road between two (side, up) offsets in each frame — painted edge lines
   // (same height, flat) and the guardrail beam (same side offset, vertical). Skips the gap.
-  function strip(a0, a1, mat) {
+  const notInGap = i => !GAPS.some(g => i / SAMPLES > g.u0 && i / SAMPLES < g.u1);
+  function strip(a0, a1, mat, keep = notInGap) {
     const v = [], idx = [];
     for (let i = 0; i <= SAMPLES; i++) {
       const f = frames[i];
       const p0 = f.p.clone().addScaledVector(f.side, a0.s).addScaledVector(f.up, a0.u);
       const p1 = f.p.clone().addScaledVector(f.side, a1.s).addScaledVector(f.up, a1.u);
       v.push(p0.x, p0.y, p0.z, p1.x, p1.y, p1.z);
-      if (i < SAMPLES && !GAPS.some(g => i / SAMPLES > g.u0 && i / SAMPLES < g.u1)) {
+      if (i < SAMPLES && keep(i)) {
         const b = i * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
       }
     }
@@ -598,6 +611,179 @@ const GRASS_TILE   = 22;   // world units per grass texture repeat
   // reflecting the procedural environment reads as a black band)
   railMat = new THREE.MeshStandardMaterial({ color: 0xb8bcc0, roughness: .5, metalness: .2, side: THREE.DoubleSide });
   for (const s of [1, -1]) strip({ s: s * (GW + 0.62), u: 0.72 }, { s: s * (GW + 0.62), u: 1.12 }, railMat).castShadow = true;
+
+  // bridge deck: a concrete box girder under the road across the gorge
+  const onDeck = i => onBridge(i / SAMPLES) || onBridge((i + 1) / SAMPLES);
+  for (const s of [1, -1]) {
+    strip({ s: s * GW, u: 0.05 }, { s: s * (GW + 1.1), u: 0.05 }, concreteMat, onDeck);                        // deck edge
+    strip({ s: s * (GW + 1.1), u: 0.05 }, { s: s * (GW + 1.1), u: -DECK_DEPTH }, concreteMat, onDeck).castShadow = true;  // girder face
+  }
+  strip({ s: GW + 1.1, u: -DECK_DEPTH }, { s: -(GW + 1.1), u: -DECK_DEPTH }, concreteMat, onDeck);             // soffit
+}
+
+// ------------------------------------------------------------------
+// Cliffs, gorge, viaduct piers, lake — the road rides a ridge: rock walls drop from both grass
+// edges to the valley floor, stepping outward (and roughening) as they fall. At BRIDGE the
+// ridge breaks: gorge walls close off the terrain, piers carry the deck down to a lake.
+// ------------------------------------------------------------------
+const CLIFF_FLOOR = -260;   // valley floor (matches the valley disc)
+const CLIFF_FLARE = 0.42;   // outward step per unit of drop — lower = sheerer cliffs
+const CLIFF_ROWS  = 12;     // vertical resolution of the rock walls
+const ROCK_TILE   = 34;     // world units per rock texture repeat
+const GORGE_LEAN  = 0.08;   // how far the gorge walls lean into the gap per unit of drop
+const LAKE_Y      = -255;   // water level (just above the valley floor)
+const PIER_SPACING = 46;    // world units between viaduct pier pairs
+let cliffMat, waterTex;
+{
+  // small value-noise fbm for rock displacement
+  const hash = (x, y) => { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); };
+  const vnoise = (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
+  };
+  const fbm = (x, y) => vnoise(x, y) * 0.55 + vnoise(x * 2.1, y * 2.1) * 0.3 + vnoise(x * 4.3, y * 4.3) * 0.15;
+
+  cliffMat = new THREE.MeshStandardMaterial({ color: 0x7d7c72, roughness: 0.95, side: THREE.DoubleSide });
+  const iStart = Math.ceil(BRIDGE.u0 * SAMPLES), iEnd = Math.floor(BRIDGE.u1 * SAMPLES);
+  const flat = v => new THREE.Vector3(v.x, 0, v.z).normalize();
+
+  // one rock wall per side; `cols[s][i][r]` keeps vertices so the gorge caps can stitch to them
+  const cols = { 1: [], [-1]: [] };
+  const verts = [], uvs = [], idx = [];
+  let along = 0;
+  for (const s of [1, -1]) {
+    along = 0;
+    for (let i = 0; i <= SAMPLES; i++) {
+      const f = frames[i];
+      if (i > 0) along += f.p.distanceTo(frames[i - 1].p);
+      const top = f.p.clone().addScaledVector(f.side, s * 60); top.y -= 0.4;
+      const out = flat(f.side).multiplyScalar(s);
+      const col = [];
+      for (let r = 0; r <= CLIFF_ROWS; r++) {
+        const k = Math.pow(r / CLIFF_ROWS, 1.5);                 // rows bunch up near the top edge
+        const y = top.y + (CLIFF_FLOOR - top.y) * k;
+        const drop = top.y - y;
+        const n = fbm(along * 0.018 + (s > 0 ? 0 : 50), r * 0.55);
+        const push = r === 0 ? 0 : drop * CLIFF_FLARE * (0.75 + 0.35 * n) + n * Math.min(drop, 30) * 0.6;
+        const p = top.clone().addScaledVector(out, push);
+        p.y = y + (r === 0 || r === CLIFF_ROWS ? 0 : n * 6);
+        col.push(verts.length / 3);
+        verts.push(p.x, p.y, p.z);
+        uvs.push(along / ROCK_TILE, drop / ROCK_TILE);
+      }
+      cols[s].push(col);
+      if (i > 0 && !(i - 1 >= iStart && i - 1 < iEnd)) {
+        const a = cols[s][i - 1], b = col;
+        for (let r = 0; r < CLIFF_ROWS; r++) idx.push(a[r], b[r], a[r + 1], b[r], b[r + 1], a[r + 1]);
+      }
+    }
+  }
+  // gorge walls: close the terrain at both ends of the bridge, leaning into the gap as they drop
+  const CAP_COLS = 14;
+  for (const [ic, dir] of [[iStart, 1], [iEnd, -1]]) {
+    const f = frames[ic], into = flat(f.tan).multiplyScalar(dir);
+    const grid = [];
+    for (let c = 0; c <= CAP_COLS; c++) {
+      const t = c / CAP_COLS, col = [];
+      for (let r = 0; r <= CLIFF_ROWS; r++) {
+        if (c === 0) { col.push(cols[1][ic][r]); continue; }
+        if (c === CAP_COLS) { col.push(cols[-1][ic][r]); continue; }
+        const L = cols[1][ic][r] * 3, R = cols[-1][ic][r] * 3;
+        const p = new THREE.Vector3(verts[L], verts[L + 1], verts[L + 2]).lerp(new THREE.Vector3(verts[R], verts[R + 1], verts[R + 2]), t);
+        const drop = f.p.y - 0.4 - p.y;
+        const n = fbm(t * 6 + ic, r * 0.55);
+        p.addScaledVector(into, Math.sin(Math.PI * t) * (drop * GORGE_LEAN + n * Math.min(drop, 25) * 0.6));
+        col.push(verts.length / 3);
+        verts.push(p.x, p.y, p.z);
+        uvs.push(t * 120 / ROCK_TILE, drop / ROCK_TILE);
+      }
+      grid.push(col);
+    }
+    for (let c = 0; c < CAP_COLS; c++) for (let r = 0; r < CLIFF_ROWS; r++) {
+      const a = grid[c], b = grid[c + 1];
+      idx.push(a[r], b[r], a[r + 1], b[r], b[r + 1], a[r + 1]);
+    }
+  }
+  // one shared vertex buffer, split into index ranges along the road so each chunk can be
+  // frustum-culled; drawn after the near geometry (the walls are huge and mostly hidden)
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  const CHUNK_TRIS = 6000;
+  for (let t0 = 0; t0 < idx.length; t0 += CHUNK_TRIS * 3) {
+    const cg = new THREE.BufferGeometry();
+    cg.setAttribute('position', g.getAttribute('position'));
+    cg.setAttribute('normal', g.getAttribute('normal'));
+    cg.setAttribute('uv', g.getAttribute('uv'));
+    const sub = idx.slice(t0, t0 + CHUNK_TRIS * 3);
+    cg.setIndex(sub);
+    // bounds from this chunk's own vertices (computeBoundingSphere would use the whole shared buffer)
+    const bb = new THREE.Box3(), v = new THREE.Vector3();
+    for (const k of sub) bb.expandByPoint(v.set(verts[k * 3], verts[k * 3 + 1], verts[k * 3 + 2]));
+    cg.boundingBox = bb;
+    cg.boundingSphere = bb.getBoundingSphere(new THREE.Sphere());
+    const chunk = new THREE.Mesh(cg, cliffMat);
+    chunk.receiveShadow = true;
+    chunk.renderOrder = 10;
+    scene.add(chunk);
+  }
+
+  // viaduct piers: pairs of tapered concrete columns + a cap beam under the deck
+  // spread evenly, keeping clear of the gorge walls (they lean into the gap as they drop)
+  let span = 0;
+  for (let i = iStart + 1; i <= iEnd; i++) span += frames[i].p.distanceTo(frames[i - 1].p);
+  const margin = (frames[iStart].p.y - LAKE_Y) * GORGE_LEAN + 12;
+  const nPiers = Math.max(1, Math.round((span - 2 * margin) / PIER_SPACING) + 1);
+  const step = nPiers > 1 ? (span - 2 * margin) / (nPiers - 1) : 0;
+  let dist = 0, next = nPiers > 1 ? margin : span / 2;
+  for (let i = iStart + 1; i < iEnd; i++) {
+    dist += frames[i].p.distanceTo(frames[i - 1].p);
+    if (dist < next || next > span - margin + 1) continue;
+    next += step || Infinity;
+    const f = frames[i], top = f.p.y - DECK_DEPTH, h = top - LAKE_Y + 4;
+    const yaw = Math.atan2(f.tan.x, f.tan.z);
+    for (const s of [1, -1]) {
+      const pier = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8 + h * 0.014, h, 4, 1).rotateY(Math.PI / 4), concreteMat);
+      pier.position.copy(f.p).addScaledVector(flat(f.side), s * (ROAD_HALF_WIDTH - 2.5));
+      pier.position.y = top - h / 2;
+      pier.rotation.y = yaw;
+      pier.castShadow = pier.receiveShadow = true;
+      scene.add(pier);
+    }
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(2 * ROAD_HALF_WIDTH + 2, 1.6, 3.4), concreteMat);
+    cap.position.copy(f.p); cap.position.y = top - 0.8; cap.rotation.y = yaw;
+    cap.castShadow = true; scene.add(cap);
+  }
+
+  // fjord filling the valley floor — reflects the sky, fades into the haze; ripples scroll in frame()
+  const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const cx = cv.getContext('2d'), img = cx.createImageData(N, N);
+  const hgt = (x, y) => {                     // tileable ripple heightfield
+    const a = 2 * Math.PI / N;
+    return Math.sin(x * a * 3 + Math.sin(y * a * 2) * 1.3) + Math.sin(y * a * 5 + x * a * 2) * 0.6
+         + Math.sin((x + y) * a * 7) * 0.35 + Math.sin((x - 2 * y) * a * 11) * 0.2;
+  };
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const dx = hgt(x + 1, y) - hgt(x - 1, y), dy = hgt(x, y + 1) - hgt(x, y - 1);
+    const nx = -dx * 2, ny = -dy * 2, l = Math.hypot(nx, ny, 1), o = (y * N + x) * 4;
+    img.data[o] = (nx / l * 0.5 + 0.5) * 255; img.data[o + 1] = (ny / l * 0.5 + 0.5) * 255;
+    img.data[o + 2] = (1 / l * 0.5 + 0.5) * 255; img.data[o + 3] = 255;
+  }
+  cx.putImageData(img, 0, 0);
+  waterTex = new THREE.CanvasTexture(cv);
+  waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping;
+  waterTex.repeat.set(420, 420);
+  waterTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const lake = new THREE.Mesh(new THREE.CircleGeometry(5600, 96), new THREE.MeshStandardMaterial({
+    color: 0x173a42, roughness: 0.14, metalness: 0, normalMap: waterTex, normalScale: new THREE.Vector2(0.3, 0.3) }));
+  lake.rotation.x = -Math.PI / 2;
+  lake.position.set(0, LAKE_Y, -TRACK_LEN / 2);
+  lake.receiveShadow = true;
+  lake.renderOrder = 20;   // after everything nearer, so the depth test skips the pixels they cover
+  scene.add(lake);
 }
 
 // Guardrail posts + roadside trees + distant mountains
@@ -677,6 +863,8 @@ const trees = [];
   for (let i = 0; i < SAMPLES; i += TREE_SPACING) {
     const f = frames[i];
     if (GAPS.some(g => i / SAMPLES > g.u0 - 0.01 && i / SAMPLES < g.u1 + 0.01)) continue;
+    if (i / SAMPLES > BRIDGE.u0 - 0.012 && i / SAMPLES < BRIDGE.u1 + 0.012) continue;
+    if (i / SAMPLES < 0.035 || i / SAMPLES > 0.955) continue;   // leave room for the start/finish crowds
     for (const s of [1, -1]) {
       if (rnd() > TREE_CHANCE) continue;
       const d = ROAD_HALF_WIDTH + 6 + rnd() * (SHOULDER - ROAD_HALF_WIDTH - 10);
@@ -826,6 +1014,8 @@ function aimHdri(tex, az) {
     console.warn('[assets] HDRI unavailable, keeping procedural sky:', e?.message || e);
   }
 })();
+applyPBR(cliffMat, 'rock', 0xc8c4b8)
+  .catch(e => console.warn('[assets] rock textures unavailable:', e?.message || e));
 applyPBR(groundMeshes[1].material, 'asphalt', 0xffffff)
   .catch(e => console.warn('[assets] asphalt textures unavailable:', e?.message || e));
 applyPBR(groundMeshes[0].material, 'grass', 0xd2e6a0).then(() => {
@@ -1121,6 +1311,98 @@ const wind = (() => {
 let itemSpin = 0;
 
 // ------------------------------------------------------------------
+// Start / finish — arches over the road and cheering crowds behind the rails. Spectators are
+// clones of Quaternius "Man" (CC0) with per-person colors; mixers only tick near the camera.
+// ------------------------------------------------------------------
+const CROWD_ZONES = [ { u0: 0.004, u1: 0.03, arch: 0.014, label: 'START' },
+                      { u0: 0.962, u1: 0.994, arch: 0.985, label: 'FINISH' } ];
+const CROWD_PER_SIDE = 16;    // spectators per side of the road, per zone
+const CROWD_ANIM_DIST = 260;  // only animate spectators this close to the camera
+const crowd = [];             // { mixer, obj }
+{
+  // arches: two posts + a banner with the label painted on a canvas
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x24262b, roughness: 0.5, metalness: 0.6 });
+  for (const z of CROWD_ZONES) {
+    const f = frameAt(z.arch), yaw = Math.atan2(f.tan.x, f.tan.z);
+    const arch = new THREE.Group();
+    arch.position.copy(f.p); arch.rotation.y = yaw;
+    const half = ROAD_HALF_WIDTH + 1.6, H = 9;
+    for (const s of [1, -1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.7, H, 0.7), postMat);
+      post.position.set(s * half, H / 2 - 0.5, 0); post.castShadow = true; arch.add(post);
+    }
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 160;
+    const cx = cv.getContext('2d');
+    cx.fillStyle = z.label === 'START' ? '#d8412f' : '#111418'; cx.fillRect(0, 0, 1024, 160);
+    if (z.label === 'FINISH') {                                   // checkered border
+      for (let x = 0; x < 1024; x += 32) for (const y of [0, 128]) {
+        cx.fillStyle = ((x / 32 + y / 128) % 2) ? '#fff' : '#111418'; cx.fillRect(x, y, 32, 32);
+      }
+    }
+    cx.fillStyle = '#fff'; cx.font = '900 96px system-ui, sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.fillText(z.label, 512, 84);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const banner = new THREE.Mesh(new THREE.BoxGeometry(2 * half + 0.7, 2.2, 0.3),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 }));
+    banner.position.set(0, H - 1.3, 0); banner.castShadow = true;
+    arch.add(banner);
+    scene.add(arch);
+  }
+
+  new GLTFLoader().loadAsync('assets/models/spectator.glb').then(g => {
+    g.scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(g.scene);
+    const scale = (RIDER_HEIGHT * 0.95) / (box.max.y - box.min.y);
+    const clip = n => g.animations.find(a => a.name.endsWith(n));
+    const clips = { clap: clip('Man_Clapping'), idle: clip('Man_Idle'), jump: clip('Man_Jump') };
+    const palette = {
+      Shirt: [0xd8412f, 0x2f6fd8, 0xf2c14e, 0x3fa34d, 0xffffff, 0x222222, 0x8e44ad, 0xe67e22],
+      Pants: [0x1d2a44, 0x2b2b2b, 0x5a4632, 0x3b4f6b, 0x6b6b6b],
+      Skin:  [0xf1c9a5, 0xd9a06b, 0xa86b3c, 0x6b4226, 0xe8b894],
+      Hair:  [0x1a1410, 0x4a2f1b, 0xb58a4c, 0x7a7a7a, 0x2b1b12],
+    };
+    let seed = 99;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const pick = a => a[Math.floor(rnd() * a.length)];
+    for (const z of CROWD_ZONES) for (const s of [1, -1]) for (let n = 0; n < CROWD_PER_SIDE; n++) {
+      const u = z.u0 + (z.u1 - z.u0) * (n + rnd() * 0.8) / CROWD_PER_SIDE;
+      const f = frameAt(u);
+      const lat = s * (ROAD_HALF_WIDTH + 2.4 + rnd() * 5);
+      const p = f.p.clone().addScaledVector(f.side, lat); p.y -= 0.4;
+      const person = SkeletonUtils.clone(g.scene);
+      person.traverse(o => {
+        if (!o.isMesh) return;
+        o.castShadow = true; o.frustumCulled = false;   // skinned bounds are unreliable; we hide by distance instead
+        o.material = o.material.clone();
+        const cols = palette[o.material.name];
+        if (cols) o.material.color.set(pick(cols));
+      });
+      person.scale.setScalar(scale * (0.9 + rnd() * 0.2));
+      person.position.copy(p);
+      // face the road (and a little up-hill, toward oncoming riders)
+      const toRoad = f.p.clone().sub(p).setY(0).normalize().addScaledVector(f.tan, -0.5).normalize();
+      person.rotation.y = Math.atan2(toRoad.x, toRoad.z) + (rnd() - 0.5) * 0.5;
+      const mixer = new THREE.AnimationMixer(person);
+      const r = rnd();
+      const action = mixer.clipAction(r < 0.65 ? clips.clap : r < 0.85 ? clips.jump : clips.idle);
+      action.play(); action.time = rnd() * action.getClip().duration;
+      action.timeScale = 0.85 + rnd() * 0.3;
+      mixer.update(0);
+      scene.add(person);
+      crowd.push({ mixer, obj: person });
+    }
+  }).catch(e => console.warn('[assets] spectator model unavailable, no crowds:', e?.message || e));
+}
+const CROWD_SHOW_DIST = 600;  // hide spectators entirely beyond this
+function updateCrowd(dt) {
+  for (const c of crowd) {
+    const d2 = c.obj.position.distanceToSquared(camera.position);
+    c.obj.visible = d2 < CROWD_SHOW_DIST * CROWD_SHOW_DIST;
+    if (d2 < CROWD_ANIM_DIST * CROWD_ANIM_DIST) c.mixer.update(dt);
+  }
+}
+
+// ------------------------------------------------------------------
 // Input — keyboard + gamepad
 // ------------------------------------------------------------------
 const keys = {};
@@ -1344,6 +1626,11 @@ function update(dt) {
   // soft wall at shoulder edge
   const limit = ROAD_HALF_WIDTH + 45;
   if (Math.abs(state.lateral) > limit) { state.lateral = Math.sign(state.lateral) * limit; state.heading *= -0.3; state.speed *= 0.6; }
+  // on the bridge there's no shoulder — the rails hold you on the deck
+  const railLim = ROAD_HALF_WIDTH - 0.5;
+  if (onBridge(state.u) && Math.abs(state.lateral) > railLim) {
+    state.lateral = Math.sign(state.lateral) * railLim; state.heading *= -0.3; state.speed *= 0.9;
+  }
 
   if (state.u >= 0.999) finishRun('end'); // reached the bottom — results board, then loop back up
 
@@ -1549,10 +1836,17 @@ function drawHud(info) {
 // Radio — cycles tracks; title/artist fade in at the start & end of each song
 // ------------------------------------------------------------------
 const playlist = [
-  { title: 'Bios',           artist: 'Zorrovian',                src: 'audio/bios.mp3' },   // plays first
-  { title: 'No Heart',       artist: '21 Savage & Metro Boomin', src: 'audio/no-heart.mp3' },
-  { title: 'Move That Dope', artist: 'Future',                   src: 'audio/move-that-dope.mp3' },
-  { title: 'Nocturnal',      artist: 'Cmillz',                   src: 'audio/nocturnal.mp3' },
+  { title: 'Bios',                artist: 'Zorrovian',                 src: 'audio/bios.mp3' },   // plays first
+  { title: 'I Already Smoked It', artist: 'Strocken',                  src: 'audio/I Already Smoked It - Strocken.mp3' },
+  { title: 'Incredible',          artist: 'M.Beat feat. General Levy', src: 'audio/Incredible - M.Beat Feat General levy.mp3' },
+  { title: 'Give Me Space',       artist: 'DJ Javascript',             src: 'audio/Give Me Space - DJ Javascript.mp3' },
+  { title: 'Moods',               artist: 'ST Files',                  src: 'audio/Moods - ST Files.mp3' },
+  { title: 'negative shift',      artist: 'mindvacy',                  src: 'audio/negative shift - mindvacy.mp3' },
+  { title: 'Move That Dope',      artist: 'Future',                    src: 'audio/move-that-dope.mp3' },
+  // temporarily off:
+  // { title: 'Crisis Mode',      artist: 'DJ Javascript',             src: 'audio/Crisis Mode - DJ Javascript.mp3' },
+  // { title: 'No Heart',         artist: '21 Savage & Metro Boomin',  src: 'audio/no-heart.mp3' },
+  // { title: 'Nocturnal',        artist: 'Cmillz',                    src: 'audio/nocturnal.mp3' },
 ];
 const INTRO_SECS = 5;   // seconds of full-opacity label after a song starts
 const OUTRO_SECS = 6;   // seconds of full-opacity label before a song ends
@@ -1897,11 +2191,13 @@ function frame(now) {
   const rawDt = (now - last) / 1000;
   dt = Math.min(0.05, rawDt); last = now;
   adaptRes(rawDt);
+  if (waterTex) { waterTex.offset.x += dt * 0.012; waterTex.offset.y += dt * 0.007; }
   if (gameState === 'PLAYING') {
     const info = update(dt);
     place(info);
     drawHud(info);
   }
+  updateCrowd(dt);
   updateRadio();
   pollMenuGamepad(dt);
   if (fx.on) {
