@@ -52,6 +52,10 @@ Anything new placed along the course should use frames too.
 - `finishPass` does ACES tone mapping and sRGB itself through `#include <tonemapping_fragment>`, then applies grade, vignette, grain and letterbox. There's intentionally **no OutputPass**.
 - MSAA is only enabled at pixel ratio below 2; it cost ~35fps on the half-float target.
 - `adaptRes()` steps the pixel ratio through `RES_STEPS` to hold the frame rate.
+- **Hitch traps (macOS Chrome):**
+  - Don't redraw DOM elements over the canvas during play. Each redraw makes the compositor reshuffle its overlays: a 0.1–2s freeze. HUD text that changes mid-run belongs in the canvas; the trick popup is a canvas-texture quad drawn by `renderHudPass()`. Fading an element's `opacity` is fine.
+  - Don't create an `AudioContext` mid-run; creating one blocks for ~0.5s. Use the shared `audioCtx`.
+  - `warmUp()` draws one hidden frame with everything visible once loading goes quiet, so shaders and textures aren't first prepared mid-run.
 
 **Levels:** `LEVELS` picks the course from `?level=N` (1-based) at load; `LV` / `IS_SWITCH` gate the per-level code. Level 1 (Ridge Run) is `buildRoadPoints`'s ridge; level 2 (Switchback Pass) returns `buildSwitchbackPoints()` (`SB` tunables, `sbLegs`, `sbMidU(leg, off)` to place features on a traverse). Each level has its own leaderboard key (`LV.lbKey`). Track Select (Esc menu) and "Next Race" on the END screen both call `gotoLevel(n)`, which reloads with the next `?level=` and carries the radio track/time through `sessionStorage 'downhill.radio'`.
 

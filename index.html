@@ -4,6 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Downhill — prototype</title>
+<!-- thin digital digits for the run timer (falls back to a light system monospace offline) -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" />
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1020; font-family: -apple-system, system-ui, sans-serif; }
   #app { position: fixed; inset: 0; }
@@ -47,9 +51,6 @@
   #powerups .pu { display: inline-block; margin-left: 6px; padding: 4px 10px; border-radius: 16px; font-size: 13px; font-weight: 800;
     background: rgba(10,16,32,.55); color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
   #powerups .pu.endur { color: #b6ff9e; } #powerups .pu.death { color: #fff; } #powerups .pu.weap { color: #ff9b8a; }
-  #trickpop { position: fixed; left: 50%; top: 34%; transform: translateX(-50%); opacity: 0;
-    font-size: 34px; font-weight: 900; letter-spacing: 2px; color: #ffd23c; text-shadow: 0 0 18px rgba(255,210,60,.7);
-    pointer-events: none; user-select: none; font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
   #best { position: fixed; right: 24px; top: 20px; color:#fff; text-align:right; text-shadow:0 2px 8px rgba(0,0,0,.6); user-select:none;}
   #best .lbl { font-size: 13px; opacity:.7; letter-spacing:2px; text-transform:uppercase;}
   #best .lbl.sub { margin-top: 10px; }
@@ -73,7 +74,10 @@
   body.clean #help, body.clean #best, body.clean #hud, body.clean #powerups,
   body.clean #nowplaying, body.clean #transport { display: none; }
   kbd { background:#223; border:1px solid #456; border-bottom-width:2px; border-radius:5px; padding:1px 6px; font-size:12px; }
-  #flash { position: fixed; inset:0; pointer-events:none; box-shadow: inset 0 0 220px rgba(255,255,255,0); transition: box-shadow .3s; }
+  /* edge flash: a fixed gradient on its own layer; only its opacity animates (animating a blurred
+     box-shadow repainted the whole screen every frame) */
+  #flash { position: fixed; inset:0; pointer-events:none; opacity: 0; will-change: opacity;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0) 45%, rgba(255,255,255,.55) 85%, #fff 100%); }
   #nowplaying {
     position: fixed; right: 24px; bottom: 60px; text-align: right; color: #fff;
     text-shadow: 0 2px 8px rgba(0,0,0,.6); user-select: none; pointer-events: none;
@@ -184,7 +188,6 @@
   </div>
 </div>
 <div id="powerups"></div>
-<div id="trickpop"></div>
 <div id="balance"><div id="balneedle"></div></div>
 <div id="lights"><span class="lt"></span><span class="lt"></span><span class="lt go"></span></div>
 <div id="flash"></div>
@@ -2693,13 +2696,100 @@ const el = {
   kickwrap: document.getElementById('kickwrap'),
   kickbar: document.getElementById('kickbar'),
   powerups: document.getElementById('powerups'),
-  trickpop: document.getElementById('trickpop'),
   flash: document.getElementById('flash'),
 };
 const MPH = 1.15; // units/sec -> "mph" fudge for readout
 let flashT = 0, trickPopT = 0;
+
+// ------------------------------------------------------------------
+// Trick popup — drawn inside the WebGL canvas, not as a DOM element: on macOS Chrome, redrawing a
+// DOM layer over the canvas makes the compositor reshuffle its overlays, which froze the game for
+// 0.1–2s on every landing and pickup. A canvas-texture quad in its own ortho pass costs nothing.
+// ------------------------------------------------------------------
+const POP_Y  = 0.34;          // popup text top, fraction of screen height
+const POP_PX = 34;            // text size (CSS px)
+const POP_RES = 2;            // canvas pixels per CSS px
+const popCv = document.createElement('canvas');
+popCv.width = 1024; popCv.height = Math.ceil(POP_PX * POP_RES * 2.2);
+const popCx = popCv.getContext('2d');
+const popTex = new THREE.CanvasTexture(popCv); popTex.colorSpace = THREE.SRGBColorSpace;
+const popMat = new THREE.MeshBasicMaterial({ map: popTex, transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false });
+const popMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), popMat);
+const hudScene = new THREE.Scene(); hudScene.add(popMesh);
+const hudCam = new THREE.OrthographicCamera(0, 1, 0, -1, -1, 1);   // CSS pixels, y down the screen
+function layoutPop() {
+  hudCam.right = innerWidth; hudCam.bottom = -innerHeight; hudCam.updateProjectionMatrix();
+  popMesh.scale.set(popCv.width / POP_RES, popCv.height / POP_RES, 1);
+  popMesh.position.set(innerWidth / 2, -(innerHeight * POP_Y + POP_PX * 0.3), 0);
+}
+function drawPop(text) {
+  text = text.replace(/\s+/g, ' ');   // collapse spaces the way the old DOM popup did
+  const W = popCv.width, H = popCv.height;
+  popCx.clearRect(0, 0, W, H);
+  popCx.font = `900 ${POP_PX * POP_RES}px ui-monospace, Menlo, monospace`;
+  popCx.letterSpacing = 2 * POP_RES + 'px';
+  const w = popCx.measureText(text).width, fit = Math.min(1, (W - 80) / w);   // shrink long lines to fit
+  popCx.save();
+  popCx.translate(W / 2, H / 2); popCx.scale(fit, fit);
+  popCx.textAlign = 'center'; popCx.textBaseline = 'middle';
+  popCx.fillStyle = '#ffd23c';
+  popCx.shadowColor = 'rgba(255,210,60,.7)'; popCx.shadowBlur = 18 * POP_RES;
+  popCx.fillText(text, 0, 0);
+  popCx.restore();
+  popTex.needsUpdate = true;
+}
+
+// Run timer — mm:ss, top centre. Appears at 00:00 with the green light, then runs; freezes
+// at the finish line. Same canvas-quad treatment as the popup; it only redraws when the text changes.
+const TIMER_PX = 34;          // digit size (CSS px) — matches the top-right stats
+const TIMER_Y  = 40;          // centre of the digits, CSS px from the top
+const TIMER_OPACITY = 0.55;   // see-through
+const TIMER_FONT = '"Share Tech Mono", ui-monospace, Menlo, monospace';
+const timerCv = document.createElement('canvas');
+timerCv.width = 320; timerCv.height = Math.ceil(TIMER_PX * POP_RES * 1.8);
+const timerCx = timerCv.getContext('2d');
+const timerTex = new THREE.CanvasTexture(timerCv); timerTex.colorSpace = THREE.SRGBColorSpace;
+const timerMat = new THREE.MeshBasicMaterial({ map: timerTex, transparent: true, opacity: TIMER_OPACITY, depthTest: false, depthWrite: false, toneMapped: false });
+const timerMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), timerMat);
+hudScene.add(timerMesh);
+let timerTxt = '';
+function layoutTimer() {
+  timerMesh.scale.set(timerCv.width / POP_RES, timerCv.height / POP_RES, 1);
+  timerMesh.position.set(innerWidth / 2, -TIMER_Y, 0);
+}
+function drawTimer(txt) {
+  timerTxt = txt;
+  const W = timerCv.width, H = timerCv.height;
+  timerCx.clearRect(0, 0, W, H);
+  timerCx.font = `400 ${TIMER_PX * POP_RES}px ${TIMER_FONT}`;
+  timerCx.letterSpacing = 2 * POP_RES + 'px';
+  timerCx.textAlign = 'center'; timerCx.textBaseline = 'middle';
+  timerCx.fillStyle = '#fff';
+  timerCx.shadowColor = 'rgba(0,0,0,.6)'; timerCx.shadowBlur = 8 * POP_RES; timerCx.shadowOffsetY = 2 * POP_RES;
+  timerCx.fillText(txt, W / 2, H / 2);
+  timerTex.needsUpdate = true;
+}
+function updateTimer() {
+  timerMesh.visible = gameState !== 'TITLE' && gameState !== 'COUNTDOWN' && hudMode === 0;   // from the green light; hides with the HUD (H)
+  if (!timerMesh.visible) return;
+  const secs = finish.crossed && lastRun ? lastRun.timeS : run.t;
+  const txt = String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(Math.floor(secs % 60)).padStart(2, '0');
+  if (txt !== timerTxt) drawTimer(txt);
+}
+document.fonts?.load(`400 ${TIMER_PX * POP_RES}px "Share Tech Mono"`).then(() => { timerTxt = ''; }).catch(() => {});   // redraw once the font lands
+layoutTimer();
+
+function renderHudPass() {
+  updateTimer();
+  popMesh.visible = popMat.opacity > 0;
+  if (!popMesh.visible && !timerMesh.visible) return;
+  renderer.autoClear = false;
+  renderer.render(hudScene, hudCam);
+  renderer.autoClear = true;
+}
+layoutPop();
 function flash(v) { flashT = v; }
-function showTrick(text) { el.trickpop.textContent = text; trickPopT = 1.4; }
+function showTrick(text) { drawPop(text); trickPopT = 1.4; }
 function drawHud(info) {
   el.speed.innerHTML = Math.round(state.speed * MPH) + '<small>mph</small>';
   el.best.textContent = Math.round(topSpeed * MPH);
@@ -2724,10 +2814,10 @@ function drawHud(info) {
   el.powerups.innerHTML = pu;
 
   // trick popup fade
-  if (trickPopT > 0) { trickPopT = Math.max(0, trickPopT - dt); el.trickpop.style.opacity = Math.min(1, trickPopT); }
+  if (trickPopT > 0) { trickPopT = Math.max(0, trickPopT - dt); popMat.opacity = Math.min(1, trickPopT); }
 
   if (flashT > 0) { flashT = Math.max(0, flashT - dt); }
-  el.flash.style.boxShadow = `inset 0 0 220px rgba(255,255,255,${flashT})`;
+  const fo = flashT.toFixed(2); if (el.flash.style.opacity !== fo) el.flash.style.opacity = fo;
 }
 
 // ------------------------------------------------------------------
@@ -2751,6 +2841,10 @@ const OUTRO_SECS = 6;   // seconds of full-opacity label before a song ends
 const DIM_OPACITY = 0.28;
 
 const audio = new Audio();
+// one Web Audio context for the countdown beeps and the chaos analyser, made at load: creating one
+// blocks the page for ~0.5s on macOS (it used to happen on the first countdown beep, freezing GO)
+let audioCtx = null;
+try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
 audio.preload = 'auto';
 audio.volume = 0.7;
 const npEl = document.getElementById('nowplaying');
@@ -2849,7 +2943,7 @@ freqTex.needsUpdate = true;
 function ensureAnalyser() {
   if (analyser || !location.protocol.startsWith('http')) return;
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = audioCtx;
     const src = ctx.createMediaElementSource(audio);
     analyser = ctx.createAnalyser();
     analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.45;   // low smoothing keeps kick transients sharp
@@ -3360,10 +3454,9 @@ const LAUNCH_SPEED   = 12;    // u/s you roll off the line with
 const startSeq = { phase: 'fly', t: 0, lit: 0, wait: 0 };
 const lightsEl = document.getElementById('lights');
 const lightEls = [...lightsEl.querySelectorAll('.lt')];
-let sfxCtx = null;
 function beep(freq, dur, vol) {               // tiny synth — no audio assets needed
   try {
-    sfxCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    const sfxCtx = audioCtx;
     if (sfxCtx.state === 'suspended') sfxCtx.resume();
     const t0 = sfxCtx.currentTime, o = sfxCtx.createOscillator(), g = sfxCtx.createGain();
     o.type = 'square'; o.frequency.value = freq;
@@ -3448,6 +3541,25 @@ function adaptRes(rawDt) {
   else res.good = 0;
 }
 
+// ------------------------------------------------------------------
+// Warm-up — the first time something is drawn, the GPU compiles its shaders (shadow pass too) and
+// uploads its textures: a 0.1–2s hitch mid-run when the finish crowd, a detail chunk or a pickup
+// first comes into view. Once loading goes quiet, draw one throwaway frame with everything visible
+// and unculled so all of that happens up front (the real frame renders over it straight after).
+// ------------------------------------------------------------------
+const WARM_DELAY = 400;       // ms after the last asset lands before warming up
+const warm = { at: 0 };
+function scheduleWarmUp() { warm.at = performance.now() + WARM_DELAY; }
+function warmUp() {
+  warm.at = 0;
+  const saved = [];
+  scene.traverse(o => { saved.push(o, o.visible, o.frustumCulled); o.visible = true; o.frustumCulled = false; });
+  if (fx.on) composer.render(0); else renderer.render(scene, camera);
+  for (let k = 0; k < saved.length; k += 3) { saved[k].visible = saved[k + 1]; saved[k].frustumCulled = saved[k + 2]; }
+}
+THREE.DefaultLoadingManager.onLoad = scheduleWarmUp;   // every loader (GLB, textures, HDRI) reports here
+scheduleWarmUp();                                      // the procedural scene (file:// has no loads)
+
 let dt = 0, last = performance.now();
 function frame(now) {
   const rawDt = (now - last) / 1000;
@@ -3468,6 +3580,7 @@ function frame(now) {
   updateChaos(dt);
   updateRadio();
   pollMenuGamepad(dt);
+  if (warm.at && now >= warm.at) warmUp();
   if (fx.on) {
     fx.bars += (fx.barsTarget - fx.bars) * Math.min(1, dt * 4);
     finishPass.uniforms.uBars.value = fx.bars * Math.max(0, (1 - camera.aspect / 2.39) / 2);
@@ -3476,6 +3589,7 @@ function frame(now) {
   } else {
     renderer.render(scene, camera);
   }
+  renderHudPass();
   requestAnimationFrame(frame);
 }
 beginRun();   // every run opens with the flyover + countdown
@@ -3485,6 +3599,7 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
+  layoutPop(); layoutTimer();
 });
 </script>
 </body>
