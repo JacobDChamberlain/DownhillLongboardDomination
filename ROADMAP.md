@@ -74,7 +74,8 @@ you hardest here and your Unity/Unreal endgame pays off, so don't sink effort in
   (the spectator model already has Punch/Death clips), a pit walk controller, crowd hit reactions.
 - [ ] **3. World & scenery** — *done: cliffs (road rides a ridge), bridge/viaduct over a
   fjord, crowds + arches at start/finish, enclosed pits at both ends (crowd all round), finish
-  coast-to-a-stop + pit camera + staged results, start flyover + three-light countdown.* Still
-  open: carve-down-mountainside sections, more roadside detail.
-- [ ] **4. Full visual pass** — *post-processing, trailer cams, HDRI sky, PBR road/grass, rigged rider, pine forest done; ground detail/LOD next* — post-processing (bloom, vignette, motion blur,
+  coast-to-a-stop + pit camera + staged results, start flyover + three-light countdown,
+  mountainside walls (rock face rising on the inside of two curves), roadside rocks / bushes /
+  grass tufts.* Still open: switchbacks carving down a mountain face → **level 2**.
+- [ ] **4. Full visual pass** — *post-processing, trailer cams, HDRI sky, PBR road/grass, rigged rider, pine forest, ground detail (grass tufts, rocks, bushes) + distance LOD done* — post-processing (bloom, vignette, motion blur,
   chromatic aberration); HDRI + textured tarmac need asset files added.

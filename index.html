@@ -1020,6 +1020,83 @@ const hazeMats = [];
 
 
 // ------------------------------------------------------------------
+// Mountainside walls — stretches where the road is cut into the mountain: a rock wall rises on
+// the inside of the curve (the drop stays on the other side). The inside is worked out from the
+// road's own curvature, and the wall tapers out of the grass at both ends.
+// ------------------------------------------------------------------
+const MOUNTAIN_WALLS = [ { u0: 0.395, u1: 0.515 }, { u0: 0.755, u1: 0.865 } ];
+const WALL_SET_BACK  = 5;      // grass between the road edge and the foot of the wall
+const WALL_TAPER_U   = 0.018;  // the wall grows out of the grass over this much of the run
+const wallAt = (u, lateral) => {    // true if (u, lateral) is inside a wall's footprint
+  for (const w of MOUNTAIN_WALLS)
+    if (u > w.u0 && u < w.u1 && Math.sign(lateral) === w.side && Math.abs(lateral) > ROAD_HALF_WIDTH + WALL_SET_BACK - 2) return true;
+  return false;
+};
+{
+  const flatV = v => new THREE.Vector3(v.x, 0, v.z).normalize();
+  // wall height profile across the cut: [distance past the wall foot, height]
+  // wall face, a jagged crest, then the mountain's back falling away to the valley floor
+  const PROFILE = [[0, -0.4], [1.5, 5], [3.5, 22], [7, 52], [14, 82], [28, 108], [48, 124], [70, 118],
+                   [95, 80], [125, 10], [155, -80], [185, -170], [210, -260]];
+  const CREST = 6;    // profile index of the crest — the peaks get the most noise
+  const hash = (x, y) => { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); };
+  const vn = (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
+  };
+  for (const w of MOUNTAIN_WALLS) {
+    // inside of the curve = the side the road bends toward
+    const a = frames[Math.round(w.u0 * SAMPLES)], b = frames[Math.round(((w.u0 + w.u1) / 2) * SAMPLES)], c = frames[Math.round(w.u1 * SAMPLES)];
+    w.side = Math.sign(b.tan.clone().sub(a.tan).add(c.tan.clone().sub(b.tan)).dot(b.side)) || 1;
+    const i0 = Math.round(w.u0 * SAMPLES), i1 = Math.round(w.u1 * SAMPLES);
+    const verts = [], uvs = [], idx = [], P = PROFILE.length;
+    let along = 0;
+    for (let i = i0; i <= i1; i++) {
+      const f = frames[i];
+      if (i > i0) along += f.p.distanceTo(frames[i - 1].p);
+      const u = i / SAMPLES;
+      const k = THREE.MathUtils.smoothstep(Math.min(u - w.u0, w.u1 - u), 0, WALL_TAPER_U);   // taper at the ends
+      const out = flatV(f.side).multiplyScalar(w.side);
+      const foot = f.p.clone().addScaledVector(f.side, w.side * (ROAD_HALF_WIDTH + WALL_SET_BACK));
+      const peak = 1 + 0.45 * vn(along * 0.012, 7.3) + 0.2 * vn(along * 0.04, 3.1);   // peaks + saddles
+      let prevD = 0;
+      PROFILE.forEach(([d, h], j) => {
+        const n = vn(along * 0.05, j * 0.9);
+        const crestish = Math.max(0, 1 - Math.abs(j - CREST) / 4);
+        let hh = j ? h * (1 + n * 0.22) * (1 + (peak - 1) * crestish) : h;
+        if (h < 0) hh = Math.max(CLIFF_FLOOR - foot.y, h);                  // the back reaches the valley
+        let dd = d * (0.6 + 0.4 * k) + (j ? n * 2.5 : 0);
+        // never reach over another stretch of the road — pull this vertex back if it would
+        const probe = foot.clone().addScaledVector(out, dd);
+        for (let q = 0; q <= SAMPLES; q += 5) {
+          if (Math.abs(q - i) < 60) continue;
+          const r = frames[q].p;
+          if (Math.hypot(r.x - probe.x, r.z - probe.z) < ROAD_HALF_WIDTH + 30) { dd = prevD; break; }
+        }
+        prevD = dd;
+        const p = foot.clone().addScaledVector(out, dd);
+        p.y = foot.y + (j ? hh * k + (1 - k) * Math.min(0, hh) * 0 : h);
+        verts.push(p.x, p.y, p.z);
+        uvs.push(along / ROCK_TILE, (j ? Math.abs(h) + d * 0.5 : 0) / ROCK_TILE);
+      });
+      if (i > i0) {
+        const A = (i - 1 - i0) * P, B = (i - i0) * P;
+        for (let j = 0; j < P - 1; j++) idx.push(A + j, B + j, A + j + 1, B + j, B + j + 1, A + j + 1);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, cliffMat);
+    m.receiveShadow = true; m.castShadow = true;
+    scene.add(m);
+    groundMeshes.push(m);   // the trackside camera won't hide behind it
+  }
+}
+
+// ------------------------------------------------------------------
 // Roadside forest — Quaternius stylized pines (CC0, 3 variants in one GLB), instanced.
 // Placements are computed once; cone trees stand in until the GLB loads (or for file://).
 // ------------------------------------------------------------------
@@ -1040,6 +1117,7 @@ const trees = [];
     for (const s of [1, -1]) {
       if (rnd() > TREE_CHANCE) continue;
       const d = ROAD_HALF_WIDTH + 6 + rnd() * (SHOULDER - ROAD_HALF_WIDTH - 10);
+      if (wallAt(i / SAMPLES, s * d)) continue;            // that's inside the mountain
       const p = f.p.clone().addScaledVector(f.side, s * d);
       p.y -= 0.7;                                          // grass sits 0.4 below; sink the base a bit
       // keep clear of any other stretch of road that winds back nearby
@@ -1099,6 +1177,141 @@ const trees = [];
     });
     coneTrunk.visible = coneLeaf.visible = false;
   }).catch(e => console.warn('[assets] pine models unavailable, keeping cone trees:', e?.message || e));
+}
+
+// ------------------------------------------------------------------
+// Roadside detail — rocks + bushes (Quaternius, CC0, one GLB) scattered along the shoulders, and
+// procedural grass tufts close to the road. Instanced in chunks; the grass only draws near the
+// camera and far prop chunks are hidden (LOD), so the detail costs little.
+// ------------------------------------------------------------------
+const PROP_STEP       = 3;     // try a prop every N road samples, per side
+const ROCK_CHANCE     = 0.22;
+const BUSH_CHANCE     = 0.32;
+const PROP_DRAW_DIST  = 700;   // prop chunks beyond this are hidden
+const GRASS_PER_STEP  = 5;     // grass tufts per road sample, per side
+const GRASS_DRAW_DIST = 160;   // grass chunks only draw this close
+const detailChunks = [];       // { obj, c: centre, dist } — toggled by distance each frame
+let grassWind = { value: 0 };  // wind-sway clock shared with the grass shader
+{
+  let seed = 4242;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const skip = (u, lat) =>
+    GAPS.some(g => u > g.u0 - 0.006 && u < g.u1 + 0.006) || onBridge(u) || inPit(u) || u < 0.04 || u > 0.92 ||
+    (u > 0.925 && Math.abs(lat) < 20) || wallAt(u, lat);
+  const up = new THREE.Vector3(0, 1, 0);
+
+  // ---- rocks + bushes
+  const placements = [[], [], [], []];   // rock A, rock B, bush, flowering bush
+  for (let i = 0; i < SAMPLES; i += PROP_STEP) {
+    const f = frames[i], u = i / SAMPLES;
+    for (const s of [1, -1]) {
+      const r = rnd();
+      let v, d, sc;
+      if (r < ROCK_CHANCE) { v = rnd() < 0.5 ? 0 : 1; d = ROAD_HALF_WIDTH + 3 + rnd() * 46; sc = 0.5 + rnd() * rnd() * 3.2; }
+      else if (r < ROCK_CHANCE + BUSH_CHANCE) { v = rnd() < 0.7 ? 2 : 3; d = ROAD_HALF_WIDTH + 2.5 + rnd() * 30; sc = 1.1 + rnd() * 1.4; }
+      else continue;
+      if (skip(u, s * d)) continue;
+      const p = f.p.clone().addScaledVector(f.side, s * d); p.y -= 0.5;
+      placements[v].push({ p, sc, yaw: rnd() * Math.PI * 2, i });
+    }
+  }
+  new GLTFLoader().loadAsync('assets/models/props.glb').then(g => {
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3();
+    g.scenes.forEach((variant, v) => {
+      variant.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(variant);
+      const list = placements[v];
+      variant.traverse(o => {
+        if (!o.isMesh) return;
+        const mat = o.material;
+        if (mat.transparent || /Leaves|Flowers/.test(mat.name)) Object.assign(mat, { transparent: false, alphaTest: 0.45, depthWrite: true, side: THREE.DoubleSide });
+        mat.envMapIntensity = ENV_INTENSITY;
+        const geo = o.geometry.clone().applyMatrix4(o.matrixWorld).translate(0, -box.min.y, 0);
+        for (let c0 = 0; c0 < list.length; c0 += 24) {           // chunks along the road
+          const chunk = list.slice(c0, c0 + 24);
+          const inst = new THREE.InstancedMesh(geo, mat, chunk.length);
+          chunk.forEach((t, k) => { sv.setScalar(t.sc); inst.setMatrixAt(k, m4.compose(t.p, q.setFromAxisAngle(up, t.yaw), sv)); });
+          inst.computeBoundingSphere();
+          inst.castShadow = v < 2; inst.receiveShadow = true;
+          scene.add(inst);
+          detailChunks.push({ obj: inst, c: inst.boundingSphere.center.clone(), dist: PROP_DRAW_DIST + inst.boundingSphere.radius });
+        }
+      });
+    });
+  }).catch(e => console.warn('[assets] roadside props unavailable:', e?.message || e));
+
+  // ---- grass tufts: three crossed cards with a painted blade texture, swaying in the wind
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 128;
+  const cx = cv.getContext('2d');
+  for (let b = 0; b < 46; b++) {
+    const x = 8 + Math.random() * 112, h = 55 + Math.random() * 70, lean = (Math.random() - 0.5) * 34, w = 2 + Math.random() * 3;
+    const gr = cx.createLinearGradient(0, 128, 0, 128 - h);
+    gr.addColorStop(0, '#5f7d36'); gr.addColorStop(1, Math.random() < 0.3 ? '#c9c56a' : '#8fae4a');
+    cx.fillStyle = gr;
+    cx.beginPath(); cx.moveTo(x - w, 128); cx.quadraticCurveTo(x + lean * 0.4, 128 - h * 0.6, x + lean, 128 - h); cx.lineTo(x + w, 128); cx.fill();
+  }
+  // transparent pixels get grass-coloured RGB so the smaller mip levels (distant tufts) don't
+  // darken — a canvas would store them as black, so build a DataTexture from the pixels instead
+  const px = cx.getImageData(0, 0, 128, 128).data;
+  for (let k = 0; k < px.length; k += 4) if (px[k + 3] === 0) { px[k] = 88; px[k + 1] = 118; px[k + 2] = 48; }
+  const gtex = new THREE.DataTexture(new Uint8Array(px), 128, 128, THREE.RGBAFormat);
+  gtex.flipY = true; gtex.colorSpace = THREE.SRGBColorSpace; gtex.generateMipmaps = true;
+  gtex.minFilter = THREE.LinearMipmapLinearFilter; gtex.magFilter = THREE.LinearFilter; gtex.needsUpdate = true;
+  const cards = [];
+  for (let k = 0; k < 3; k++) cards.push(new THREE.PlaneGeometry(1.6, 1.1).translate(0, 0.55, 0).rotateY(k * Math.PI / 3));
+  const tuft = mergeGeos(cards);
+  const nrm = tuft.attributes.normal;
+  for (let k = 0; k < nrm.count; k++) nrm.setXYZ(k, 0, 1, 0);        // lit like the ground, no dark backsides
+  const gmat = new THREE.MeshStandardMaterial({ map: gtex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1 });
+  const windT = { value: 0 };
+  gmat.onBeforeCompile = sh => {
+    sh.uniforms.uWind = windT;
+    sh.vertexShader = 'uniform float uWind;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      #ifdef USE_INSTANCING
+        vec3 ip = instanceMatrix[3].xyz;
+        transformed.x += sin(uWind * 1.7 + ip.x * 0.15 + ip.z * 0.11) * 0.12 * position.y;
+        transformed.z += cos(uWind * 1.3 + ip.z * 0.13) * 0.08 * position.y;
+      #endif`);
+  };
+  grassWind = windT;
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), yq = new THREE.Quaternion(), sv = new THREE.Vector3();
+  const GRASS_CHUNK = 40;   // road samples per grass chunk
+  for (let c0 = 0; c0 < SAMPLES; c0 += GRASS_CHUNK) {
+    const mats = [];
+    for (let i = c0; i < Math.min(SAMPLES, c0 + GRASS_CHUNK); i++) {
+      const f = frames[i], u = i / SAMPLES;
+      for (const s of [1, -1]) for (let n = 0; n < GRASS_PER_STEP; n++) {
+        const d = ROAD_HALF_WIDTH + 1.2 + Math.pow(rnd(), 1.6) * 26;       // denser near the road
+        if (skip(u, s * d)) continue;
+        const p = f.p.clone().addScaledVector(f.side, s * d).addScaledVector(f.tan, (rnd() - 0.5) * 3);
+        p.y -= 0.42;
+        q.setFromUnitVectors(up, f.up).multiply(yq.setFromAxisAngle(up, rnd() * Math.PI * 2));
+        sv.set(0.7 + rnd() * 0.8, 0.6 + rnd() * 0.9, 0.7 + rnd() * 0.8);
+        mats.push(m4.compose(p, q, sv).clone());
+      }
+    }
+    if (!mats.length) continue;
+    const inst = new THREE.InstancedMesh(tuft, gmat, mats.length);
+    mats.forEach((mm, k) => inst.setMatrixAt(k, mm));
+    inst.computeBoundingSphere();
+    inst.receiveShadow = true;
+    scene.add(inst);
+    detailChunks.push({ obj: inst, c: inst.boundingSphere.center.clone(), dist: GRASS_DRAW_DIST + inst.boundingSphere.radius * 0.5 });
+  }
+}
+function mergeGeos(list) {   // minimal non-indexed merge of same-layout geometries
+  const out = new THREE.BufferGeometry(), attrs = ['position', 'normal', 'uv'];
+  for (const a of attrs) {
+    const parts = list.map(g => (g.index ? g.toNonIndexed() : g).attributes[a].array);
+    const arr = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
+    let o = 0; for (const p of parts) { arr.set(p, o); o += p.length; }
+    out.setAttribute(a, new THREE.BufferAttribute(arr, a === 'uv' ? 2 : 3));
+  }
+  return out;
+}
+function updateDetailLOD(dt) {
+  grassWind.value += dt;
+  for (const ch of detailChunks) ch.obj.visible = ch.c.distanceToSquared(camera.position) < ch.dist * ch.dist;
 }
 
 // ------------------------------------------------------------------
@@ -1524,7 +1737,7 @@ function makeLabel(text, color, width = 0.2) {     // width as a fraction of scr
   };
   // visible from far down the road: a bright glow, a tall light beam, and a name label
   const itemName = { boost: 'ROCKET BOOST', endurance: 'ENDURANCE', freedeath: 'FREE DEATH', weapon: 'WEAPON' };
-  const beamGeo = new THREE.CylinderGeometry(0.5, 1.4, ITEM_BEAM_H, 12, 1, true).translate(0, ITEM_BEAM_H / 2, 0);
+  const beamGeo = new THREE.CylinderGeometry(0.22, 0.6, ITEM_BEAM_H, 12, 1, true).translate(0, ITEM_BEAM_H / 2, 0);
   for (const it of ITEMS) {
     const f = frameAt(it.u);
     const pos = f.p.clone().addScaledVector(f.side, it.lat).addScaledVector(f.up, 2.4);
@@ -1538,7 +1751,7 @@ function makeLabel(text, color, width = 0.2) {     // width as a fraction of scr
     const label = makeLabel(itemName[it.type], c);
     label.position.y = 1.8;   // (in the pickup's 1.6× scale)
     m.add(label);
-    it.mesh = m; it.label = label; it.taken = false; it.basePos = pos.clone();
+    it.mesh = m; it.label = label; it.beam = beam; it.taken = false; it.basePos = pos.clone();
     scene.add(m);
   }
 }
@@ -2159,7 +2372,9 @@ function place(info) {
     const m = it.mesh;
     if (m && m.visible) {
       m.rotation.y = itemSpin * 2; m.position.y = it.basePos.y + Math.sin(itemSpin * 3 + it.u * 12) * 0.3;
-      it.label.visible = m.position.distanceToSquared(camera.position) < ITEM_LABEL_DIST ** 2;   // beams carry the long range
+      const dist = m.position.distanceTo(camera.position);
+      it.label.visible = dist < ITEM_LABEL_DIST;                                   // beams carry the long range
+      it.beam.material.opacity = THREE.MathUtils.clamp((dist - 25) / 160, 0.02, 0.55); // fade up close so it never blocks the view
     }
   }
 
@@ -3020,6 +3235,7 @@ function frame(now) {
     pitCam(dt);   // PIT → STATS → ENTRY → RESULTS: keep circling the rider
   }
   updateCrowd(dt);
+  updateDetailLOD(dt);
   updateChaos(dt);
   updateRadio();
   pollMenuGamepad(dt);
