@@ -15,6 +15,7 @@ we deliberately defer those.
 - Carve scrub tuned to realistic amounts (`CARVE_SCRUB`)
 - Arcade results board + high scores (localStorage), initials entry, `finishRun()` hook
 - Distance readout under top speed (HUD)
+- Run timer (mm:ss, top centre) from the green light to the finish line
 - First hill eased so it opens smoothly (`START_EASE`) — big drop after preserved
 - Track shortened ~half (`TRACK_LEN` / `TRACK_DROP`) — scenery-first
 - Hangtime tracked per run + shown on the scoreboard (`Air` column)

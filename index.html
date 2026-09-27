@@ -4,6 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Downhill — prototype</title>
+<!-- thin digital digits for the run timer (falls back to a light system monospace offline) -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" />
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1020; font-family: -apple-system, system-ui, sans-serif; }
   #app { position: fixed; inset: 0; }
@@ -2734,8 +2738,51 @@ function drawPop(text) {
   popCx.restore();
   popTex.needsUpdate = true;
 }
+
+// Run timer — mm:ss, top centre. Appears at 00:00 with the green light, then runs; freezes
+// at the finish line. Same canvas-quad treatment as the popup; it only redraws when the text changes.
+const TIMER_PX = 34;          // digit size (CSS px) — matches the top-right stats
+const TIMER_Y  = 40;          // centre of the digits, CSS px from the top
+const TIMER_OPACITY = 0.55;   // see-through
+const TIMER_FONT = '"Share Tech Mono", ui-monospace, Menlo, monospace';
+const timerCv = document.createElement('canvas');
+timerCv.width = 320; timerCv.height = Math.ceil(TIMER_PX * POP_RES * 1.8);
+const timerCx = timerCv.getContext('2d');
+const timerTex = new THREE.CanvasTexture(timerCv); timerTex.colorSpace = THREE.SRGBColorSpace;
+const timerMat = new THREE.MeshBasicMaterial({ map: timerTex, transparent: true, opacity: TIMER_OPACITY, depthTest: false, depthWrite: false, toneMapped: false });
+const timerMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), timerMat);
+hudScene.add(timerMesh);
+let timerTxt = '';
+function layoutTimer() {
+  timerMesh.scale.set(timerCv.width / POP_RES, timerCv.height / POP_RES, 1);
+  timerMesh.position.set(innerWidth / 2, -TIMER_Y, 0);
+}
+function drawTimer(txt) {
+  timerTxt = txt;
+  const W = timerCv.width, H = timerCv.height;
+  timerCx.clearRect(0, 0, W, H);
+  timerCx.font = `400 ${TIMER_PX * POP_RES}px ${TIMER_FONT}`;
+  timerCx.letterSpacing = 2 * POP_RES + 'px';
+  timerCx.textAlign = 'center'; timerCx.textBaseline = 'middle';
+  timerCx.fillStyle = '#fff';
+  timerCx.shadowColor = 'rgba(0,0,0,.6)'; timerCx.shadowBlur = 8 * POP_RES; timerCx.shadowOffsetY = 2 * POP_RES;
+  timerCx.fillText(txt, W / 2, H / 2);
+  timerTex.needsUpdate = true;
+}
+function updateTimer() {
+  timerMesh.visible = gameState !== 'TITLE' && gameState !== 'COUNTDOWN' && hudMode === 0;   // from the green light; hides with the HUD (H)
+  if (!timerMesh.visible) return;
+  const secs = finish.crossed && lastRun ? lastRun.timeS : run.t;
+  const txt = String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(Math.floor(secs % 60)).padStart(2, '0');
+  if (txt !== timerTxt) drawTimer(txt);
+}
+document.fonts?.load(`400 ${TIMER_PX * POP_RES}px "Share Tech Mono"`).then(() => { timerTxt = ''; }).catch(() => {});   // redraw once the font lands
+layoutTimer();
+
 function renderHudPass() {
-  if (popMat.opacity <= 0) return;
+  updateTimer();
+  popMesh.visible = popMat.opacity > 0;
+  if (!popMesh.visible && !timerMesh.visible) return;
   renderer.autoClear = false;
   renderer.render(hudScene, hudCam);
   renderer.autoClear = true;
@@ -3552,7 +3599,7 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
-  layoutPop();
+  layoutPop(); layoutTimer();
 });
 </script>
 </body>
