@@ -11,6 +11,7 @@ All assets are licensed **CC0** (public domain).
 | `models/skater.glb` | [Casual Character](https://poly.pizza/m/kZ3DmIoGip) by Quaternius (via Poly Pizza) |
 | `models/longboard.glb` | [Skateboard](https://poly.pizza/m/Bt1Iql32Ox) by cg_world (via Poly Pizza) |
 | `models/spectator.glb` | [Man](https://poly.pizza/m/HMnuH5geEG) by Quaternius (via Poly Pizza) |
+| `models/props.glb` | Quaternius "Rock Medium" ×2 ([1](https://poly.pizza/m/KZdEP3uUpa), [2](https://poly.pizza/m/JQxF95498B)), ["Bush"](https://poly.pizza/m/ooG6CkLyE8), ["Bush with Flowers"](https://poly.pizza/m/U1ymDy8tbY) (via Poly Pizza); merged into one GLB, textures 512px |
 | `models/pines.glb` | Quaternius "Pine" ×3 — [1](https://poly.pizza/m/igSu0cPoBz), [2](https://poly.pizza/m/79gmlLnweB), [3](https://poly.pizza/m/Zt62gceKXZ) (via Poly Pizza); merged into one GLB with shared textures, bark downsized to 512px |
 
 HDRI and textures are from [Poly Haven](https://polyhaven.com).

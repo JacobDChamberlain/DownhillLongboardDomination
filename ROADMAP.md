@@ -72,9 +72,14 @@ you hardest here and your Unity/Unreal endgame pays off, so don't sink effort in
   using whichever combat pickup you'd upgraded to when you crossed the line (fist → stick → water
   bottle → rock), or a punch if you have none. Needs: walk/idle/punch animations on the rider
   (the spectator model already has Punch/Death clips), a pit walk controller, crowd hit reactions.
-- [ ] **3. World & scenery** — *done: cliffs (road rides a ridge), bridge/viaduct over a
+- [x] **3. World & scenery** — *done: cliffs (road rides a ridge), bridge/viaduct over a
   fjord, crowds + arches at start/finish, enclosed pits at both ends (crowd all round), finish
-  coast-to-a-stop + pit camera + staged results, start flyover + three-light countdown.* Still
-  open: carve-down-mountainside sections, more roadside detail.
-- [ ] **4. Full visual pass** — *post-processing, trailer cams, HDRI sky, PBR road/grass, rigged rider, pine forest done; ground detail/LOD next* — post-processing (bloom, vignette, motion blur,
+  coast-to-a-stop + pit camera + staged results, start flyover + three-light countdown,
+  mountainside walls (rock face rising on the inside of two curves), roadside rocks / bushes /
+  grass tufts, **level 2 "Switchback Pass"** (six traverses joined by hairpins down a
+  heightfield mountain face, `?level=2`), per-level leaderboards, **Next Race** on the final
+  screen (music carries over), **Track Select** in the Esc menu.* Ideas: a fleshed-out track select
+  (previews, best times, on the title screen), more levels,
+  keep the rider out of the mountain on level 1.
+- [ ] **4. Full visual pass** — *post-processing, trailer cams, HDRI sky, PBR road/grass, rigged rider, pine forest, ground detail (grass tufts, rocks, bushes) + distance LOD done* — post-processing (bloom, vignette, motion blur,
   chromatic aberration); HDRI + textured tarmac need asset files added.
