@@ -57,6 +57,16 @@ you hardest here and your Unity/Unreal endgame pays off, so don't sink effort in
 - [x] **2. Visual-chaos toys** — chaos mode on `X`: RAVE (strobing rainbow sky), VISUALIZER
   (music-driven spectrum bars), STARRY (night + Milky Way), GLITCH (wireframe world + screen
   tearing), all pulsing to the music. Meme/image skies still open (need image assets).
+- [ ] **Rail grinds** — *done: G (gamepad Y) locks onto either guardrail from the air, THPS-style
+  balance needle (A/D), Space hops off, bails, sparks, points per second; 50-50 and BOARDSLIDE
+  (hold Shift).* TODO grind tricks:
+  - [ ] Pick the grind by direction + G at lock-on, like THPS: nosegrind, 5-0, crooked, smith,
+        feeble, lipslide, tailslide, noseslide
+  - [ ] Switch grinds mid-rail (direction + G) with a combo multiplier
+  - [ ] Grind → air trick → grind combos (score multiplier across the chain)
+  - [ ] Manuals (tip up/down on the road) to link combos between rails
+  - [ ] Per-trick balance difficulty (slides harder to hold than 50-50s)
+  - [ ] Grind sound + landing sound
 - [ ] **3. World & scenery** — *done: cliffs (road rides a ridge), bridge/viaduct over a
   fjord, crowds + arches at start/finish.* Still open: carve-down-mountainside sections, more
   roadside detail.
