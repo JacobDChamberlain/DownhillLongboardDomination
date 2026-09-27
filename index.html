@@ -47,11 +47,20 @@
   #best .val { font-size: 34px; font-weight:800; }
   #best small { font-size: 16px; font-weight:700; opacity:.6; margin-left:3px; }
   #help {
-    position: fixed; left: 24px; top: 20px; color:#cfe3ff; font-size: 13px; line-height: 1.7;
-    background: rgba(10,16,32,.45); padding: 12px 16px; border-radius: 12px; backdrop-filter: blur(6px);
-    user-select:none; max-width: 260px;
+    position: fixed; left: 24px; top: 20px; color:#cfe3ff; font-size: 13px;
+    background: rgba(10,16,32,.4); padding: 6px 12px; border-radius: 10px; backdrop-filter: blur(6px);
+    user-select:none; pointer-events: none;
   }
-  #help b { color:#fff; }
+  /* controls panel in the pause menu */
+  .controls-grid { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 18px 36px; text-align: left; max-width: 760px; }
+  .controls-grid h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 2px; color: #ffd23c; }
+  .controls-grid dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 14px; }
+  .controls-grid dt { white-space: nowrap; }
+  .controls-grid dd { margin: 0; opacity: .85; }
+  .controls-grid .tricks dt { font-weight: 800; color: #fff; }
+  .controls-grid small { display: block; opacity: .65; font-size: 12px; }   /* description on its own line */
+  .controls-pad { margin-top: 18px; font-size: 13px; opacity: .7; }
+  @media (max-width: 700px) { .controls-grid { grid-template-columns: 1fr; } }
   body.clean #help, body.clean #best, body.clean #hud, body.clean #powerups,
   body.clean #nowplaying, body.clean #transport { display: none; }
   kbd { background:#223; border:1px solid #456; border-bottom-width:2px; border-radius:5px; padding:1px 6px; font-size:12px; }
@@ -138,20 +147,7 @@
 </head>
 <body>
 <div id="app"></div>
-<div id="help">
-  <b>DOWNHILL — prototype</b><br>
-  <kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd> <kbd>→</kbd> — carve<br>
-  <kbd>Shift</kbd> hold — tuck (go faster)<br>
-  <kbd>W</kbd>/<kbd>↑</kbd> — kick-push (build speed)<br>
-  <kbd>Space</kbd> — ollie · +steer/tuck for tricks<br>
-  <kbd>G</kbd> in the air near a rail — <b>grind</b> · <kbd>A</kbd>/<kbd>D</kbd> balance · <kbd>Space</kbd> hop off · +<kbd>Shift</kbd> boardslide<br>
-  <kbd>Mouse</kbd> — look around (click to lock)<br>
-  <kbd>Esc</kbd> — pause menu · <kbd>R</kbd> — reset<br>
-  <kbd>M</kbd> — music on/off · <kbd>,</kbd> <kbd>.</kbd> — prev/next track<br>
-  <kbd>C</kbd> — camera (chase / drone / trackside) · <kbd>H</kbd> — hide HUD / letterbox<br>
-  <kbd>X</kbd> — chaos mode (rave / visualizer / starry / glitch / off)<br>
-  <span style="opacity:.7">🎮 Stick carve · RT/A tuck · X jump · B kick · Y grind · ☰ pause</span>
-</div>
+<div id="help"><kbd>Esc</kbd> menu &amp; controls</div>
 <div id="best">
   <div class="lbl">Top speed</div><div class="val" id="bestval">0</div>
   <div class="lbl sub">Distance</div><div class="val"><span id="distval">0</span><small>m</small></div>
@@ -188,6 +184,7 @@
     <ul class="menu-list">
       <li data-action="resume">Resume</li>
       <li data-action="settings">Settings</li>
+      <li data-action="controls">Controls</li>
       <li data-action="quit">Quit</li>
     </ul>
     <div class="menu-hint">↑ ↓ / stick to move · Enter / A to select · Esc to resume</div>
@@ -201,6 +198,43 @@
       <li data-action="back">Back</li>
     </ul>
     <div class="menu-hint">← → to adjust · Enter / A to confirm · Esc to go back</div>
+  </div>
+  <div class="menu-panel hidden" data-screen="controls">
+    <div class="menu-title">CONTROLS</div>
+    <div class="controls-grid">
+      <section><h3>RIDING</h3><dl>
+        <dt><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></dt><dd>carve</dd>
+        <dt><kbd>Shift</kbd> hold</dt><dd>tuck — go faster</dd>
+        <dt><kbd>W</kbd> / <kbd>↑</kbd></dt><dd>kick-push</dd>
+        <dt><kbd>0</kbd></dt><dd>reset run</dd>
+      </dl></section>
+      <section><h3>TRICKS — IN THE AIR</h3><dl class="tricks">
+        <dt>Ollie</dt><dd><kbd>Space</kbd></dd>
+        <dt>Spin</dt><dd>hold <kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd> + <kbd>Space</kbd><small>each 180° landed scores</small></dd>
+        <dt>Grab</dt><dd>hold <kbd>Shift</kbd> + <kbd>Space</kbd><small>no steering, or it's a spin</small></dd>
+        <dt>Big Air</dt><dd><kbd>Space</kbd> off a ramp<small>long hangtime scores</small></dd>
+        <dt>Revert</dt><dd><kbd>Shift</kbd> + <kbd>R</kbd> on the ground<small>switches your stance; scores right after a landing</small></dd>
+      </dl></section>
+      <section><h3>GRINDS — ON A RAIL</h3><dl class="tricks">
+        <dt>50-50 Grind</dt><dd><kbd>I</kbd> in the air near a rail</dd>
+        <dt>Boardslide</dt><dd>hold <kbd>Shift</kbd> + <kbd>I</kbd> in the air near a rail</dd>
+        <dt>Balance</dt><dd><kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd><small>keep the needle out of the red</small></dd>
+        <dt>Hop off</dt><dd><kbd>Space</kbd><small>steer to pick a side</small></dd>
+      </dl></section>
+      <section><h3>CAMERA &amp; LOOK</h3><dl>
+        <dt><kbd>C</kbd></dt><dd>chase / drone / trackside camera</dd>
+        <dt><kbd>H</kbd></dt><dd>hide HUD / letterbox</dd>
+        <dt><kbd>X</kbd></dt><dd>chaos mode: rave / visualizer / starry / glitch</dd>
+        <dt>Mouse</dt><dd>look around (click to lock)</dd>
+      </dl></section>
+      <section><h3>MUSIC &amp; MENU</h3><dl>
+        <dt><kbd>M</kbd></dt><dd>music on / off</dd>
+        <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>previous / next track</dd>
+        <dt><kbd>Esc</kbd></dt><dd>pause menu</dd>
+      </dl></section>
+    </div>
+    <div class="controls-pad">🎮 Stick carve · RT / A tuck · X jump · B kick · Y grind · ☰ pause</div>
+    <ul class="menu-list" style="margin-top:18px"><li data-action="back">Back</li></ul>
   </div>
 </div>
 
@@ -1206,6 +1240,7 @@ function ik2(a, b, c, target, pole) {
 // the rider faces -X (toe side).
 function poseRider(info, dt) {
   const k = Math.min(1, dt * 8);
+  const fwd = Math.cos(stanceYaw) >= 0 ? 1 : -1;   // lean +Z is down the road in regular, up it in switch
   const grab = state.airborne && trick.type === 'grab' ? 1 : 0;
   const target = grind.on ? 0.55 : grab ? 0.85 : state.airborne ? 0.5 : info.tuck ? 0.8 : 0.3;
   rig.crouch += (target - rig.crouch) * k;
@@ -1226,11 +1261,11 @@ function poseRider(info, dt) {
   for (const [s, z] of [['L', STANCE], ['R', -STANCE]]) {
     const [a, b, e] = rig.leg[s];
     ik2(a, b, e, P(new THREE.Vector3(0.06, rig.deckTop + rig.ankleH, z)),
-        L(new THREE.Vector3(-1, 0.2, z > 0 ? 0.5 : -0.3)));
+        L(new THREE.Vector3(-1, 0.2, (z * fwd > 0 ? 0.5 : -0.3) * fwd)));
     const f = rig.foot[s];
     f.position.copy(f.parent.worldToLocal(e.getWorldPosition(new THREE.Vector3()).add(L(f.userData.off))));
     f.updateMatrixWorld(true);
-    turnWorld(f, Y, z > 0 ? 0.55 : 0.2);                                 // front foot angled to the nose
+    turnWorld(f, Y, (z * fwd > 0 ? 0.55 : 0.2) * fwd);                   // front foot angled to the nose
   }
 
   // spine: bend toward the toe side with the crouch, twist the chest down the hill
@@ -1238,10 +1273,10 @@ function poseRider(info, dt) {
   turnWorld(rig.abdomen, Z, bendAng * 0.5);
   turnWorld(rig.torso, Z, bendAng * 0.5);
   const twist = 0.3 + c * 0.25;
-  turnWorld(rig.chest, Y, twist);
+  turnWorld(rig.chest, Y, twist * fwd);
   // head: finish turning to look down the road, and lift against the bend
-  turnWorld(rig.neck, Y, (Math.PI / 2 - twist) * 0.5);
-  turnWorld(rig.head, Y, (Math.PI / 2 - twist) * 0.5);
+  turnWorld(rig.neck, Y, (Math.PI / 2 - twist) * 0.5 * fwd);
+  turnWorld(rig.head, Y, (Math.PI / 2 - twist) * 0.5 * fwd);
   turnWorld(rig.head, X, -bendAng * 0.7);
 
   // arms: loose balance pose ↔ downhill tuck (hands clasped at the small of the back); grab
@@ -1482,7 +1517,8 @@ addEventListener('keydown', e => {
   keys[e.code] = true;
   if (!e.repeat) tapped[e.code] = true;
   if (gameState !== 'PLAYING' || e.repeat) return;
-  if (e.code === 'KeyR') resetRun();
+  if (e.code === 'KeyR' && e.shiftKey) revert();
+  else if (e.code === 'Digit0' || e.code === 'Numpad0') resetRun();
   else if (e.code === 'KeyC') cycleCam();
   else if (e.code === 'KeyX') cycleChaos();
   else if (e.code === 'KeyH') cycleHud();
@@ -1510,8 +1546,8 @@ function readInput() {
   if (keys['ShiftLeft'] || keys['ShiftRight']) tuck = 1;
   if (keys['Space'] || tapped['Space']) jump = true;
   if (keys['KeyW'] || keys['ArrowUp']) kick = true;
-  if (keys['KeyG'] || tapped['KeyG']) grindBtn = true;
-  tapped['Space'] = tapped['KeyG'] = false;
+  if (keys['KeyI'] || tapped['KeyI']) grindBtn = true;
+  tapped['Space'] = tapped['KeyI'] = false;
 
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   for (const p of pads) {
@@ -1580,7 +1616,7 @@ const trick = { type: null, spin: 0, dir: 1, air: 0 };
 const RAIL_LAT       = ROAD_HALF_WIDTH + 0.62;  // guardrail beam line (matches the rail strip)
 const RAIL_H         = 1.07;   // rider height above the road with the board on the beam
 const GRIND_SNAP     = 1.8;    // lateral lock-on reach — a little snap assist, like THPS
-const GRIND_BUFFER   = 0.3;    // a G press this many seconds early still catches the rail
+const GRIND_BUFFER   = 0.3;    // an I press this many seconds early still catches the rail
 const GRIND_FRICTION = 3.5;    // extra drag while grinding (u/s²)
 const GRIND_PTS      = 300;    // points per second of clean grind
 const BAL_TIP        = 1.4;    // how fast the needle falls away from center (grows with grind time)
@@ -1609,11 +1645,24 @@ function resetRun() {
   trick.type = null; trick.spin = 0; trick.air = 0;
   enduranceT = 0; freeDeath = false; weaponTier = 0;
   grind.on = false; grind.cd = 0; grind.buffer = 0;
+  stance = 1; lastLandT = -1e9;
   for (const it of ITEMS) { if (it.mesh) it.mesh.visible = true; it.taken = false; }
 }
 
 // Gameplay actions (declarations hoist, so update() can call these).
 function takeoff(vy) { if (state.airborne) return; state.airborne = true; state.vy = vy; armTrick(); }
+// --- Revert (Shift+R): a quick 180° pivot on the ground that switches stance (regular ↔ switch).
+//     Right after a landing it scores, like THPS's revert.
+const REVERT_WINDOW = 0.5;   // seconds after landing that a revert still counts as a trick
+const REVERT_PTS    = 100;
+let stance = 1;              // 1 = regular, -1 = switch (rider + board turned 180°)
+let lastLandT = -1e9, revertCd = 0;
+function revert() {
+  if (state.airborne || grind.on || revertCd > 0) return;
+  stance = -stance; revertCd = 0.45;
+  if (run.t - lastLandT < REVERT_WINDOW) { run.score += REVERT_PTS; showTrick('REVERT  +' + REVERT_PTS); }
+  else showTrick(stance === 1 ? 'REGULAR' : 'SWITCH');
+}
 function startGrind(side, inp) {
   scoreTrick();                               // the air trick that got you up there still counts
   Object.assign(grind, { on: true, side, t: 0, bal: (Math.random() - 0.5) * 0.2, drift: 0,
@@ -1708,6 +1757,7 @@ function update(dt) {
   curInput = inp;
   state.steerSmooth += (inp.steer - state.steerSmooth) * Math.min(1, dt * 12);
   const jumpPressed = inp.jump && !jumpWasDown; jumpWasDown = inp.jump;
+  revertCd = Math.max(0, revertCd - dt);
 
   const f = frameAt(state.u);
   const slope = Math.max(0, -f.tan.y); // 0..1 how steeply downhill
@@ -1750,10 +1800,10 @@ function update(dt) {
     if (trick.type === 'spin') trick.spin += SPIN_RATE * trick.dir * dt;
     state.vy -= 34 * dt;
     state.height += state.vy * dt;
-    if (state.height <= 0) { state.height = 0; state.airborne = false; state.vy = 0; scoreTrick(); if (state.speed > 4) flash(0.15); }
+    if (state.height <= 0) { state.height = 0; state.airborne = false; state.vy = 0; scoreTrick(); lastLandT = run.t; if (state.speed > 4) flash(0.15); }
   }
 
-  // rail lock-on (G): airborne, at rail height, within reach of a beam — rising into it while
+  // rail lock-on (I): airborne, at rail height, within reach of a beam — rising into it while
   // drifting toward it, or coming down onto it
   grind.cd = Math.max(0, grind.cd - dt);
   grind.buffer = inp.grind && !grindWasDown ? GRIND_BUFFER : Math.max(0, grind.buffer - dt);
@@ -1804,6 +1854,7 @@ function update(dt) {
 // ------------------------------------------------------------------
 // Placement + camera
 // ------------------------------------------------------------------
+let stanceYaw = 0, slideYawAnim = 0;
 const camPos = new THREE.Vector3(0, 200, 200);
 const camLook = new THREE.Vector3();
 // Camera modes — C cycles. 'drone' and 'trackside' are for capturing trailer footage.
@@ -1837,9 +1888,13 @@ function place(info) {
 
   // lean into the carve
   // grinding: the rider wobbles with the balance needle; a boardslide swings the board across the rail
-  lean.rotation.z = grind.on ? -grind.bal * 0.45 : -state.steerSmooth * 0.5;
+  // switch stance turns the whole board + rider 180° (animated — that's the revert); the carve
+  // lean is applied inside that turn, so flip it with the stance to keep leaning into the carve
+  stanceYaw += ((stance === 1 ? 0 : Math.PI) - stanceYaw) * Math.min(1, dt * 12);
   const slideYaw = grind.on && grind.name === 'BOARDSLIDE' ? Math.PI / 2 : 0;
-  lean.rotation.y += (slideYaw - lean.rotation.y) * Math.min(1, dt * 14);
+  slideYawAnim += (slideYaw - slideYawAnim) * Math.min(1, dt * 14);
+  lean.rotation.y = stanceYaw + slideYawAnim;
+  lean.rotation.z = (grind.on ? -grind.bal * 0.45 : -state.steerSmooth * 0.5) * Math.cos(stanceYaw);
   lean.rotation.x = !rig.ready && info.tuck ? 0.18 : 0;   // the rigged rider tucks with its body instead
 
   // trick pose in the air (spin about up, grab = tuck-and-hold); settle back on the ground
@@ -2309,15 +2364,17 @@ function updateChaos(dt) {
 // ------------------------------------------------------------------
 // Pause menu + settings — keyboard & gamepad navigable
 // ------------------------------------------------------------------
-let gameState = 'PLAYING';   // PLAYING | PAUSED | SETTINGS | TITLE
+let gameState = 'PLAYING';   // PLAYING | PAUSED | SETTINGS | CONTROLS | TITLE | ENTRY | RESULTS
 let menuIndex = 0;
 const settings = { volume: 70, sens: 100 };
 audio.volume = settings.volume / 100;
 
 const menuEl = document.getElementById('menu');
 const titleEl = document.getElementById('title');
-const items = { main: ['resume', 'settings', 'quit'], settings: ['volume', 'sens', 'fx', 'back'] };
-const curScreen = () => (gameState === 'SETTINGS' ? 'settings' : 'main');
+const items = { main: ['resume', 'settings', 'controls', 'quit'], settings: ['volume', 'sens', 'fx', 'back'], controls: ['back'] };
+const inSubmenu = () => gameState === 'SETTINGS' || gameState === 'CONTROLS';
+const inMenu = () => gameState === 'PAUSED' || inSubmenu();
+const curScreen = () => (gameState === 'SETTINGS' ? 'settings' : gameState === 'CONTROLS' ? 'controls' : 'main');
 const curItems = () => items[curScreen()];
 
 function showPanel(name) {
@@ -2336,12 +2393,13 @@ function renderValues() {
 function openMenu()  { gameState = 'PAUSED'; menuIndex = 0; document.exitPointerLock?.(); menuEl.classList.remove('hidden'); showPanel('main'); renderMenu(); }
 function closeMenu() { gameState = 'PLAYING'; menuEl.classList.add('hidden'); }
 function openSettings() { gameState = 'SETTINGS'; menuIndex = 0; showPanel('settings'); renderValues(); renderMenu(); }
+function openControls() { gameState = 'CONTROLS'; menuIndex = 0; showPanel('controls'); renderMenu(); }
 function backToMain()   { gameState = 'PAUSED'; menuIndex = 0; showPanel('main'); renderMenu(); }
 function quitGame()  { gameState = 'TITLE'; menuEl.classList.add('hidden'); titleEl.classList.remove('hidden'); }
 function startFromTitle() { resetRun(); topSpeed = 0; gameState = 'PLAYING'; titleEl.classList.add('hidden'); }
 
 function activate(item) {
-  ({ resume: closeMenu, settings: openSettings, quit: quitGame, back: backToMain })[item]?.();
+  ({ resume: closeMenu, settings: openSettings, controls: openControls, quit: quitGame, back: backToMain })[item]?.();
 }
 function adjustSetting(item, dir) {
   if (item === 'volume') { settings.volume = THREE.MathUtils.clamp(settings.volume + dir * 5, 0, 100); audio.volume = settings.volume / 100; }
@@ -2365,11 +2423,11 @@ addEventListener('keydown', e => {
   if (gameState === 'RESULTS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') rideAgain(); return; }
   if (e.code === 'Escape') {
     if (gameState === 'PLAYING') openMenu();
-    else if (gameState === 'SETTINGS') backToMain();
+    else if (inSubmenu()) backToMain();
     else if (gameState === 'PAUSED') closeMenu();
     return;
   }
-  if (gameState === 'PAUSED' || gameState === 'SETTINGS') { e.preventDefault(); menuNav(e.code); }
+  if (inMenu()) { e.preventDefault(); menuNav(e.code); }
 });
 
 // Mouse on menu items
@@ -2391,10 +2449,9 @@ function pollMenuGamepad(dt) {
 
   if (padEdge(p, 9)) { // Start
     if (gameState === 'PLAYING') openMenu();
-    else if (gameState === 'SETTINGS') backToMain();
+    else if (inSubmenu()) backToMain();
     else if (gameState === 'PAUSED') closeMenu();
   }
-  const inMenu = gameState === 'PAUSED' || gameState === 'SETTINGS';
   const up = padEdge(p, 12), dn = padEdge(p, 13), lf = padEdge(p, 14), rt = padEdge(p, 15);
   const a = padEdge(p, 0), b = padEdge(p, 1); // consume edges regardless of state
   if (gameState === 'TITLE') { if (a) startFromTitle(); return; }
@@ -2413,12 +2470,12 @@ function pollMenuGamepad(dt) {
     }
     return;
   }
-  if (!inMenu) return;
+  if (!inMenu()) return;
 
   if (up) menuNav('ArrowUp'); if (dn) menuNav('ArrowDown');
   if (lf) menuNav('ArrowLeft'); if (rt) menuNav('ArrowRight');
   if (a) menuNav('Enter');
-  if (b) { if (gameState === 'SETTINGS') backToMain(); else closeMenu(); }
+  if (b) { if (inSubmenu()) backToMain(); else closeMenu(); }
 
   padCooldown -= dt;
   if (padCooldown <= 0) {
