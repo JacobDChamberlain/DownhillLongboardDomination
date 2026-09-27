@@ -287,7 +287,7 @@
     <div id="rnext" class="rhint blink">Enter / A / click — continue</div>
     <div id="rcontinue" class="rhint blink">Enter / A / click — continue</div>
     <div id="rend">
-      <ul class="menu-list rmenu"><li data-r="restart" class="sel">Restart</li><li data-r="quit">Quit</li></ul>
+      <ul class="menu-list rmenu"><li data-r="restart" class="sel">Restart</li><li data-r="next">Next Race</li><li data-r="quit">Quit</li></ul>
       <div class="menu-hint">↑ ↓ to choose · Enter / A to select</div>
     </div>
   </div>
@@ -548,7 +548,7 @@ const START_EASE = 0.15;  // first fraction of the track where the rolling rises
 
 // Level 2 — Switchback Pass: traverses across a steep mountain face joined by hairpins, a level
 // approach from the start pit and a level run-out into the finish pit.
-const SB = { W: 300, DZ: 95, LEGS: 6, GRADE: 0.13, Y0: 720, APPROACH: 70, RUNOUT: 260 };
+const SB = { W: 300, DZ: 140, LEGS: 6, GRADE: 0.11, Y0: 720, APPROACH: 70, RUNOUT: 260 };   // DZ: gap between traverses
 const sbLegs = [];   // { z, dir, s0 } — arc length where each traverse starts (terrain + features read this)
 function buildSwitchbackPoints() {
   const raw = []; let s = 0, last = null;
@@ -728,7 +728,7 @@ const GRASS_TILE   = 22;   // world units per grass texture repeat
       const uSeg = i / SAMPLES;
       if (GAPS.some(g => uSeg > g.u0 && uSeg < g.u1)) continue;   // leave a hole — the abyss shows through
       roadIdx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
-      if (!onBridge(uSeg) && !inPit(uSeg)) {
+      if (!IS_SWITCH && !onBridge(uSeg) && !inPit(uSeg)) {
         const c = i * 4;   // 4 grass verts per sample: left-outer, left-inner, right-inner, right-outer
         grassIdx.push(c, c + 1, c + 4, c + 1, c + 5, c + 4, c + 2, c + 3, c + 6, c + 3, c + 7, c + 6);
       }
@@ -786,6 +786,8 @@ const GRASS_TILE   = 22;   // world units per grass texture repeat
   railMat = new THREE.MeshStandardMaterial({ color: 0xb8bcc0, roughness: .5, metalness: .2, side: THREE.DoubleSide });
   glowMats.push({ mat: paintMat, color: 0xffffff, k: 1 }, { mat: railMat, color: 0xffffff, k: 0.4 });   // rail is a big surface — less, or bloom fogs the screen
   const railKeep = i => notInGap(i) && !inPit(i / SAMPLES);
+  if (IS_SWITCH) for (const s of [1, -1])    // level 2: a concrete curb face down from the road edge to the cut
+    strip({ s: s * (GW + 0.05), u: 0.05 }, { s: s * (GW + 0.05), u: -1.6 }, concreteMat, railKeep);
   for (const s of [1, -1]) strip({ s: s * (GW + 0.62), u: 0.72 }, { s: s * (GW + 0.62), u: 1.12 }, railMat, railKeep).castShadow = true;
 
   // bridge deck: a concrete box girder under the road across the gorge
@@ -825,6 +827,7 @@ let cliffMat, waterTex;
   const iStart = Math.ceil(BRIDGE.u0 * SAMPLES), iEnd = Math.floor(BRIDGE.u1 * SAMPLES);
   const flat = v => new THREE.Vector3(v.x, 0, v.z).normalize();
 
+  if (!IS_SWITCH) {   // the ridge's cliffs, gorge and viaduct — level 2 has a mountain face instead
   // one rock wall per side; `cols[s][i][r]` keeps vertices so the gorge caps can stitch to them
   const cols = { 1: [], [-1]: [] };
   const verts = [], uvs = [], idx = [];
@@ -934,6 +937,7 @@ let cliffMat, waterTex;
     cap.castShadow = true; scene.add(cap);
   }
 
+  }
   // fjord filling the valley floor — reflects the sky, fades into the haze; ripples scroll in frame()
   const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
   const cx = cv.getContext('2d'), img = cx.createImageData(N, N);
@@ -956,10 +960,118 @@ let cliffMat, waterTex;
   const lake = new THREE.Mesh(new THREE.CircleGeometry(5600, 96), new THREE.MeshStandardMaterial({
     color: 0x173a42, roughness: 0.14, metalness: 0, normalMap: waterTex, normalScale: new THREE.Vector2(0.3, 0.3) }));
   lake.rotation.x = -Math.PI / 2;
-  lake.position.set(0, LAKE_Y, -TRACK_LEN / 2);
+  lake.position.set(TRACK_CENTER.x, LAKE_Y, TRACK_CENTER.z);
   lake.receiveShadow = true;
   lake.renderOrder = 20;   // after everything nearer, so the depth test skips the pixels they cover
   scene.add(lake);
+}
+
+// ------------------------------------------------------------------
+// Switchback terrain (level 2) — the mountain face the road is cut into. Between two traverses
+// the face slopes from one road shelf down to the next; above the top traverse it climbs, below
+// the bottom one and past the hairpins it falls away to the valley. The road (and both pits) are
+// carved flat into it. Steep ground is tinted toward rock.
+// ------------------------------------------------------------------
+const TERRAIN_STEP = 7;          // grid spacing (world units)
+const TERRAIN_FALLOFF = 400;     // the mountain slopes down to the valley over this much at the grid's edge
+const SHELF_W      = ROAD_HALF_WIDTH + 4;   // flat shelf either side of the road centreline
+let terrainHeightAt = null, terrainMat = null;
+const roadBuckets = new Map(), RB = 24;      // 2D spatial hash of road samples
+for (let i = 0; i <= SAMPLES; i++) {
+  const p = frames[i].p, k = Math.floor(p.x / RB) + ',' + Math.floor(p.z / RB);
+  if (!roadBuckets.has(k)) roadBuckets.set(k, []);
+  roadBuckets.get(k).push(i);
+}
+function nearestRoad(x, z, maxR = 40) {       // → { d, i }: horizontal distance to the closest road sample
+  const r = Math.ceil(maxR / RB), bx = Math.floor(x / RB), bz = Math.floor(z / RB);
+  let d = Infinity, bi = -1;
+  for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) {
+    const list = roadBuckets.get((bx + a) + ',' + (bz + b)); if (!list) continue;
+    for (const i of list) { const p = frames[i].p, e = Math.hypot(p.x - x, p.z - z); if (e < d) { d = e; bi = i; } }
+  }
+  return { d, i: bi };
+}
+// level 2: how steep the ground is at (x, z) — rise per unit run; things don't stand on cliffs
+function steepAt(x, z) {
+  if (!terrainHeightAt) return 0;
+  return Math.hypot(terrainHeightAt(x + 1.5, z) - terrainHeightAt(x - 1.5, z), terrainHeightAt(x, z + 1.5) - terrainHeightAt(x, z - 1.5)) / 3;
+}
+// put p (on the road's side line) onto the ground: level 1's grass ribbon, or level 2's terrain
+function groundize(p, ribbonDy) {
+  if (terrainHeightAt) p.y = terrainHeightAt(p.x, p.z) + ribbonDy + 0.4; else p.y += ribbonDy;
+  return p;
+}
+if (IS_SWITCH) {
+  const hash = (x, y) => { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); };
+  const vn = (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
+  };
+  const LAST = sbLegs.length - 1, zTop = sbLegs[0].z, zBot = sbLegs[LAST].z;
+  const x0 = -SB.W - 900, x1 = SB.W + 900, z0 = zTop + 850, z1 = zBot - 850;
+  const nx = Math.ceil((x1 - x0) / TERRAIN_STEP), nz = Math.ceil((z0 - z1) / TERRAIN_STEP);
+  const flatV = v => new THREE.Vector3(v.x, 0, v.z).normalize();
+  const pits = [
+    { c: frameAt(FINISH_PIT_U).p, R: FINISH_PIT_R },
+    { c: frames[0].p.clone().addScaledVector(flatV(frames[0].tan), -START_PIT_BACK), R: START_PIT_R },
+  ];
+  const H = new Float32Array((nx + 1) * (nz + 1));
+  for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
+    const x = x0 + i * TERRAIN_STEP, z = z0 - j * TERRAIN_STEP;
+    let h;
+    if (z >= zTop) {                            // above the top traverse: climb to a crest, then fall away behind
+      const up = Math.max(0, z - zTop - SHELF_W);
+      h = sbLegY(0, x) + Math.min(up * 0.9, 160) - Math.max(0, up - 180) * 0.75 + vn(x * 0.03, z * 0.03) * 12;
+    }
+    else if (z <= zBot) h = sbLegY(LAST, x) - Math.max(0, zBot - z - SHELF_W) * 0.7 + vn(x * 0.02, z * 0.02) * 20;
+    else {
+      const k = Math.min(LAST - 1, Math.floor((zTop - z) / SB.DZ)), t = (zTop - z - k * SB.DZ);
+      const tt = THREE.MathUtils.clamp((t - SHELF_W) / (SB.DZ - 2 * SHELF_W), 0, 1);
+      h = THREE.MathUtils.lerp(sbLegY(k, x), sbLegY(k + 1, x), tt) + vn(x * 0.04, z * 0.04) * 7 * Math.sin(Math.PI * tt);
+    }
+    const edge = Math.abs(x) - (SB.W + SB.DZ / 2 + 25);          // past the hairpins the mountain falls away
+    if (edge > 0) h -= edge * 0.7 + vn(x * 0.02, z * 0.02) * Math.min(edge, 60) * 0.3;
+    const nr = nearestRoad(x, z, 36);                             // carve the road's shelf
+    if (nr.i >= 0 && nr.d < ROAD_HALF_WIDTH + 14) {
+      const f = frames[nr.i], shelf = f.p.y - 0.45 - Math.abs(f.side.y) * ROAD_HALF_WIDTH;
+      h = THREE.MathUtils.lerp(shelf, h, THREE.MathUtils.smoothstep(nr.d, ROAD_HALF_WIDTH + 2.5, ROAD_HALF_WIDTH + 14));
+    }
+    for (const pt of pits) {                                       // flatten both pits
+      const d = Math.hypot(x - pt.c.x, z - pt.c.z);
+      h = THREE.MathUtils.lerp(pt.c.y - 0.6, h, THREE.MathUtils.smoothstep(d, pt.R + 16, pt.R + 130));   // wide blend: no plateau cliff
+    }
+    const border = Math.min(i, j, nx - i, nz - j) * TERRAIN_STEP;       // slope down to the valley at the edges
+    h = THREE.MathUtils.lerp(CLIFF_FLOOR, h, THREE.MathUtils.smoothstep(border, 0, TERRAIN_FALLOFF));
+    H[j * (nx + 1) + i] = Math.max(CLIFF_FLOOR, h);
+  }
+  terrainHeightAt = (x, z) => {
+    const fi = THREE.MathUtils.clamp((x - x0) / TERRAIN_STEP, 0, nx - 1e-6), fj = THREE.MathUtils.clamp((z0 - z) / TERRAIN_STEP, 0, nz - 1e-6);
+    const i = Math.floor(fi), j = Math.floor(fj), a = fi - i, b = fj - j, w = nx + 1;
+    return (H[j * w + i] * (1 - a) + H[j * w + i + 1] * a) * (1 - b) + (H[(j + 1) * w + i] * (1 - a) + H[(j + 1) * w + i + 1] * a) * b;
+  };
+  const pos = new Float32Array((nx + 1) * (nz + 1) * 3), uv = new Float32Array((nx + 1) * (nz + 1) * 2), idx = [];
+  for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
+    const n = j * (nx + 1) + i, x = x0 + i * TERRAIN_STEP, z = z0 - j * TERRAIN_STEP;
+    pos.set([x, H[n], z], n * 3); uv.set([x / GRASS_TILE, (z + H[n]) / GRASS_TILE], n * 2);   // v follows the slope — no stretching on steep faces
+    if (i < nx && j < nz) { const a = n, b = n + 1, c = n + nx + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  // steep ground reads as bare rock / earth
+  const nrm = g.attributes.normal, col = new Float32Array(nrm.count * 3);
+  for (let k = 0; k < nrm.count; k++) {
+    const r = THREE.MathUtils.smoothstep(1 - nrm.getY(k), 0.18, 0.5);
+    col.set([1 - r * 0.45, 1 - r * 0.5, 1 - r * 0.47], k * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  terrainMat = new THREE.MeshStandardMaterial({ color: 0x4f7233, roughness: 1, vertexColors: true });
+  const terrain = new THREE.Mesh(g, terrainMat);
+  terrain.receiveShadow = true; terrain.renderOrder = 10;
+  scene.add(terrain);
+  groundMeshes.push(terrain);
 }
 
 // ------------------------------------------------------------------
@@ -1005,7 +1117,8 @@ const ARENAS = [];   // { c: centre (floor level), R, openAng, openHalf } — cr
     scene.add(floor);
     // grass berm rim, then rock walls outside down to the valley floor
     ring([[R, FLOOR_DY], [R + 3, 0.6], [R + 7, 3.8], [R + 11, 5.2], [R + 17, 5.4]], c, openAng, openHalf, groundMeshes[0].material, planarUV);
-    ring([[R + 17, 5.4], [R + 21, 1.5], [R + 32, -45], [R + 60, -150], [R + 95, CLIFF_FLOOR - c.y]], c, openAng, openHalf, cliffMat, rockUV);
+    if (!IS_SWITCH)   // level 1's pits stand on the ridge; level 2's sit on the mountain terrain
+      ring([[R + 17, 5.4], [R + 21, 1.5], [R + 32, -45], [R + 60, -150], [R + 95, CLIFF_FLOOR - c.y]], c, openAng, openHalf, cliffMat, rockUV);
     ARENAS.push({ c: c.clone(), R, openAng, openHalf, roadThrough });
   }
   // finish: centred on the level end of the road; opening faces back up the road
@@ -1037,7 +1150,7 @@ const hazeMats = [];
   scene.add(posts);
 
   // Layered ridgelines encircling the run — each band hazier than the last (aerial perspective)
-  const center = new THREE.Vector3(0, 0, -TRACK_LEN / 2);
+  const center = TRACK_CENTER.clone();
   function ridgeRing(radius, minH, maxH, color, seed) {
     const seg = 170, verts = [], idx = [];
     let rng = seed;
@@ -1084,7 +1197,7 @@ const hazeMats = [];
 // the inside of the curve (the drop stays on the other side). The inside is worked out from the
 // road's own curvature, and the wall tapers out of the grass at both ends.
 // ------------------------------------------------------------------
-const MOUNTAIN_WALLS = [ { u0: 0.395, u1: 0.515 }, { u0: 0.755, u1: 0.865 } ];
+const MOUNTAIN_WALLS = IS_SWITCH ? [] : [ { u0: 0.395, u1: 0.515 }, { u0: 0.755, u1: 0.865 } ];
 const WALL_SET_BACK  = 5;      // grass between the road edge and the foot of the wall
 const WALL_TAPER_U   = 0.018;  // the wall grows out of the grass over this much of the run
 const wallAt = (u, lateral) => {    // true if (u, lateral) is inside a wall's footprint
@@ -1164,6 +1277,7 @@ const TREE_SPACING  = 5;     // try a tree every N road samples, per side
 const TREE_CHANCE   = 0.55;  // probability each try places one
 const TREE_MIN_H = 14, TREE_MAX_H = 26;   // world units (rider is 2.5)
 const TREE_CHUNK = 12;   // trees per instanced draw (per variant) — the unit of frustum culling
+const DETAIL_U_MIN = IS_SWITCH ? 150 / TOTAL_LEN : 0.035;   // trees / props start this far down the run (crowd room)
 const trees = [];
 {
   let seed = 1337;
@@ -1173,13 +1287,13 @@ const trees = [];
     const f = frames[i];
     if (GAPS.some(g => i / SAMPLES > g.u0 - 0.01 && i / SAMPLES < g.u1 + 0.01)) continue;
     if (i / SAMPLES > BRIDGE.u0 - 0.012 && i / SAMPLES < BRIDGE.u1 + 0.012) continue;
-    if (i / SAMPLES < 0.035 || i / SAMPLES > 0.918) continue;   // leave room for the start/finish crowds
+    if (i / SAMPLES < DETAIL_U_MIN || i / SAMPLES > FINISH_U - 0.04) continue;   // leave room for the start/finish crowds
     for (const s of [1, -1]) {
       if (rnd() > TREE_CHANCE) continue;
       const d = ROAD_HALF_WIDTH + 6 + rnd() * (SHOULDER - ROAD_HALF_WIDTH - 10);
       if (wallAt(i / SAMPLES, s * d)) continue;            // that's inside the mountain
-      const p = f.p.clone().addScaledVector(f.side, s * d);
-      p.y -= 0.7;                                          // grass sits 0.4 below; sink the base a bit
+      const p = groundize(f.p.clone().addScaledVector(f.side, s * d), -0.7);   // sink the base a bit
+      if (steepAt(p.x, p.z) > 1.0) continue;               // not on a cliff face
       // keep clear of any other stretch of road that winds back nearby
       let clear = true;
       for (let j = Math.max(0, i - 400); j <= Math.min(SAMPLES, i + 400) && clear; j += 4) {
@@ -1256,8 +1370,9 @@ let grassWind = { value: 0 };  // wind-sway clock shared with the grass shader
   let seed = 4242;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const skip = (u, lat) =>
-    GAPS.some(g => u > g.u0 - 0.006 && u < g.u1 + 0.006) || onBridge(u) || inPit(u) || u < 0.04 || u > 0.92 ||
-    (u > 0.925 && Math.abs(lat) < 20) || wallAt(u, lat);
+    GAPS.some(g => u > g.u0 - 0.006 && u < g.u1 + 0.006) || onBridge(u) || inPit(u) || u < DETAIL_U_MIN + 0.005 ||
+    u > FINISH_U - 0.038 || wallAt(u, lat);
+  const onOtherRoad = p => IS_SWITCH && (nearestRoad(p.x, p.z, 24).d < ROAD_HALF_WIDTH + 2 || steepAt(p.x, p.z) > 0.75);   // another traverse, or too steep
   const up = new THREE.Vector3(0, 1, 0);
 
   // ---- rocks + bushes
@@ -1271,7 +1386,8 @@ let grassWind = { value: 0 };  // wind-sway clock shared with the grass shader
       else if (r < ROCK_CHANCE + BUSH_CHANCE) { v = rnd() < 0.7 ? 2 : 3; d = ROAD_HALF_WIDTH + 2.5 + rnd() * 30; sc = 1.1 + rnd() * 1.4; }
       else continue;
       if (skip(u, s * d)) continue;
-      const p = f.p.clone().addScaledVector(f.side, s * d); p.y -= 0.5;
+      const p = groundize(f.p.clone().addScaledVector(f.side, s * d), -0.5);
+      if (onOtherRoad(p)) continue;
       placements[v].push({ p, sc, yaw: rnd() * Math.PI * 2, i });
     }
   }
@@ -1343,9 +1459,9 @@ let grassWind = { value: 0 };  // wind-sway clock shared with the grass shader
       for (const s of [1, -1]) for (let n = 0; n < GRASS_PER_STEP; n++) {
         const d = ROAD_HALF_WIDTH + 1.2 + Math.pow(rnd(), 1.6) * 26;       // denser near the road
         if (skip(u, s * d)) continue;
-        const p = f.p.clone().addScaledVector(f.side, s * d).addScaledVector(f.tan, (rnd() - 0.5) * 3);
-        p.y -= 0.42;
-        q.setFromUnitVectors(up, f.up).multiply(yq.setFromAxisAngle(up, rnd() * Math.PI * 2));
+        const p = groundize(f.p.clone().addScaledVector(f.side, s * d).addScaledVector(f.tan, (rnd() - 0.5) * 3), -0.42);
+        if (onOtherRoad(p)) continue;
+        q.setFromUnitVectors(up, terrainHeightAt ? up : f.up).multiply(yq.setFromAxisAngle(up, rnd() * Math.PI * 2));
         sv.set(0.7 + rnd() * 0.8, 0.6 + rnd() * 0.9, 0.7 + rnd() * 0.8);
         mats.push(m4.compose(p, q, sv).clone());
       }
@@ -1472,6 +1588,13 @@ applyPBR(groundMeshes[0].material, 'grass', 0xd2e6a0).then(() => {
       diffuseColor *= mix( texA, texB, 0.45 ) * (0.85 + 0.3 * texB.g);`);
   };
   groundMeshes[0].material.needsUpdate = true;
+  if (terrainMat) {                    // level 2's mountain face uses the same grass (tinted by slope)
+    const gm = groundMeshes[0].material;
+    Object.assign(terrainMat, { map: gm.map, normalMap: gm.normalMap, roughnessMap: gm.roughnessMap, aoMap: gm.aoMap, aoMapIntensity: gm.aoMapIntensity });
+    terrainMat.color.copy(gm.color);
+    terrainMat.onBeforeCompile = gm.onBeforeCompile;
+    terrainMat.needsUpdate = true;
+  }
 }).catch(e => console.warn('[assets] grass textures unavailable:', e?.message || e));
 
 // ------------------------------------------------------------------
@@ -1821,8 +1944,11 @@ let itemSpin = 0;
 // Start / finish — arches over the road and cheering crowds behind the rails. Spectators are
 // clones of Quaternius "Man" (CC0) with per-person colors; mixers only tick near the camera.
 // ------------------------------------------------------------------
-const CROWD_ZONES = [ { u0: 0.006, u1: 0.034, arch: START_U, label: 'START' },
-                      { u0: 0.928, u1: 0.957, arch: FINISH_U, label: 'FINISH' } ];
+const CROWD_ZONES = IS_SWITCH
+  ? [ { u0: 25 / TOTAL_LEN, u1: 150 / TOTAL_LEN, arch: START_U, label: 'START' },
+      { u0: FINISH_U - 130 / TOTAL_LEN, u1: FINISH_U - 4 / TOTAL_LEN, arch: FINISH_U, label: 'FINISH' } ]
+  : [ { u0: 0.006, u1: 0.034, arch: START_U, label: 'START' },
+      { u0: 0.928, u1: 0.957, arch: FINISH_U, label: 'FINISH' } ];
 const CROWD_PER_SIDE = 16;    // spectators per side of the road, per zone
 const PIT_CROWD_SPACING = 5;  // world units between spectators lining the road through the finish pit
 const CROWD_START_PIT   = 45; // spectators around the start line in the start pit
@@ -1901,7 +2027,8 @@ const crowd = [];             // { mixer, obj }
     for (const z of CROWD_ZONES) for (const s of [1, -1]) for (let n = 0; n < CROWD_PER_SIDE; n++) {
       const u = z.u0 + (z.u1 - z.u0) * (n + rnd() * 0.8) / CROWD_PER_SIDE;
       const f = frameAt(u);
-      const p = f.p.clone().addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 2.4 + rnd() * 5)); p.y -= 0.4;
+      const p = groundize(f.p.clone().addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 2.4 + rnd() * 5)), -0.4);
+      if (steepAt(p.x, p.z) > 0.6) continue;             // nobody stands on a cliff face
       // face the road (and a little up-hill, toward oncoming riders)
       spawn(p, f.p.clone().sub(p).setY(0).normalize().addScaledVector(f.tan, -0.5).normalize());
     }
@@ -1911,7 +2038,7 @@ const crowd = [];             // { mixer, obj }
       for (const s of [1, -1]) for (let row = 0; row < 2; row++) {
         if (row === 1 && rnd() < 0.5) continue;
         const f = frameAt(u + (rnd() - 0.5) * 1.5 / TOTAL_LEN);
-        const p = f.p.clone().addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 3 + row * 2.4 + rnd() * 1.2)); p.y -= 0.5;
+        const p = groundize(f.p.clone().addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 3 + row * 2.4 + rnd() * 1.2)), -0.5);
         spawn(p, f.p.clone().sub(p).setY(0).normalize());
       }
     {
@@ -1919,7 +2046,7 @@ const crowd = [];             // { mixer, obj }
       for (let n = 0; n < 18; n++) {
         const ang = Math.atan2(D.z, D.x) + (n / 17 - 0.5) * 2.6 + (rnd() - 0.5) * 0.1;
         const dir = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang));
-        const p = fe.p.clone().addScaledVector(dir, 12 + rnd() * 7); p.y -= 0.5;
+        const p = groundize(fe.p.clone().addScaledVector(dir, 12 + rnd() * 7), -0.5);
         spawn(p, dir.clone().negate());
       }
     }
@@ -2357,8 +2484,10 @@ function update(dt) {
   run.topSpeed = Math.max(run.topSpeed, state.speed);
 
   // soft wall at shoulder edge
-  const limit = ROAD_HALF_WIDTH + 45;
-  if (Math.abs(state.lateral) > limit) { state.lateral = Math.sign(state.lateral) * limit; state.heading *= -0.3; state.speed *= 0.6; }
+  const limit = IS_SWITCH ? ROAD_HALF_WIDTH - 0.5 : ROAD_HALF_WIDTH + 45;   // level 2: the rails hold you on the shelf
+  if (Math.abs(state.lateral) > limit) {
+    state.lateral = Math.sign(state.lateral) * limit; state.heading *= -0.3; state.speed *= IS_SWITCH ? 0.9 : 0.6;
+  }
   // on the bridge there's no shoulder — the rails hold you on the deck
   const railLim = ROAD_HALF_WIDTH - 0.5;
   if (onBridge(state.u) && Math.abs(state.lateral) > railLim) {
@@ -2644,7 +2773,15 @@ function prevTrack() { if (!radioStarted) { radioStarted = true; playTrack(0); }
 // now and, if that's refused, again on the first key / click / tap. The music keys and the
 // transport buttons are left to their own handlers (otherwise they'd start it, then toggle it off).
 radioStarted = true;
-playTrack(0);
+{
+  let carried = null;
+  try { carried = JSON.parse(sessionStorage.getItem('downhill.radio')); sessionStorage.removeItem('downhill.radio'); } catch {}
+  playTrack(carried ? carried.track : 0);
+  if (carried) audio.addEventListener('loadedmetadata', () => {
+    audio.currentTime = carried.time || 0;
+    if (!carried.playing) audio.pause();
+  }, { once: true });
+}
 function unlockAudio(e) {
   if (e.type === 'keydown' && ['KeyM', 'Period', 'Comma'].includes(e.code)) return;
   if (e.target?.closest?.('#transport')) return;
@@ -3033,7 +3170,7 @@ function pollMenuGamepad(dt) {
 // Ranked by fastest completion time for now; each entry also stores top speed,
 // distance and score so a future rank-toggle can sort by any metric via compareBy[].
 // ------------------------------------------------------------------
-const LB_KEY = 'downhill.scores';      // localStorage key for the leaderboard
+const LB_KEY = LV.lbKey;               // localStorage key for this level's leaderboard (level 1 keeps 'downhill.scores')
 const NAME_KEY = 'downhill.initials';  // last initials the player entered
 const LB_MAX = 8;                      // rows kept on the board
 const ENTRY_LEN = 3;                   // arcade initials
@@ -3077,9 +3214,17 @@ function showEnd() {                           // 4) after everything: just the 
   rmenuIndex = 0; renderRmenu();
 }
 function rmenuMove(d) { rmenuIndex = (rmenuIndex + d + rmenuItems.length) % rmenuItems.length; renderRmenu(); }
+const NEXT_LEVEL = (LEVEL_IDX + 1) % LEVELS.length;
+rmenuItems.find(li => li.dataset.r === 'next').textContent = 'Next Race: ' + LEVELS[NEXT_LEVEL].name;
 function rmenuPick(i = rmenuIndex) {
+  const r = rmenuItems[i].dataset.r;
+  if (r === 'next') {                          // reload into the next course; the song carries over
+    try { sessionStorage.setItem('downhill.radio', JSON.stringify({ track, time: audio.currentTime, playing: !audio.paused })); } catch {}
+    location.search = '?level=' + (NEXT_LEVEL + 1);
+    return;
+  }
   results.el.classList.add('hidden');
-  if (rmenuItems[i].dataset.r === 'restart') beginRun();
+  if (r === 'restart') beginRun();
   else quitGame();
 }
 rmenuItems.forEach((li, i) => {
@@ -3212,6 +3357,7 @@ function beginRun() {
   lightEls.forEach(l => l.classList.remove('on'));
   lightsEl.classList.remove('show');
   gameState = 'COUNTDOWN';
+  showTrick(LV.name);
 }
 function skipFly() { startSeq.phase = 'count'; startSeq.t = 0; chaseOff.set = false; lightsEl.classList.add('show'); }
 const idleInfo = { tuck: false, offroad: false, carving: false, brake: false };
