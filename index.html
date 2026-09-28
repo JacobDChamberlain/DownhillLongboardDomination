@@ -3636,8 +3636,8 @@ const LB_KEY = LV.lbKey;               // localStorage key for this level's lead
 // Global leaderboard (Supabase). Paste the project URL and its anon / publishable key to turn on the
 // WORLD board; left blank, scores stay local only. The key is meant to be public: the table's
 // row-level security only lets anyone read and add scores (see supabase/schema.sql).
-const SUPABASE_URL = '';
-const SUPABASE_KEY = '';
+const SUPABASE_URL = 'https://daugbbqekkptwycxcahy.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_gQUP3UcNCJEmzNz1Uzm9oA_GdMFu-eM';
 const WORLD_ON = !!(SUPABASE_URL && SUPABASE_KEY) && location.protocol.startsWith('http');
 const NAME_KEY = 'downhill.initials';  // last initials the player entered
 const LB_MAX = 8;                      // rows kept on the board
