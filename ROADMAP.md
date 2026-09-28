@@ -64,8 +64,12 @@ content. The carving rewrite is the big one: do it before building more switchba
 - [x] **CPU racers** — *done: three AI riders (RAZ, KOJI, MEL) on the start grid with you; same
   physics, always tucked, per-rider skill + a light rubber band; inside line through bends,
   dodge whoever's ahead, kickers with gap assist, shoulder bumps; POS x/4 under the timer and
-  your place on the results.* Ideas: difficulty setting, CPUs doing tricks / grabbing pickups,
-  CPUs that can crash, a race-results table with everyone's times.
+  your place on the results. They tuck and sit up on their own (your cruise/tuck poses blended),
+  wobble off the line, bail some kicker landings and stumble at speed, take rocket boosts;
+  **K** kicks a racer beside you (Road Rash style); they're knockable in the pit brawl.
+  Results: a THIS RACE standings window (same rankings) before the all-time board. Minimap
+  top-left: the course to shape with a dot per racer.* Ideas: difficulty setting, CPUs kicking
+  back, CPU tricks you can see.
 - [x] **End-of-race stats board** — before initials, ←/→ or Tab cycles the ranking: fastest
   time, high score, biggest combo, longest hangtime, speed demon (top speed), etc.
 
