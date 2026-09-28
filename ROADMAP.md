@@ -87,7 +87,9 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
   a loop, three shrinking loops in a row, a lip into a ~540-unit gap, a figure-8 banked nearly sideways
   at its ends, a mountain-sized loop (R 230), the finish. Real loop physics (fall off if too slow over
   the top, slide off banks without enough grip), open edges, boost pads that guarantee the stretch ahead
-  for everyone (CPUs too).* Ideas: a crash-cam replay of falls, loop-specific trick points.
+  for everyone (CPUs too). A last half-twist hangs the run-out and finish pit upside down (crowd
+  and all; the track holds you there).* Ideas: a crash-cam replay of falls, loop-specific trick
+  points, a pit brawl on the ceiling (off in level 3's upside-down pit for now).
 - [ ] Fleshed-out track select — previews, best times, on the title screen *(basic Track Select
   in the Esc menu + Next Race are done)*.
 - [ ] Keep the rider out of the mountain on level 1 (parked — "reminds me of the old days").

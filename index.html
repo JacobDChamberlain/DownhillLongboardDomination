@@ -130,6 +130,7 @@
   }
   #results.hidden { display: none; }
   .rhint.brawl { opacity: .55; margin-top: 6px; }
+  body.no-brawl .rhint.brawl { display: none; }
   #results:not([data-stage="stats"]):not([data-stage="race"]):not([data-stage="board"]):not([data-stage="world"]):not([data-stage="end"]) .rhint.brawl { display: none; }
   #brawlhint { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); color: #fff; font-size: 13px;
     letter-spacing: 1px; opacity: .7; text-shadow: 0 2px 8px rgba(0,0,0,.7); pointer-events: none; user-select: none; white-space: nowrap; }
@@ -661,7 +662,7 @@ function sbLegY(i, x) {
 // the gap and the 8 (a 1:2 Lissajous, dropping as it goes so its crossings pass over each other).
 // LP records where each feature lands (arc length s) for the gap, pads and banking.
 // ------------------------------------------------------------------
-const LP = { Y0: 700, STEP: 5, loops: [], pads: [], gap: null, eight: null, marks: {}, len: 0 };
+const LP = { Y0: 700, STEP: 5, loops: [], pads: [], gap: null, eight: null, twist: null, marks: {}, len: 0 };
 function buildLoopPoints() {
   const pts = [], P = new THREE.Vector3(0, LP.Y0, 0), H = new THREE.Vector3(1, 0, 0);
   let s = 0;
@@ -731,7 +732,10 @@ function buildLoopPoints() {
   straight(200, -50); LP.marks.weapon = s - 120;
   loop(230, 30, [30, 70, 110, 150, 190, 230]);    // the monster
   straight(170, -60);
-  straight(300);                                  // run-out into the finish pit
+  LP.twist = { s0: s };
+  straight(160);                                  // one last half-twist…
+  LP.twist.s1 = s;
+  straight(300);                                  // …so the run-out and the finish pit hang upside down
   LP.len = s;
   return pts;
 }
@@ -829,6 +833,17 @@ if (IS_LOOP) for (const L of LP.loops) {
     f.side.crossVectors(f.up, f.tan).normalize();
     f.up.crossVectors(f.tan, f.side).normalize();
   });
+}
+// Level 3's last half-twist: the road rolls over (eased) and everything after it is upside down.
+// From the twist on the track holds you ("magnetic"), so hanging from it doesn't drop you off.
+const FLIP_U = IS_LOOP ? lpU(LP.twist.s0) : 2;
+if (IS_LOOP) {
+  const i0 = Math.floor(lpU(LP.twist.s0) * SAMPLES), i1 = Math.ceil(lpU(LP.twist.s1) * SAMPLES);
+  for (let i = i0; i <= SAMPLES; i++) {
+    const t = Math.min(1, (i - i0) / (i1 - i0)), a = Math.PI * (0.5 - 0.5 * Math.cos(Math.PI * t));
+    const f = frames[i];
+    f.side.applyAxisAngle(f.tan, a).normalize(); f.up.applyAxisAngle(f.tan, a).normalize();
+  }
 }
 // curvature vector (turning rate × direction) at each sample — level 3's stick-to-the-track physics
 const CURV = frames.map((f, i) => {
@@ -1308,6 +1323,12 @@ if (IS_SWITCH) {
 // ------------------------------------------------------------------
 const ARENAS = [];   // { c: centre (floor level), R, openAng, openHalf } — crowd placement reads this
 const PIT_FLOORS = [];   // the arenas' floor meshes (the pit brawl stands on these)
+// level 3: turn an object over with the finish pit — a half-roll about the road's direction at the pit
+function flipPit(o) {
+  const fp = frameAt(FINISH_PIT_U), axis = new THREE.Vector3(fp.tan.x, 0, fp.tan.z).normalize();
+  o.position.sub(fp.p).applyAxisAngle(axis, Math.PI).add(fp.p);
+  o.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, Math.PI));
+}
 {
   const FLOOR_DY = -0.55;   // a hair under the grass ribbon so the two never z-fight
   function ring(profile, c, openAng, openHalf, mat, uvFor) {
@@ -1346,13 +1367,17 @@ const PIT_FLOORS = [];   // the arenas' floor meshes (the pit brawl stands on th
     scene.add(floor); PIT_FLOORS.push(floor);
     // grass berm rim, then rock walls outside down to the valley floor
     ring([[R, FLOOR_DY], [R + 3, 0.6], [R + 7, 3.8], [R + 11, 5.2], [R + 17, 5.4]], c, openAng, openHalf, groundMeshes[0].material, planarUV);
-    if (!IS_SWITCH)   // level 1's pits stand on the ridge; level 2's sit on the mountain terrain
+    if (IS_LOOP && roadThrough)   // level 3's finish pit is flipped: a short rock rim, so it floats as an island
+      ring([[R + 17, 5.4], [R + 21, 1.5], [R + 32, -30], [R + 50, -62], [R + 60, -80]], c, openAng, openHalf, cliffMat, rockUV);
+    else if (!IS_SWITCH)   // level 1's pits stand on the ridge; level 2's sit on the mountain terrain
       ring([[R + 17, 5.4], [R + 21, 1.5], [R + 32, -45], [R + 60, -150], [R + 95, CLIFF_FLOOR - c.y]], c, openAng, openHalf, cliffMat, rockUV);
     ARENAS.push({ c: c.clone(), R, openAng, openHalf, roadThrough });
   }
   // finish: centred on the level end of the road; opening faces back up the road
   const fe = frameAt(FINISH_PIT_U);
+  const before = scene.children.length;
   arena(fe.p, FINISH_PIT_R, flat(fe.tan).negate(), true);
+  if (IS_LOOP) for (const o of scene.children.slice(before)) flipPit(o);   // level 3's pit hangs upside down
   // start: behind the start line; opening faces down the road
   const f0 = frames[0];
   arena(f0.p.clone().addScaledVector(flat(f0.tan), -START_PIT_BACK), START_PIT_R, flat(f0.tan), false);
@@ -1368,7 +1393,7 @@ const hazeMats = [];
   const posts = new THREE.InstancedMesh(postGeo, postMat, Math.floor(SAMPLES / 6) * 2);
   const dummy = new THREE.Object3D(); let pc = 0;
   for (let i = 0; i < SAMPLES; i += 6) {
-    if (inPit(i / SAMPLES)) continue;
+    if (inPit(i / SAMPLES) || IS_LOOP) continue;          // level 3 is open-edged
     const f = frames[i];
     for (const s of [1, -1]) {
       dummy.position.copy(f.p).addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 0.8)).addScaledVector(f.up, 0.7);
@@ -2221,6 +2246,7 @@ function computePadMins() {
     let v2 = v0 * v0;
     for (let i = i0; i < i1; i++) {
       if (gapAt(i)) return true;                                   // the lip's own launch takes over
+      if (i / SAMPLES >= FLIP_U) return true;                       // the twist + inverted run-out hold you on
       const f = frames[i], cv = CURV[i];
       const N = v2 * cv.dot(f.up) + G * f.up.y;
       if (N < 3 && f.up.y < 0.5) return false;
@@ -2325,6 +2351,7 @@ const crowd = [];             // { mixer, obj }
     const f = frameAt(z.arch), yaw = Math.atan2(f.tan.x, f.tan.z);
     const arch = new THREE.Group();
     arch.position.copy(f.p); arch.rotation.y = yaw;
+    if (IS_LOOP) arch.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(f.side, f.up, f.tan));   // upside down past the twist
     const half = ROAD_HALF_WIDTH + 1.6, H = 9;
     for (const s of [1, -1]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.7, H, 0.7), postMat);
@@ -2376,6 +2403,7 @@ const crowd = [];             // { mixer, obj }
       person.scale.setScalar(scale * (0.9 + rnd() * 0.2));
       person.position.copy(p);
       person.rotation.y = Math.atan2(face.x, face.z) + (rnd() - 0.5) * 0.5;
+      if (IS_LOOP && p.distanceTo(frameAt(FINISH_PIT_U).p) < FINISH_PIT_R + 60) flipPit(person);   // level 3's upside-down pit
       const mixer = new THREE.AnimationMixer(person);
       const r = rnd();
       const action = mixer.clipAction(r < 0.65 ? clips.clap : r < 0.85 ? clips.jump : clips.idle);
@@ -2688,11 +2716,12 @@ function updateCoast(dt, inp, f, slope) {
 function pitCam(dt) {                                  // slow orbit around the stopped rider
   finish.t += dt;
   finish.orbitAng += dt * 0.32;
-  const p = skater.position;
-  const want = new THREE.Vector3(p.x + Math.cos(finish.orbitAng) * 13, p.y + 4 + Math.sin(finish.t * 0.4) * 0.8, p.z + Math.sin(finish.orbitAng) * 13);
+  const p = skater.position, up = IS_LOOP ? frameAt(state.u).up : UP;   // level 3's pit is upside down
+  const want = new THREE.Vector3(p.x + Math.cos(finish.orbitAng) * 13, p.y, p.z + Math.sin(finish.orbitAng) * 13)
+    .addScaledVector(up, 4 + Math.sin(finish.t * 0.4) * 0.8);
   camPos.lerp(want, Math.min(1, dt * 1.5));
   camera.position.copy(keepAboveGround(camPos));
-  camera.lookAt(p.x, p.y + 1.3, p.z);
+  camera.up.copy(up); camera.lookAt(p.clone().addScaledVector(up, 1.3)); camera.up.set(0, 1, 0);
   camera.fov += (50 - camera.fov) * Math.min(1, dt * 2); camera.updateProjectionMatrix();
   if (gameState === 'PIT' && finish.t >= PIT_ORBIT_SECS) finishRun('end');
 }
@@ -3112,7 +3141,7 @@ function update(dt) {
   for (const pd of BOOST_PADS) if (uPrev < pd.u && state.u >= pd.u) padBoost(pd);
   // level 3: stay on the track. Upside down you need speed to press you into it; on a steep bank
   // the pull down the slope has to be held by grip (more speed → more grip) or you slide off.
-  if (IS_LOOP && !state.airborne && !grind.on && !inPit(state.u)) {
+  if (IS_LOOP && !state.airborne && !grind.on && !inPit(state.u) && state.u < FLIP_U) {
     const fn = frameAt(state.u), cv = CURV[Math.round(state.u * SAMPLES)], v2 = state.speed * state.speed;
     const N = v2 * cv.dot(fn.up) + G * fn.up.y;                 // how hard the track pushes on you
     if (N < 0 && fn.up.y < 0.5) return enterFree(inp, fn, true);   // too slow over the top: you drop off
@@ -4466,7 +4495,8 @@ const brawl = { on: false, from: null, walker: new THREE.Group(), heading: 0, ba
 const brawlRay = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0);
 scene.add(brawl.walker);
 const brawlHintEl = document.getElementById('brawlhint');
-const canBrawl = () => rig.ready && rig.clips.length && !brawl.on && ['PIT', 'STATS', 'RACE', 'RESULTS', 'WORLD', 'END'].includes(gameState);
+const canBrawl = () => !IS_LOOP && rig.ready && rig.clips.length && !brawl.on &&   // (not in level 3's upside-down pit, yet)
+                       ['PIT', 'STATS', 'RACE', 'RESULTS', 'WORLD', 'END'].includes(gameState);
 const brawlClip = n => rig.clips.find(c => c.name.endsWith('|' + n));
 function brawlBase(name) {                     // idle / walk / run, cross-faded
   if (brawl.baseName === name) return;
@@ -5088,6 +5118,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 computePadMins();
+if (IS_LOOP) document.body.classList.add('no-brawl');
 openSelect();   // pick a rider, then every run opens with the flyover + countdown
 requestAnimationFrame(frame);
 
