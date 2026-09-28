@@ -71,7 +71,7 @@
   .controls-grid small { display: block; opacity: .65; font-size: 12px; }   /* description on its own line */
   .controls-pad { margin-top: 18px; font-size: 13px; opacity: .7; }
   @media (max-width: 700px) { .controls-grid { grid-template-columns: 1fr; } }
-  body.clean #help, body.clean #best, body.clean #hud, body.clean #powerups,
+  body.clean #help, body.clean #best, body.clean #hud, body.clean #powerups, body.clean #brawlhint,
   body.clean #nowplaying, body.clean #transport { display: none; }
   kbd { background:#223; border:1px solid #456; border-bottom-width:2px; border-radius:5px; padding:1px 6px; font-size:12px; }
   /* edge flash: a fixed gradient on its own layer; only its opacity animates (animating a blurred
@@ -129,6 +129,25 @@
     font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
   }
   #results.hidden { display: none; }
+  .rhint.brawl { opacity: .55; margin-top: 6px; }
+  #results:not([data-stage="stats"]):not([data-stage="board"]):not([data-stage="end"]) .rhint.brawl { display: none; }
+  #brawlhint { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); color: #fff; font-size: 13px;
+    letter-spacing: 1px; opacity: .7; text-shadow: 0 2px 8px rgba(0,0,0,.7); pointer-events: none; user-select: none; white-space: nowrap; }
+  #brawlhint.hidden { display: none; }
+  /* rider select (the riders themselves are drawn in the canvas) */
+  #select { position: fixed; inset: 0; z-index: 18; display: flex; flex-direction: column; justify-content: space-between;
+    align-items: center; padding: 7vh 0 6vh; color: #fff; pointer-events: none; user-select: none; text-shadow: 0 4px 20px rgba(0,0,0,.6); }
+  #select.hidden { display: none; }
+  #select .sel-title { font-size: 40px; font-weight: 900; letter-spacing: 6px; }
+  #select .sel-foot { display: flex; flex-direction: column; align-items: center; }
+  #select .sel-row { display: flex; align-items: center; gap: 28px; }
+  #select .sel-name { font-size: 34px; font-weight: 900; letter-spacing: 4px; min-width: 300px; text-align: center; color: #ffd23c; }
+  #select button { pointer-events: auto; cursor: pointer; font-size: 22px; color: #fff; background: rgba(60,166,255,.22);
+    border: 1px solid rgba(60,166,255,.7); border-radius: 12px; width: 52px; height: 52px; }
+  #select button:hover { background: rgba(60,166,255,.45); }
+  #select .sel-count { margin-top: 8px; font-size: 13px; letter-spacing: 3px; opacity: .6; }
+  body.selecting #hud, body.selecting #best, body.selecting #help, body.selecting #powerups, body.selecting #balance { display: none; }
+  body.brawling #hud, body.brawling #powerups, body.brawling #balance { display: none; }   /* off the board: no ride HUD */
   .rboard { width: min(520px, 92vw); }
   .rtitle { font-size: 48px; font-weight: 900; letter-spacing: 6px; text-align: center;
     color: #ffd23c; text-shadow: 0 0 18px rgba(255,210,60,.6); margin-bottom: 14px; }
@@ -191,6 +210,15 @@
 <div id="balance"><div id="balneedle"></div></div>
 <div id="lights"><span class="lt"></span><span class="lt"></span><span class="lt go"></span></div>
 <div id="flash"></div>
+<div id="select" class="hidden">
+  <div class="sel-title">CHOOSE YOUR RIDER</div>
+  <div class="sel-foot">
+    <div class="sel-row"><button data-d="-1" aria-label="previous rider">◀</button><div class="sel-name">CASUAL</div><button data-d="1" aria-label="next rider">▶</button></div>
+    <div class="sel-count">1 / 9</div>
+    <div class="menu-hint">← → choose · Enter / A to ride</div>
+  </div>
+</div>
+<div id="brawlhint" class="hidden">WASD / arrows walk · double-tap W or Shift to sprint · <b>F</b> / <b>J</b> punch · C camera · Esc back to results</div>
 <div id="nowplaying">
   <div class="np-eyebrow">♪ Now playing</div>
   <div class="np-title">—</div>
@@ -251,6 +279,12 @@
         <dt>Balance</dt><dd><kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd><small>keep the needle out of the red</small></dd>
         <dt>Hop off</dt><dd><kbd>Space</kbd><small>steer to pick a side</small></dd>
       </dl></section>
+      <section><h3>AFTER THE FINISH</h3><dl class="tricks">
+        <dt>Step off</dt><dd><kbd>F</kbd> + <kbd>J</kbd><small>in the pit, on the stats or the end screen</small></dd>
+        <dt>Walk</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows<small>double-tap <kbd>W</kbd> or hold <kbd>Shift</kbd> to sprint</small></dd>
+        <dt>Punch</dt><dd><kbd>F</kbd> left · <kbd>J</kbd> right<small>your weapon pickup changes the swing</small></dd>
+        <dt>Back</dt><dd><kbd>Esc</kbd></dd>
+      </dl></section>
       <section><h3>CAMERA &amp; LOOK</h3><dl>
         <dt><kbd>C</kbd></dt><dd>chase / drone / trackside camera</dd>
         <dt><kbd>H</kbd></dt><dd>hide HUD / letterbox</dd>
@@ -296,9 +330,10 @@
     <ol id="rlist" class="rlist"></ol>
     <div id="rnext" class="rhint blink">Enter / A / click — continue</div>
     <div id="rcontinue" class="rhint blink">Enter / A / click — continue</div>
+    <div class="rhint brawl">F + J — step off your board</div>
     <div id="rend">
-      <ul class="menu-list rmenu"><li data-r="restart" class="sel">Restart</li><li data-r="next">Next Race</li><li data-r="quit">Quit</li></ul>
-      <div class="menu-hint">↑ ↓ to choose · Enter / A to select</div>
+      <ul class="menu-list rmenu"><li data-r="restart" class="sel">Restart</li><li data-r="next">Next Race</li><li data-r="rider">Change Rider</li><li data-r="quit">Quit</li></ul>
+      <div class="menu-hint">↑ ↓ to choose · Enter / A to select · F + J step off your board</div>
     </div>
   </div>
 </div>
@@ -676,6 +711,9 @@ const sbMidU = (leg, off = 0) => (sbLegs[leg].s0 + SB.W + off) / SB.len;
 const GAPS  = IS_SWITCH ? [] : [ { u0: 0.618, u1: 0.628 } ];   // road holes you must jump (a kicker sits right before)
 const RAMPS = IS_SWITCH ? [ sbMidU(1, -60), sbMidU(3, 80), sbMidU(4, -40) ]
                         : [ 0.30, 0.47, 0.613 ];          // launch kickers; the last one feeds the gap
+const KICKER_HALF_W = 6;       // kicker ramp: half-width across the road
+const KICKER_LEN    = 7;       // length along the road
+const KICKER_H      = 2.6;     // lip height
 const BRIDGE = IS_SWITCH ? { u0: -1, u1: -1 } : { u0: 0.665, u1: 0.725 };   // the ridge breaks here; the road crosses the gap on a viaduct
 const onBridge = u => u > BRIDGE.u0 && u < BRIDGE.u1;
 // Start / finish pits — enclosed arenas at both ends (crowd all around, no cut-off level edge)
@@ -1095,6 +1133,7 @@ if (IS_SWITCH) {
 // road comes through, and rock walls outside dropping to the valley. The crowd rings the rim.
 // ------------------------------------------------------------------
 const ARENAS = [];   // { c: centre (floor level), R, openAng, openHalf } — crowd placement reads this
+const PIT_FLOORS = [];   // the arenas' floor meshes (the pit brawl stands on these)
 {
   const FLOOR_DY = -0.55;   // a hair under the grass ribbon so the two never z-fight
   function ring(profile, c, openAng, openHalf, mat, uvFor) {
@@ -1130,7 +1169,7 @@ const ARENAS = [];   // { c: centre (floor level), R, openAng, openHalf } — cr
     const fuv = floor.geometry.attributes.uv, fp = floor.geometry.attributes.position;
     for (let i = 0; i < fuv.count; i++) fuv.setXY(i, (fp.getX(i) + c.x) / GRASS_TILE, (fp.getZ(i) + c.z) / GRASS_TILE);
     floor.position.set(c.x, c.y + FLOOR_DY, c.z); floor.receiveShadow = true;
-    scene.add(floor);
+    scene.add(floor); PIT_FLOORS.push(floor);
     // grass berm rim, then rock walls outside down to the valley floor
     ring([[R, FLOOR_DY], [R + 3, 0.6], [R + 7, 3.8], [R + 11, 5.2], [R + 17, 5.4]], c, openAng, openHalf, groundMeshes[0].material, planarUV);
     if (!IS_SWITCH)   // level 1's pits stand on the ridge; level 2's sit on the mountain terrain
@@ -1619,6 +1658,9 @@ applyPBR(groundMeshes[0].material, 'grass', 0xd2e6a0).then(() => {
 const skater = new THREE.Group();
 const trickPivot = new THREE.Group(); // spin/flip trick rotation, kept separate from the carve lean
 const lean = new THREE.Group();       // separate node so we can lean into carves
+// roll (z) first, about the road's direction, then yaw: the lean stays across the road/rail whatever
+// way the rider is turned (switch stance, a boardslide's 90° swing)
+lean.rotation.order = 'ZYX';
 skater.add(trickPivot);
 trickPivot.add(lean);
 {
@@ -1655,16 +1697,50 @@ scene.add(skater);
 const RIDER_HEIGHT = 2.5;   // world units, standing
 const BOARD_LEN    = 1.8;   // longboard length (world units)
 const STANCE       = 0.4;   // half the distance between the feet along the board
-const rig = { ready: false, crouch: 0.3, grab: 0 };
-{
-  const boxParts = [...lean.children];
-  const gltf = new GLTFLoader();
-  Promise.all([gltf.loadAsync('assets/models/skater.glb'), gltf.loadAsync('assets/models/longboard.glb')])
-    .then(([ch, bd]) => buildRig(ch.scene, bd.scene, boxParts))
-    .catch(e => console.warn('[assets] rider models unavailable, keeping box rider:', e?.message || e));
-}
+const rig = { ready: false, loading: false, crouch: 0.3, grab: 0 };
 
-function buildRig(charScene, boardScene, boxParts) {
+// The roster (character select). All but the OG are Quaternius characters on the same rig (same
+// bones + clips), so the board pose and the pit brawl work on any of them. The OG is the original
+// plain-shapes rider on his own box board — the fallback that's always there (file:// too).
+const RIDERS = [
+  { name: 'CASUAL',     file: 'assets/models/skater.glb' },
+  { name: 'HOODIE',     file: 'assets/models/riders/hoodie.glb' },
+  { name: 'PUNK',       file: 'assets/models/riders/punk.glb' },
+  { name: 'ROCKER',     file: 'assets/models/riders/rocker.glb' },
+  { name: 'BEACH BUM',  file: 'assets/models/riders/beach.glb' },
+  { name: 'ADVENTURER', file: 'assets/models/riders/adventurer.glb' },
+  { name: 'THE SUIT',   file: 'assets/models/riders/suit.glb' },
+  { name: 'HARD HAT',   file: 'assets/models/riders/hardhat.glb' },
+  { name: 'THE OG',     file: null },
+];
+const RIDER_KEY = 'downhill.rider';            // last pick (localStorage)
+let riderIdx = 0;
+try { const i = parseInt(localStorage.getItem(RIDER_KEY), 10); if (i >= 0 && i < RIDERS.length) riderIdx = i; } catch {}
+const riderLoads = {};                         // file → gltf promise, shared by the game and the carousel
+const loadRider = i => riderLoads[RIDERS[i].file] ||= new GLTFLoader().loadAsync(RIDERS[i].file);
+const boxParts = [...lean.children];
+let boardLoad = null;
+function setRider(i) {
+  riderIdx = i;
+  try { localStorage.setItem(RIDER_KEY, i); } catch {}
+  if (!RIDERS[i].file) { dropRig(); rig.loading = false; return; }
+  rig.loading = true;
+  boardLoad ||= new GLTFLoader().loadAsync('assets/models/longboard.glb');
+  Promise.all([loadRider(i), boardLoad]).then(([ch, bd]) => {
+    if (riderIdx !== i) return;                // picked someone else in the meantime
+    dropRig();
+    buildRig(SkeletonUtils.clone(ch.scene), bd.scene.clone(true), boxParts, ch.animations);
+  }).catch(e => console.warn('[assets] rider model unavailable, keeping box rider:', e?.message || e))
+    .finally(() => { if (riderIdx === i) rig.loading = false; });
+}
+function dropRig() {                           // back to the box rider
+  if (rig.root) { rig.mixer?.stopAllAction(); lean.remove(rig.root, rig.board); }
+  rig.ready = false; rig.root = rig.board = null;
+  for (const p of boxParts) p.visible = true;
+}
+setRider(riderIdx);
+
+function buildRig(charScene, boardScene, boxParts, clips = []) {
   const prep = o => o.traverse(m => {
     if (!m.isMesh) return;
     m.castShadow = true; m.frustumCulled = false;
@@ -1706,6 +1782,8 @@ function buildRig(charScene, boardScene, boxParts) {
   });
   rig.bones = [];
   charScene.traverse(o => { if (o.isBone) rig.bones.push([o, o.position.clone(), o.quaternion.clone()]); });
+  // the model's own clips (walk / run / punches…) only play off the board, in the pit brawl
+  rig.clips = clips; rig.mixer = new THREE.AnimationMixer(charScene);
 
   // rest measurements in lean space
   const inLean = o => lean.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
@@ -1905,7 +1983,7 @@ function makeLabel(text, color, width = 0.2) {     // width as a fraction of scr
   const rampMat = new THREE.MeshStandardMaterial({ color: 0x9a5b2f, roughness: .85, side: THREE.DoubleSide });
   for (const ru of RAMPS) {
     const f = frameAt(ru);
-    const w = 6, L = 7, H = 2.6;                         // half-width, length, lip height
+    const w = KICKER_HALF_W, L = KICKER_LEN, H = KICKER_H;
     const A  = f.p.clone().addScaledVector(f.side,  w).addScaledVector(f.tan, -L / 2); // near-low (rider hits first)
     const B  = f.p.clone().addScaledVector(f.side,  w).addScaledVector(f.tan,  L / 2); // far-low
     const C  = B.clone().addScaledVector(f.up, H);                                      // far-high (lip)
@@ -2006,7 +2084,7 @@ const crowd = [];             // { mixer, obj }
     const box = new THREE.Box3().setFromObject(g.scene);
     const scale = (RIDER_HEIGHT * 0.95) / (box.max.y - box.min.y);
     const clip = n => g.animations.find(a => a.name.endsWith(n));
-    const clips = { clap: clip('Man_Clapping'), idle: clip('Man_Idle'), jump: clip('Man_Jump') };
+    const clips = { clap: clip('Man_Clapping'), idle: clip('Man_Idle'), jump: clip('Man_Jump'), death: clip('Man_Death') };
     const palette = {
       Shirt: [0xd8412f, 0x2f6fd8, 0xf2c14e, 0x3fa34d, 0xffffff, 0x222222, 0x8e44ad, 0xe67e22],
       Pants: [0x1d2a44, 0x2b2b2b, 0x5a4632, 0x3b4f6b, 0x6b6b6b],
@@ -2037,7 +2115,7 @@ const crowd = [];             // { mixer, obj }
       mixer.update(0);
       scene.add(person);
       const meshes = []; person.traverse(o => { if (o.isMesh) meshes.push(o); });
-      crowd.push({ mixer, obj: person, meshes, shadow: true });
+      crowd.push({ mixer, obj: person, meshes, shadow: true, action, death: clips.death, rotY: person.rotation.y, pos0: person.position.clone(), down: false });
     }
     // lining the road into the start and up to the finish line
     for (const z of CROWD_ZONES) for (const s of [1, -1]) for (let n = 0; n < CROWD_PER_SIDE; n++) {
@@ -2225,6 +2303,8 @@ const RAMP_FACTOR = 0.30;      // + this * speed (need speed to clear gaps)
 const GAP_MIN_SPEED = 30;      // u/s (~35 mph) you need at a gap kicker to clear the gap
 const GAP_MARGIN    = 10;      // world units of landing room past the gap
 const GAP_MAX_VY    = 45;      // cap on the assisted launch (a big, floaty jump over the crevasse)
+const GAP_RESPAWN_BACK  = 45;  // fall in → respawn this far (world units) before the gap's kicker…
+const GAP_RESPAWN_SPEED = GAP_MIN_SPEED + 6;   // …already rolling fast enough to clear it
 
 // --- Power-ups
 const ROCKET_BOOST   = 22;     // instant speed added by a boost pickup
@@ -2248,6 +2328,11 @@ function resetRun() {
 }
 
 // Gameplay actions (declarations hoist, so update() can call these).
+function land(h = 0) {
+  state.height = h; state.airborne = false; state.vy = 0;
+  settleSpin(); scoreTrick(); lastLandT = run.t;
+  if (state.speed > 4) flash(0.15);
+}
 function takeoff(vy) { if (state.airborne) return; state.airborne = true; state.vy = vy; armTrick(); }
 // A kicker that feeds a gap launches you far enough to clear it (with margin) as long as you're
 // rolling at GAP_MIN_SPEED or better — the road climbs into that kicker, so a speed-only launch
@@ -2268,6 +2353,7 @@ function kickerLaunch(ru) {
 const PIT_STOP_U     = 0.984;  // where you roll to rest — the middle of the finish pit
 const PIT_ROLL       = 16;     // a slow finish still rolls you in at about this speed
 const PIT_ORBIT_SECS = 4.5;   // camera circles you this long before the stats come up
+const COAST_LAT      = ROAD_HALF_WIDTH - 1;   // how far off centre you can steer while coasting in
 const finish = { crossed: false, stopped: false, t: 0, orbitAng: 0 };
 function crossFinish() {
   finish.crossed = true;
@@ -2275,10 +2361,11 @@ function crossFinish() {
   if (grind.on) endGrind();
   showTrick('FINISH!'); flash(0.3);
 }
-function updateCoast(dt, f, slope) {
+function updateCoast(dt, inp, f, slope) {
+  if (!state.airborne && state.height > 0) { state.airborne = true; state.vy = 0; }   // crossed the line on a rail
   if (state.airborne) {                                // finish a jump that was in progress
     state.vy -= 34 * dt; state.height += state.vy * dt;
-    if (state.height <= 0) { state.height = 0; state.airborne = false; state.vy = 0; }
+    if (state.height <= 0) { state.height = 0; state.airborne = false; state.vy = 0; settleSpin(); trick.type = null; }
   }
   // controlled stop: brake exactly hard enough to come to rest at PIT_STOP_U, however fast you
   // crossed the line; a slow finish gets rolled on in instead of stalling in the chute
@@ -2287,9 +2374,9 @@ function updateCoast(dt, f, slope) {
   if (state.speed < PIT_ROLL && d > 25) a = 8;
   state.speed = Math.max(0, state.speed + a * dt);
   if (d <= 0.3) state.speed = 0;
-  state.heading *= Math.exp(-dt * 3);
-  state.steerSmooth *= Math.exp(-dt * 4);
-  state.lateral *= Math.exp(-dt * 0.8);
+  // speed is automatic, steering isn't: carve across the chute and the pit as you roll to a stop
+  state.heading += (-state.steerSmooth * MAX_HEADING - state.heading) * Math.min(1, dt * TURN_RATE * 3);
+  state.lateral = THREE.MathUtils.clamp(state.lateral + state.speed * Math.sin(state.heading) * dt, -COAST_LAT, COAST_LAT);
   state.u = Math.min(STOP_U, state.u + (state.speed * dt) / TOTAL_LEN);
   if (state.u >= STOP_U) state.speed = 0;               // rolled into the far berm
   if (state.speed < 0.4 && d < 6 && !state.airborne && !finish.stopped) {
@@ -2324,7 +2411,7 @@ function revert() {
   else showTrick(stance === 1 ? 'REGULAR' : 'SWITCH');
 }
 function startGrind(side, inp) {
-  scoreTrick();                               // the air trick that got you up there still counts
+  settleSpin(); scoreTrick();                               // the air trick that got you up there still counts
   Object.assign(grind, { on: true, side, t: 0, bal: (Math.random() - 0.5) * 0.2, drift: 0,
                          name: inp.tuck ? 'BOARDSLIDE' : '50-50 GRIND' });
   Object.assign(state, { airborne: false, vy: 0, height: RAIL_H, lateral: side * RAIL_LAT });
@@ -2376,6 +2463,14 @@ function updateGrind(dt, inp, f, slope, jumpPressed) {
   if (!finish.crossed && state.u >= FINISH_U) crossFinish();
   return info;
 }
+// land a spin in whichever stance you're facing: an odd number of half-turns switches your stance
+// instead of unwinding the rider back to where the spin started (the rest eases to the nearest 180)
+function settleSpin() {
+  if (trick.type !== 'spin') return;
+  const halves = Math.round(Math.abs(trick.spin) / Math.PI);
+  if (halves % 2) { stance = -stance; stanceYaw = stance === 1 ? 0 : Math.PI; }
+  trickPivot.rotation.y = trick.spin - Math.sign(trick.spin) * halves * Math.PI;
+}
 function armTrick() {
   trick.spin = 0; trick.air = 0;
   if (Math.abs(state.steerSmooth) > 0.35) { trick.type = 'spin'; trick.dir = Math.sign(state.steerSmooth); }
@@ -2406,8 +2501,12 @@ function collectItem(it) {
 function fallInGap(g) {
   grind.on = false;
   if (freeDeath) { freeDeath = false; state.u = g.u1 + 0.004; state.height = 0; state.airborne = false; state.vy = 0; showTrick('FREE DEATH USED'); flash(0.2); return; }
-  state.u = Math.max(0.001, g.u0 - 0.03);   // respawn just before the kicker so you can retry
-  state.lateral *= 0.3; state.speed *= 0.5;
+  // respawn on the kicker's run-up with a rolling start that clears it; respawning further back
+  // at half speed left you too slow for the climb into the kicker, stuck in a retry loop
+  const ru = RAMPS.find(r => g.u0 > r && g.u0 - r < 0.02) ?? g.u0;
+  state.u = Math.max(0.001, ru - GAP_RESPAWN_BACK / TOTAL_LEN);
+  state.lateral *= 0.3; state.heading = 0; state.speed = Math.max(state.speed * 0.5, GAP_RESPAWN_SPEED);
+  trick.type = null; trickPivot.rotation.y = 0;
   state.height = 0; state.airborne = false; state.vy = 0;
   flash(0.4);
 }
@@ -2421,7 +2520,7 @@ function update(dt) {
 
   const f = frameAt(state.u);
   const slope = Math.max(0, -f.tan.y); // 0..1 how steeply downhill
-  if (finish.crossed) return updateCoast(dt, f, slope);
+  if (finish.crossed) return updateCoast(dt, inp, f, slope);
   if (grind.on) return updateGrind(dt, inp, f, slope, jumpPressed);
 
   // steering -> heading (less authority at very high speed, like real carving)
@@ -2463,7 +2562,7 @@ function update(dt) {
     if (trick.type === 'spin') trick.spin += SPIN_RATE * trick.dir * dt;
     state.vy -= 34 * dt;
     state.height += state.vy * dt;
-    if (state.height <= 0) { state.height = 0; state.airborne = false; state.vy = 0; scoreTrick(); lastLandT = run.t; if (state.speed > 4) flash(0.15); }
+    if (state.height <= 0) land();
   }
 
   // rail lock-on (I): airborne, at rail height, within reach of a beam — rising into it while
@@ -2489,7 +2588,19 @@ function update(dt) {
   state.lateral += strafe * dt;
 
   // course features crossed this step (ramps / pickups), then gap check on the new position
-  for (const ru of RAMPS) if (uPrev < ru && state.u >= ru && !state.airborne) kickerLaunch(ru);
+  // kicker ramps: ride up the wedge (or come down onto it from the air) and get launched off the lip
+  let onKicker = false;
+  for (const ru of RAMPS) {
+    if (Math.abs(state.lateral) > KICKER_HALF_W) continue;
+    const s = (state.u - ru) * TOTAL_LEN, sPrev = (uPrev - ru) * TOTAL_LEN, half = KICKER_LEN / 2;
+    if (s >= -half && s < half) {
+      const surf = KICKER_H * (s + half) / KICKER_LEN;
+      if (!state.airborne) { state.height = surf; onKicker = true; }
+      else if (state.height <= surf) { land(surf); onKicker = true; }
+    }
+    if (sPrev < half && s >= half && !state.airborne && state.height > 0) kickerLaunch(ru);
+  }
+  if (!onKicker && !state.airborne && state.height > 0) { state.airborne = true; state.vy = 0; trick.type = null; }   // rolled off the side of a kicker
   for (const it of ITEMS) if (!it.taken && uPrev < it.u && state.u >= it.u && Math.abs(state.lateral - it.lat) < ITEM_PICK_R) collectItem(it);
   for (const g of GAPS) if (!state.airborne && state.height <= 0.1 && state.u > g.u0 && state.u < g.u1) { fallInGap(g); break; }
 
@@ -2559,7 +2670,7 @@ function place(info) {
   const slideYaw = grind.on && grind.name === 'BOARDSLIDE' ? Math.PI / 2 : 0;
   slideYawAnim += (slideYaw - slideYawAnim) * Math.min(1, dt * 14);
   lean.rotation.y = stanceYaw + slideYawAnim;
-  lean.rotation.z = (grind.on ? -grind.bal * 0.45 : -state.steerSmooth * 0.5) * Math.cos(stanceYaw);
+  lean.rotation.z = grind.on ? -grind.bal * 0.45 * (grind.name === 'BOARDSLIDE' ? -1 : 1) : -state.steerSmooth * 0.5;   // board across the rail: needle side flips
   lean.rotation.x = !rig.ready && info.tuck ? 0.18 : 0;   // the rigged rider tucks with its body instead
 
   // trick pose in the air (spin about up, grab = tuck-and-hold); settle back on the ground
@@ -2770,7 +2881,7 @@ function drawTimer(txt) {
   timerTex.needsUpdate = true;
 }
 function updateTimer() {
-  timerMesh.visible = gameState !== 'TITLE' && gameState !== 'COUNTDOWN' && hudMode === 0;   // from the green light; hides with the HUD (H)
+  timerMesh.visible = !['TITLE', 'COUNTDOWN', 'SELECT'].includes(gameState) && hudMode === 0;   // from the green light; hides with the HUD (H)
   if (!timerMesh.visible) return;
   const secs = finish.crossed && lastRun ? lastRun.timeS : run.t;
   const txt = String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(Math.floor(secs % 60)).padStart(2, '0');
@@ -3135,7 +3246,7 @@ function updateChaos(dt) {
 // ------------------------------------------------------------------
 // Pause menu + settings — keyboard & gamepad navigable
 // ------------------------------------------------------------------
-let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE
+let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE | BRAWL | SELECT
 let menuIndex = 0;
 const settings = { volume: 70, sens: 100 };
 audio.volume = settings.volume / 100;
@@ -3177,7 +3288,7 @@ function gotoLevel(n) {
 function openControls() { gameState = 'CONTROLS'; menuIndex = 0; showPanel('controls'); renderMenu(); }
 function backToMain()   { gameState = 'PAUSED'; menuIndex = 0; showPanel('main'); renderMenu(); }
 function quitGame()  { gameState = 'TITLE'; menuEl.classList.add('hidden'); results.el.classList.add('hidden'); titleEl.classList.remove('hidden'); }
-function startFromTitle() { topSpeed = 0; titleEl.classList.add('hidden'); beginRun(); }
+function startFromTitle() { topSpeed = 0; titleEl.classList.add('hidden'); openSelect(); }
 
 function activate(item) {
   if (item.startsWith('level-')) return gotoLevel(+item.slice(6));
@@ -3201,6 +3312,28 @@ function menuNav(code) {
 // Global game/menu key handling
 addEventListener('keydown', e => {
   if (gameState === 'TITLE') { if (e.code === 'Enter' || e.code === 'Space') startFromTitle(); return; }
+  if (gameState === 'SELECT') {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') selMove(-1);
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') selMove(1);
+    else if (!e.repeat && (e.code === 'Enter' || e.code === 'Space')) confirmSelect();
+    return;
+  }
+  if (gameState === 'BRAWL') {
+    if (e.repeat) return;
+    if (e.code === 'Escape') exitBrawl();
+    else if (e.code === 'KeyW' || e.code === 'ArrowUp') {
+      const t = performance.now() / 1000;
+      if (t - brawl.lastFwdTap < BRAWL_DTAP) brawl.sprint = true;
+      brawl.lastFwdTap = t;
+    }
+    else if (e.code === 'KeyF') throwPunch(-1);
+    else if (e.code === 'KeyJ') throwPunch(1);
+    else if (e.code === 'KeyC') cycleCam();
+    else if (e.code === 'KeyH') cycleHud();
+    else if (e.code === 'KeyX') cycleChaos();
+    return;
+  }
+  if ((e.code === 'KeyF' || e.code === 'KeyJ') && keys['KeyF'] && keys['KeyJ'] && canBrawl()) { enterBrawl(); return; }
   if (gameState === 'COUNTDOWN') { if (startSeq.phase === 'fly') skipFly(); return; }
   if (gameState === 'ENTRY') { e.preventDefault(); handleEntryKey(e.code); return; }
   if (gameState === 'STATS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') advanceStats(); return; }
@@ -3245,6 +3378,7 @@ function pollMenuGamepad(dt) {
   const up = padEdge(p, 12), dn = padEdge(p, 13), lf = padEdge(p, 14), rt = padEdge(p, 15);
   const a = padEdge(p, 0), b = padEdge(p, 1); // consume edges regardless of state
   if (gameState === 'TITLE') { if (a) startFromTitle(); return; }
+  if (gameState === 'SELECT') { if (lf) selMove(-1); if (rt) selMove(1); if (a) confirmSelect(); return; }
   if (gameState === 'STATS') { if (a || b) advanceStats(); return; }
   if (gameState === 'RESULTS') { if (a || b) showEnd(); return; }
   if (gameState === 'END') {
@@ -3342,6 +3476,7 @@ function rmenuPick(i = rmenuIndex) {
   }
   results.el.classList.add('hidden');
   if (r === 'restart') beginRun();
+  else if (r === 'rider') openSelect();
   else quitGame();
 }
 rmenuItems.forEach((li, i) => {
@@ -3467,6 +3602,8 @@ function beep(freq, dur, vol) {               // tiny synth — no audio assets 
   } catch {}
 }
 function beginRun() {
+  if (brawl.on) exitBrawl();
+  reviveCrowd();
   resetRun();
   state.speed = 0;
   Object.assign(startSeq, { phase: 'fly', t: 0, lit: 0, wait: 0 });
@@ -3483,7 +3620,7 @@ function updateStart(dt) {
   drawHud(idleInfo);
   if (startSeq.phase === 'fly') {
     // hold on the first frame until the rider model is in (a couple of seconds at most)
-    if (!rig.ready && (startSeq.wait += dt) < 2.5) { startSeq.t = 0; }
+    if (rig.loading && (startSeq.wait += dt) < 4) { startSeq.t = 0; }
     else startSeq.t += dt;
     const k = THREE.MathUtils.smootherstep(Math.min(1, startSeq.t / START_FLY_SECS), 0, 1);
     const f = frameAt(state.u), P = skater.position;
@@ -3514,6 +3651,274 @@ function updateStart(dt) {
       setTimeout(() => lightsEl.classList.remove('show'), 1100);
     }
   }
+}
+
+// ------------------------------------------------------------------
+// Pit brawl — after the finish (pit orbit / stats / board / end screen), F + J steps you off the board to walk
+// the finish pit and knock spectators down: F / J throw left / right. The combat pickup you'd
+// upgraded to changes the swing and the reach (a stick sweeps everyone in front of you). The rider
+// model's own clips play here (walk / run / punches); its procedural board pose resumes on exit.
+// ------------------------------------------------------------------
+const BRAWL_WALK  = 5.2;      // walk speed (u/s)
+const BRAWL_RUN   = 9.5;      // sprint: hold Shift, or double-tap W / ↑
+const BRAWL_DTAP  = 0.3;      // seconds between taps that count as a double tap
+const BRAWL_TURN  = 2.8;      // turn rate (rad/s)
+const BRAWL_ROOM  = 3;        // stay this far inside the finish pit's rim
+const BRAWL_BODY  = 0.7;      // you can't walk through standing spectators
+const BRAWL_HIT_AT = 0.38;    // the blow lands this far (0–1) into the swing
+const BRAWL_ARC   = 0.35;     // cos of the half-angle in front of you that a swing covers
+const WEAPON_REACH = { FIST: 1.9, STICK: 2.8, 'WATER BOTTLE': 2.2, ROCK: 2.4 };
+const brawl = { on: false, from: null, walker: new THREE.Group(), heading: 0, base: null, baseName: '', punch: null,
+                punchT: 0, punchDur: 0, hit: false, kos: 0, camOff: null, padA: false, padB: false, lastFwdTap: -1, sprint: false };
+const brawlRay = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0);
+scene.add(brawl.walker);
+const brawlHintEl = document.getElementById('brawlhint');
+const canBrawl = () => rig.ready && rig.clips.length && !brawl.on && ['PIT', 'STATS', 'RESULTS', 'END'].includes(gameState);
+const brawlClip = n => rig.clips.find(c => c.name.endsWith('|' + n));
+function brawlBase(name) {                     // idle / walk / run, cross-faded
+  if (brawl.baseName === name) return;
+  const a = rig.mixer.clipAction(brawlClip(name));
+  a.reset().setEffectiveWeight(1).fadeIn(0.2).play();
+  if (brawl.base) brawl.base.fadeOut(0.2);
+  brawl.base = a; brawl.baseName = name;
+}
+function enterBrawl() {
+  brawl.on = true; brawl.from = gameState; gameState = 'BRAWL';
+  results.el.classList.add('hidden'); brawlHintEl.classList.remove('hidden'); document.body.classList.add('brawling');
+  // step off toward the way the rider faces (sideways off the deck)
+  const face = new THREE.Vector3(-1, 0, 0).applyQuaternion(lean.getWorldQuaternion(new THREE.Quaternion())).setY(0).normalize();
+  brawl.heading = Math.atan2(face.x, face.z);
+  brawl.walker.position.copy(skater.position).addScaledVector(face, 1.1);
+  brawl.walker.position.y = frameAt(state.u).p.y;
+  brawl.walker.rotation.set(0, brawl.heading, 0);
+  for (const [b, p, q] of rig.bones) { b.position.copy(p); b.quaternion.copy(q); }
+  brawl.walker.add(rig.root);                  // rider leaves the board; the board stays put
+  rig.root.position.set(0, 0, 0); rig.root.rotation.set(0, 0, 0);
+  brawl.base = null; brawl.baseName = ''; brawl.punch = null;
+  brawlBase('Idle');
+  brawl.camOff = camera.position.clone().sub(brawl.walker.position);
+  showTrick('BRAWL!');
+}
+function exitBrawl() {
+  rig.mixer.stopAllAction();
+  lean.add(rig.root); rig.root.rotation.set(0, -Math.PI / 2, 0);
+  brawl.on = false; brawlHintEl.classList.add('hidden'); document.body.classList.remove('brawling');
+  place(idleInfo);                              // back into the board pose
+  gameState = brawl.from;
+  if (gameState !== 'PIT') results.el.classList.remove('hidden');   // the pit orbit carries on to the stats
+}
+function throwPunch(side) {
+  if (brawl.punch && brawl.punchT < brawl.punchDur * 0.7) return;   // still mid-swing
+  const w = WEAPONS[weaponTier];
+  const a = rig.mixer.clipAction(brawlClip(w === 'STICK' ? 'Sword_Slash' : side < 0 ? 'Punch_Left' : 'Punch_Right'));
+  a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false;
+  a.setEffectiveWeight(5).fadeIn(0.05).play();                    // dominates the walk underneath
+  if (brawl.punch && brawl.punch !== a) brawl.punch.fadeOut(0.1);
+  brawl.punch = a; brawl.punchT = 0; brawl.punchDur = a.getClip().duration; brawl.hit = false;
+}
+function landBlow() {
+  const w = WEAPONS[weaponTier], reach = WEAPON_REACH[w] || 1.9, P = brawl.walker.position;
+  const fwd = new THREE.Vector3(Math.sin(brawl.heading), 0, Math.cos(brawl.heading));
+  const inReach = crowd.filter(c => {
+    if (c.down) return false;
+    const d = c.obj.position.clone().sub(P).setY(0), len = d.length();
+    return len < reach && d.dot(fwd) > BRAWL_ARC * len;
+  }).sort((a, b) => a.obj.position.distanceToSquared(P) - b.obj.position.distanceToSquared(P));
+  const hits = w === 'STICK' ? inReach : inReach.slice(0, 1);        // a stick sweeps; fists hit one
+  for (const c of hits) {
+    c.down = true;
+    c.obj.rotation.y = brawl.heading;                                 // the death clip falls forward: turn them
+    c.obj.position.addScaledVector(fwd, 0.35);                        //   away from the blow and shove them back
+    c.mixer.stopAllAction();
+    const a = c.mixer.clipAction(c.death); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+    brawl.kos++;
+  }
+  if (hits.length) { showTrick((hits.length > 1 ? hits.length + 'x ' : '') + 'KO!  ' + brawl.kos); flash(0.12); }
+}
+function reviveCrowd() {
+  for (const c of crowd) if (c.down) {
+    c.down = false; c.mixer.stopAllAction(); c.action.reset().play(); c.obj.rotation.y = c.rotY; c.obj.position.copy(c.pos0);
+  }
+  brawl.kos = 0;
+}
+function updateBrawl(dt) {
+  // walk: A/D turn, W/S forward/back (left stick on a pad), Shift runs
+  let turn = 0, move = 0;
+  if (keys['KeyA'] || keys['ArrowLeft']) turn += 1;
+  if (keys['KeyD'] || keys['ArrowRight']) turn -= 1;
+  if (keys['KeyW'] || keys['ArrowUp']) move += 1;
+  if (keys['KeyS'] || keys['ArrowDown']) move -= 1;
+  if (!(keys['KeyW'] || keys['ArrowUp'])) brawl.sprint = false;   // a double-tap sprint lasts while you hold it
+  let sprint = keys['ShiftLeft'] || keys['ShiftRight'] || brawl.sprint;
+  const pad = navigator.getGamepads ? [...navigator.getGamepads()].find(p => p) : null;
+  if (pad) {
+    if (Math.abs(pad.axes[0]) > 0.15) turn -= pad.axes[0];
+    if (Math.abs(pad.axes[1]) > 0.15) move -= pad.axes[1];
+    if (pad.buttons[7]?.value > 0.2) sprint = true;
+    const x = !!pad.buttons[2]?.pressed, b = !!pad.buttons[1]?.pressed;   // X / B = left / right
+    if (x && !brawl.padA) throwPunch(-1); if (b && !brawl.padB) throwPunch(1);
+    brawl.padA = x; brawl.padB = b;
+  }
+  brawl.heading += THREE.MathUtils.clamp(turn, -1, 1) * BRAWL_TURN * dt;
+  move = THREE.MathUtils.clamp(move, -1, 1);
+  const speed = move * (sprint && move > 0 ? BRAWL_RUN : BRAWL_WALK) * (move < 0 ? 0.6 : 1);
+  const fwd = new THREE.Vector3(Math.sin(brawl.heading), 0, Math.cos(brawl.heading));
+  const P = brawl.walker.position;
+  P.addScaledVector(fwd, speed * dt);
+  for (const c of crowd) {                     // shoulder past people instead of through them
+    if (c.down) continue;
+    const d = P.clone().sub(c.obj.position).setY(0), len = d.length();
+    if (len < BRAWL_BODY && len > 1e-4) P.addScaledVector(d, (BRAWL_BODY - len) / len);
+  }
+  const pc = frameAt(FINISH_PIT_U).p, off = P.clone().sub(pc).setY(0), lim = FINISH_PIT_R - BRAWL_ROOM;
+  if (off.length() > lim) P.copy(pc).add(off.setLength(lim)).setY(P.y);
+  // stand on whatever is underneath — road or pit floor (the grass sits lower than the road)
+  brawlRay.set(new THREE.Vector3(P.x, P.y + 3, P.z), DOWN); brawlRay.far = 8;
+  const ground = brawlRay.intersectObjects([groundMeshes[1], ...PIT_FLOORS], false)[0];
+  if (ground) P.y = ground.point.y;
+  brawl.walker.rotation.y = brawl.heading;
+  brawlBase(speed > BRAWL_WALK + 0.5 ? 'Run' : Math.abs(speed) > 0.1 ? 'Walk' : 'Idle');
+  if (brawl.base) brawl.base.timeScale = speed < 0 ? -1 : 1;
+
+  // the swing: land the blow partway through, then hand back to the legs
+  if (brawl.punch) {
+    brawl.punchT += dt;
+    if (!brawl.hit && brawl.punchT >= brawl.punchDur * BRAWL_HIT_AT) { brawl.hit = true; landBlow(); }
+    if (brawl.punchT >= brawl.punchDur - 0.12) { brawl.punch.fadeOut(0.12); brawl.punch = null; }
+  }
+  rig.mixer.update(dt);
+
+  // cameras: C still cycles — over the shoulder, high drone, or a fixed spot on the pit rim
+  const head = P.clone().add(new THREE.Vector3(0, 1.5, 0));
+  if (camMode === 'trackside') {
+    camPos.copy(pc).addScaledVector(off.lengthSq() > 1 ? off.clone().normalize().negate() : fwd, lim * 0.6).add(new THREE.Vector3(0, 6, 0));
+  } else {
+    const want = fwd.clone().multiplyScalar(camMode === 'drone' ? -11 : -5.5).add(new THREE.Vector3(0, camMode === 'drone' ? 8 : 2.6, 0));
+    brawl.camOff.lerp(want, Math.min(1, dt * 4));
+    camPos.copy(P).add(brawl.camOff);
+  }
+  camera.position.copy(keepAboveGround(camPos));
+  camera.lookAt(camMode === 'trackside' ? head : head.clone().addScaledVector(fwd, 2));
+  camera.fov += ((camMode === 'trackside' ? 40 : 58) - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
+}
+
+// ------------------------------------------------------------------
+// Rider select — a carousel before the race: the roster stands on a turntable, ← → spins it,
+// Enter rides. Opens on load (last pick preselected), from the title screen and from the end
+// screen's "Change Rider". Its own little scene, drawn over a dimmed, slowly orbiting view of the
+// start. Models load as their slot nears the front, so opening it doesn't pull the whole roster.
+// ------------------------------------------------------------------
+const SEL_RADIUS = 4.6;       // turntable radius
+const SEL_SPIN   = 7;         // how fast the turntable eases round to the pick
+const SEL_AHEAD  = 2;         // load riders this many slots either side of the pick
+const sel = { idx: 0, ang: 0, orbit: 0 };
+const selEl = document.getElementById('select');
+const selScene = new THREE.Scene();
+const selCam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.1, 100);
+selCam.position.set(0, 2.3, SEL_RADIUS + 11); selCam.lookAt(0, 1.25, SEL_RADIUS);
+selScene.add(new THREE.HemisphereLight(0xdfe8ff, 0x3a3226, 1.1));
+{ const l = new THREE.DirectionalLight(0xfff1dd, 2.2); l.position.set(3, 6, SEL_RADIUS + 8); selScene.add(l); }
+const selTable = new THREE.Group(); selScene.add(selTable);
+{
+  const deck = new THREE.Mesh(new THREE.CylinderGeometry(SEL_RADIUS + 1.4, SEL_RADIUS + 1.6, 0.3, 72),
+    new THREE.MeshStandardMaterial({ color: 0x1a1f2b, roughness: 0.6, metalness: 0.3 }));
+  deck.position.y = -0.15; selTable.add(deck);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(SEL_RADIUS + 1.5, 0.06, 8, 120), new THREE.MeshBasicMaterial({ color: 0x3ca6ff }));
+  rim.rotation.x = Math.PI / 2; rim.position.y = 0.01; selTable.add(rim);
+  const spot = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.95, 48), new THREE.MeshBasicMaterial({ color: 0xffd23c }));
+  spot.rotation.x = -Math.PI / 2; spot.position.set(0, 0.02, SEL_RADIUS); selScene.add(spot);   // marks the front slot
+}
+const selDim = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ color: 0x060a16, transparent: true, opacity: 0.5, depthTest: false, depthWrite: false, toneMapped: false }));
+const selDimScene = new THREE.Scene(); selDimScene.add(selDim);
+function layoutSelect() {
+  selCam.aspect = innerWidth / innerHeight; selCam.updateProjectionMatrix();
+  selDim.scale.set(innerWidth, innerHeight, 1); selDim.position.set(innerWidth / 2, -innerHeight / 2, 0);
+}
+layoutSelect();
+const selSlots = RIDERS.map((r, i) => {
+  const a = i / RIDERS.length * Math.PI * 2, g = new THREE.Group();
+  g.position.set(Math.sin(a) * SEL_RADIUS, 0, Math.cos(a) * SEL_RADIUS); g.rotation.y = a;   // facing out
+  selTable.add(g);
+  return { g, mixer: null, idle: null, wave: null, filled: false };
+});
+function fillSlot(i) {
+  const s = selSlots[i];
+  if (s.filled) return;
+  s.filled = true;
+  if (!RIDERS[i].file) {                       // the OG: the original box rider and his box board
+    const og = new THREE.Group();
+    for (const p of boxParts) { const c = p.clone(); c.visible = true; og.add(c); }
+    og.rotation.y = Math.PI / 2 - 0.45;        // three-quarter view, rider facing out
+    og.scale.setScalar(0.8);                   // the blocky build reads bigger than the others
+    s.g.add(og);
+    return;
+  }
+  loadRider(i).then(g => {
+    const m = SkeletonUtils.clone(g.scene);
+    m.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
+    m.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(m), sz = b.getSize(new THREE.Vector3()), k = RIDER_HEIGHT / sz.y;
+    m.scale.setScalar(k);
+    m.position.set(-(b.min.x + sz.x / 2) * k, -b.min.y * k, -(b.min.z + sz.z / 2) * k);
+    s.g.add(m);
+    s.mixer = new THREE.AnimationMixer(m);
+    const clip = n => g.animations.find(c => c.name.endsWith('|' + n));
+    s.idle = s.mixer.clipAction(clip('Idle')); s.idle.play(); s.idle.time = Math.random() * s.idle.getClip().duration;
+    s.wave = s.mixer.clipAction(clip('Wave')); s.wave.setLoop(THREE.LoopOnce, 1);
+    s.mixer.addEventListener('finished', () => { s.idle.reset().fadeIn(0.3).play(); s.wave.fadeOut(0.3); });
+    if (gameState === 'SELECT' && sel.idx === i) selWave(i);
+  }).catch(e => console.warn('[assets] rider model unavailable:', e?.message || e));
+}
+function selWave(i) {
+  const s = selSlots[i];
+  if (!s.wave) return;
+  s.wave.reset().setEffectiveWeight(1).fadeIn(0.2).play(); s.idle.fadeOut(0.2);
+}
+function renderSelect() {
+  const n = RIDERS.length;
+  selEl.querySelector('.sel-name').textContent = RIDERS[sel.idx].name;
+  selEl.querySelector('.sel-count').textContent = `${sel.idx + 1} / ${n}`;
+  for (let d = -SEL_AHEAD; d <= SEL_AHEAD; d++) fillSlot((sel.idx + d + n) % n);
+}
+function openSelect() {
+  if (brawl.on) exitBrawl();
+  gameState = 'SELECT'; sel.idx = riderIdx;
+  sel.ang = -sel.idx / RIDERS.length * Math.PI * 2;
+  results.el.classList.add('hidden'); titleEl.classList.add('hidden'); lightsEl.classList.remove('show');
+  selEl.classList.remove('hidden'); document.body.classList.add('selecting');
+  renderSelect(); selWave(sel.idx);
+}
+function selMove(d) { sel.idx = (sel.idx + d + RIDERS.length) % RIDERS.length; renderSelect(); selWave(sel.idx); }
+function confirmSelect() {
+  selEl.classList.add('hidden'); document.body.classList.remove('selecting');
+  if (sel.idx !== riderIdx || (RIDERS[sel.idx].file && !rig.ready && !rig.loading)) setRider(sel.idx);
+  beginRun();
+}
+selEl.querySelectorAll('button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); if (gameState === 'SELECT') selMove(+b.dataset.d); }));
+function updateSelect(dt) {
+  const target = -sel.idx / RIDERS.length * Math.PI * 2;
+  let diff = target - sel.ang; diff = Math.atan2(Math.sin(diff), Math.cos(diff));   // the short way round
+  sel.ang += diff * Math.min(1, dt * SEL_SPIN);
+  selTable.rotation.y = sel.ang;
+  selSlots.forEach((s, i) => {
+    const k = i === sel.idx ? 1.12 : 1;
+    s.g.scale.setScalar(s.g.scale.x + (k - s.g.scale.x) * Math.min(1, dt * 8));
+    s.mixer?.update(dt);
+  });
+  // behind it: a slow, high orbit around the start line
+  sel.orbit += dt * 0.07;
+  const P = frames[0].p;
+  camPos.set(P.x + Math.cos(sel.orbit) * 34, P.y + 12, P.z + Math.sin(sel.orbit) * 34);
+  camera.position.copy(keepAboveGround(camPos)); camera.lookAt(P.x, P.y + 2, P.z);
+}
+function renderSelectPass() {
+  renderer.autoClear = false;
+  renderer.render(selDimScene, hudCam);         // dim the world behind
+  renderer.clearDepth();
+  selScene.environment = scene.environment;
+  renderer.render(selScene, selCam);
+  renderer.autoClear = true;
 }
 
 // ------------------------------------------------------------------
@@ -3572,6 +3977,10 @@ function frame(now) {
     drawHud(info);
   } else if (gameState === 'COUNTDOWN') {
     updateStart(dt);
+  } else if (gameState === 'BRAWL') {
+    updateBrawl(dt);
+  } else if (gameState === 'SELECT') {
+    updateSelect(dt);
   } else if (finish.stopped) {
     pitCam(dt);   // PIT → STATS → ENTRY → RESULTS: keep circling the rider
   }
@@ -3589,17 +3998,18 @@ function frame(now) {
   } else {
     renderer.render(scene, camera);
   }
+  if (gameState === 'SELECT') renderSelectPass();
   renderHudPass();
   requestAnimationFrame(frame);
 }
-beginRun();   // every run opens with the flyover + countdown
+openSelect();   // pick a rider, then every run opens with the flyover + countdown
 requestAnimationFrame(frame);
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
-  layoutPop(); layoutTimer();
+  layoutPop(); layoutTimer(); layoutSelect();
 });
 </script>
 </body>
