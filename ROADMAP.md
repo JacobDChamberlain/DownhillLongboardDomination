@@ -82,8 +82,11 @@ content. The carving rewrite is the big one: do it before building more switchba
 - [ ] **Night tracks** — night versions of each track, unlocked by beating the day one
   (with an unlock notification). Street lights and nightlife lights; fireflies in the level 1
   forest.
-- [ ] **Loop-de-loop track** — booster pads with glowing arrows before the loop so you have the
-  speed; you can fly off if you leave the road.
+- [x] **Loop-de-loop track** — *done: level 3 "Loop Heights" (`?level=3`): a sky course on pillars —
+  a loop, three shrinking loops in a row, a lip into a ~540-unit gap, a figure-8 banked nearly sideways
+  at its ends, a mountain-sized loop (R 230), the finish. Real loop physics (fall off if too slow over
+  the top, slide off banks without enough grip), open edges, boost pads that guarantee the stretch ahead
+  for everyone (CPUs too).* Ideas: a crash-cam replay of falls, loop-specific trick points.
 - [ ] Fleshed-out track select — previews, best times, on the title screen *(basic Track Select
   in the Esc menu + Next Race are done)*.
 - [ ] Keep the rider out of the mountain on level 1 (parked — "reminds me of the old days").
