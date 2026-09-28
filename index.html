@@ -134,6 +134,19 @@
   #brawlhint { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); color: #fff; font-size: 13px;
     letter-spacing: 1px; opacity: .7; text-shadow: 0 2px 8px rgba(0,0,0,.7); pointer-events: none; user-select: none; white-space: nowrap; }
   #brawlhint.hidden { display: none; }
+  /* rider select (the riders themselves are drawn in the canvas) */
+  #select { position: fixed; inset: 0; z-index: 18; display: flex; flex-direction: column; justify-content: space-between;
+    align-items: center; padding: 7vh 0 6vh; color: #fff; pointer-events: none; user-select: none; text-shadow: 0 4px 20px rgba(0,0,0,.6); }
+  #select.hidden { display: none; }
+  #select .sel-title { font-size: 40px; font-weight: 900; letter-spacing: 6px; }
+  #select .sel-foot { display: flex; flex-direction: column; align-items: center; }
+  #select .sel-row { display: flex; align-items: center; gap: 28px; }
+  #select .sel-name { font-size: 34px; font-weight: 900; letter-spacing: 4px; min-width: 300px; text-align: center; color: #ffd23c; }
+  #select button { pointer-events: auto; cursor: pointer; font-size: 22px; color: #fff; background: rgba(60,166,255,.22);
+    border: 1px solid rgba(60,166,255,.7); border-radius: 12px; width: 52px; height: 52px; }
+  #select button:hover { background: rgba(60,166,255,.45); }
+  #select .sel-count { margin-top: 8px; font-size: 13px; letter-spacing: 3px; opacity: .6; }
+  body.selecting #hud, body.selecting #best, body.selecting #help, body.selecting #powerups, body.selecting #balance { display: none; }
   body.brawling #hud, body.brawling #powerups, body.brawling #balance { display: none; }   /* off the board: no ride HUD */
   .rboard { width: min(520px, 92vw); }
   .rtitle { font-size: 48px; font-weight: 900; letter-spacing: 6px; text-align: center;
@@ -197,6 +210,14 @@
 <div id="balance"><div id="balneedle"></div></div>
 <div id="lights"><span class="lt"></span><span class="lt"></span><span class="lt go"></span></div>
 <div id="flash"></div>
+<div id="select" class="hidden">
+  <div class="sel-title">CHOOSE YOUR RIDER</div>
+  <div class="sel-foot">
+    <div class="sel-row"><button data-d="-1" aria-label="previous rider">◀</button><div class="sel-name">CASUAL</div><button data-d="1" aria-label="next rider">▶</button></div>
+    <div class="sel-count">1 / 9</div>
+    <div class="menu-hint">← → choose · Enter / A to ride</div>
+  </div>
+</div>
 <div id="brawlhint" class="hidden">WASD / arrows walk · Shift run · <b>F</b> / <b>J</b> punch · C camera · Esc back to results</div>
 <div id="nowplaying">
   <div class="np-eyebrow">♪ Now playing</div>
@@ -311,7 +332,7 @@
     <div id="rcontinue" class="rhint blink">Enter / A / click — continue</div>
     <div class="rhint brawl">F + J — step off your board</div>
     <div id="rend">
-      <ul class="menu-list rmenu"><li data-r="restart" class="sel">Restart</li><li data-r="next">Next Race</li><li data-r="quit">Quit</li></ul>
+      <ul class="menu-list rmenu"><li data-r="restart" class="sel">Restart</li><li data-r="next">Next Race</li><li data-r="rider">Change Rider</li><li data-r="quit">Quit</li></ul>
       <div class="menu-hint">↑ ↓ to choose · Enter / A to select · F + J step off your board</div>
     </div>
   </div>
@@ -1675,14 +1696,48 @@ scene.add(skater);
 const RIDER_HEIGHT = 2.5;   // world units, standing
 const BOARD_LEN    = 1.8;   // longboard length (world units)
 const STANCE       = 0.4;   // half the distance between the feet along the board
-const rig = { ready: false, crouch: 0.3, grab: 0 };
-{
-  const boxParts = [...lean.children];
-  const gltf = new GLTFLoader();
-  Promise.all([gltf.loadAsync('assets/models/skater.glb'), gltf.loadAsync('assets/models/longboard.glb')])
-    .then(([ch, bd]) => buildRig(ch.scene, bd.scene, boxParts, ch.animations))
-    .catch(e => console.warn('[assets] rider models unavailable, keeping box rider:', e?.message || e));
+const rig = { ready: false, loading: false, crouch: 0.3, grab: 0 };
+
+// The roster (character select). All but the OG are Quaternius characters on the same rig (same
+// bones + clips), so the board pose and the pit brawl work on any of them. The OG is the original
+// plain-shapes rider on his own box board — the fallback that's always there (file:// too).
+const RIDERS = [
+  { name: 'CASUAL',     file: 'assets/models/skater.glb' },
+  { name: 'HOODIE',     file: 'assets/models/riders/hoodie.glb' },
+  { name: 'PUNK',       file: 'assets/models/riders/punk.glb' },
+  { name: 'ROCKER',     file: 'assets/models/riders/rocker.glb' },
+  { name: 'BEACH BUM',  file: 'assets/models/riders/beach.glb' },
+  { name: 'ADVENTURER', file: 'assets/models/riders/adventurer.glb' },
+  { name: 'THE SUIT',   file: 'assets/models/riders/suit.glb' },
+  { name: 'HARD HAT',   file: 'assets/models/riders/hardhat.glb' },
+  { name: 'THE OG',     file: null },
+];
+const RIDER_KEY = 'downhill.rider';            // last pick (localStorage)
+let riderIdx = 0;
+try { const i = parseInt(localStorage.getItem(RIDER_KEY), 10); if (i >= 0 && i < RIDERS.length) riderIdx = i; } catch {}
+const riderLoads = {};                         // file → gltf promise, shared by the game and the carousel
+const loadRider = i => riderLoads[RIDERS[i].file] ||= new GLTFLoader().loadAsync(RIDERS[i].file);
+const boxParts = [...lean.children];
+let boardLoad = null;
+function setRider(i) {
+  riderIdx = i;
+  try { localStorage.setItem(RIDER_KEY, i); } catch {}
+  if (!RIDERS[i].file) { dropRig(); rig.loading = false; return; }
+  rig.loading = true;
+  boardLoad ||= new GLTFLoader().loadAsync('assets/models/longboard.glb');
+  Promise.all([loadRider(i), boardLoad]).then(([ch, bd]) => {
+    if (riderIdx !== i) return;                // picked someone else in the meantime
+    dropRig();
+    buildRig(SkeletonUtils.clone(ch.scene), bd.scene.clone(true), boxParts, ch.animations);
+  }).catch(e => console.warn('[assets] rider model unavailable, keeping box rider:', e?.message || e))
+    .finally(() => { if (riderIdx === i) rig.loading = false; });
 }
+function dropRig() {                           // back to the box rider
+  if (rig.root) { rig.mixer?.stopAllAction(); lean.remove(rig.root, rig.board); }
+  rig.ready = false; rig.root = rig.board = null;
+  for (const p of boxParts) p.visible = true;
+}
+setRider(riderIdx);
 
 function buildRig(charScene, boardScene, boxParts, clips = []) {
   const prep = o => o.traverse(m => {
@@ -2825,7 +2880,7 @@ function drawTimer(txt) {
   timerTex.needsUpdate = true;
 }
 function updateTimer() {
-  timerMesh.visible = gameState !== 'TITLE' && gameState !== 'COUNTDOWN' && hudMode === 0;   // from the green light; hides with the HUD (H)
+  timerMesh.visible = !['TITLE', 'COUNTDOWN', 'SELECT'].includes(gameState) && hudMode === 0;   // from the green light; hides with the HUD (H)
   if (!timerMesh.visible) return;
   const secs = finish.crossed && lastRun ? lastRun.timeS : run.t;
   const txt = String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(Math.floor(secs % 60)).padStart(2, '0');
@@ -3190,7 +3245,7 @@ function updateChaos(dt) {
 // ------------------------------------------------------------------
 // Pause menu + settings — keyboard & gamepad navigable
 // ------------------------------------------------------------------
-let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE | BRAWL
+let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE | BRAWL | SELECT
 let menuIndex = 0;
 const settings = { volume: 70, sens: 100 };
 audio.volume = settings.volume / 100;
@@ -3232,7 +3287,7 @@ function gotoLevel(n) {
 function openControls() { gameState = 'CONTROLS'; menuIndex = 0; showPanel('controls'); renderMenu(); }
 function backToMain()   { gameState = 'PAUSED'; menuIndex = 0; showPanel('main'); renderMenu(); }
 function quitGame()  { gameState = 'TITLE'; menuEl.classList.add('hidden'); results.el.classList.add('hidden'); titleEl.classList.remove('hidden'); }
-function startFromTitle() { topSpeed = 0; titleEl.classList.add('hidden'); beginRun(); }
+function startFromTitle() { topSpeed = 0; titleEl.classList.add('hidden'); openSelect(); }
 
 function activate(item) {
   if (item.startsWith('level-')) return gotoLevel(+item.slice(6));
@@ -3256,6 +3311,12 @@ function menuNav(code) {
 // Global game/menu key handling
 addEventListener('keydown', e => {
   if (gameState === 'TITLE') { if (e.code === 'Enter' || e.code === 'Space') startFromTitle(); return; }
+  if (gameState === 'SELECT') {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') selMove(-1);
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') selMove(1);
+    else if (!e.repeat && (e.code === 'Enter' || e.code === 'Space')) confirmSelect();
+    return;
+  }
   if (gameState === 'BRAWL') {
     if (e.repeat) return;
     if (e.code === 'Escape') exitBrawl();
@@ -3311,6 +3372,7 @@ function pollMenuGamepad(dt) {
   const up = padEdge(p, 12), dn = padEdge(p, 13), lf = padEdge(p, 14), rt = padEdge(p, 15);
   const a = padEdge(p, 0), b = padEdge(p, 1); // consume edges regardless of state
   if (gameState === 'TITLE') { if (a) startFromTitle(); return; }
+  if (gameState === 'SELECT') { if (lf) selMove(-1); if (rt) selMove(1); if (a) confirmSelect(); return; }
   if (gameState === 'STATS') { if (a || b) advanceStats(); return; }
   if (gameState === 'RESULTS') { if (a || b) showEnd(); return; }
   if (gameState === 'END') {
@@ -3408,6 +3470,7 @@ function rmenuPick(i = rmenuIndex) {
   }
   results.el.classList.add('hidden');
   if (r === 'restart') beginRun();
+  else if (r === 'rider') openSelect();
   else quitGame();
 }
 rmenuItems.forEach((li, i) => {
@@ -3551,7 +3614,7 @@ function updateStart(dt) {
   drawHud(idleInfo);
   if (startSeq.phase === 'fly') {
     // hold on the first frame until the rider model is in (a couple of seconds at most)
-    if (!rig.ready && (startSeq.wait += dt) < 2.5) { startSeq.t = 0; }
+    if (rig.loading && (startSeq.wait += dt) < 4) { startSeq.t = 0; }
     else startSeq.t += dt;
     const k = THREE.MathUtils.smootherstep(Math.min(1, startSeq.t / START_FLY_SECS), 0, 1);
     const f = frameAt(state.u), P = skater.position;
@@ -3727,6 +3790,125 @@ function updateBrawl(dt) {
 }
 
 // ------------------------------------------------------------------
+// Rider select — a carousel before the race: the roster stands on a turntable, ← → spins it,
+// Enter rides. Opens on load (last pick preselected), from the title screen and from the end
+// screen's "Change Rider". Its own little scene, drawn over a dimmed, slowly orbiting view of the
+// start. Models load as their slot nears the front, so opening it doesn't pull the whole roster.
+// ------------------------------------------------------------------
+const SEL_RADIUS = 4.6;       // turntable radius
+const SEL_SPIN   = 7;         // how fast the turntable eases round to the pick
+const SEL_AHEAD  = 2;         // load riders this many slots either side of the pick
+const sel = { idx: 0, ang: 0, orbit: 0 };
+const selEl = document.getElementById('select');
+const selScene = new THREE.Scene();
+const selCam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.1, 100);
+selCam.position.set(0, 2.3, SEL_RADIUS + 11); selCam.lookAt(0, 1.25, SEL_RADIUS);
+selScene.add(new THREE.HemisphereLight(0xdfe8ff, 0x3a3226, 1.1));
+{ const l = new THREE.DirectionalLight(0xfff1dd, 2.2); l.position.set(3, 6, SEL_RADIUS + 8); selScene.add(l); }
+const selTable = new THREE.Group(); selScene.add(selTable);
+{
+  const deck = new THREE.Mesh(new THREE.CylinderGeometry(SEL_RADIUS + 1.4, SEL_RADIUS + 1.6, 0.3, 72),
+    new THREE.MeshStandardMaterial({ color: 0x1a1f2b, roughness: 0.6, metalness: 0.3 }));
+  deck.position.y = -0.15; selTable.add(deck);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(SEL_RADIUS + 1.5, 0.06, 8, 120), new THREE.MeshBasicMaterial({ color: 0x3ca6ff }));
+  rim.rotation.x = Math.PI / 2; rim.position.y = 0.01; selTable.add(rim);
+  const spot = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.95, 48), new THREE.MeshBasicMaterial({ color: 0xffd23c }));
+  spot.rotation.x = -Math.PI / 2; spot.position.set(0, 0.02, SEL_RADIUS); selScene.add(spot);   // marks the front slot
+}
+const selDim = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ color: 0x060a16, transparent: true, opacity: 0.5, depthTest: false, depthWrite: false, toneMapped: false }));
+const selDimScene = new THREE.Scene(); selDimScene.add(selDim);
+function layoutSelect() {
+  selCam.aspect = innerWidth / innerHeight; selCam.updateProjectionMatrix();
+  selDim.scale.set(innerWidth, innerHeight, 1); selDim.position.set(innerWidth / 2, -innerHeight / 2, 0);
+}
+layoutSelect();
+const selSlots = RIDERS.map((r, i) => {
+  const a = i / RIDERS.length * Math.PI * 2, g = new THREE.Group();
+  g.position.set(Math.sin(a) * SEL_RADIUS, 0, Math.cos(a) * SEL_RADIUS); g.rotation.y = a;   // facing out
+  selTable.add(g);
+  return { g, mixer: null, idle: null, wave: null, filled: false };
+});
+function fillSlot(i) {
+  const s = selSlots[i];
+  if (s.filled) return;
+  s.filled = true;
+  if (!RIDERS[i].file) {                       // the OG: the original box rider and his box board
+    const og = new THREE.Group();
+    for (const p of boxParts) { const c = p.clone(); c.visible = true; og.add(c); }
+    og.rotation.y = Math.PI / 2 - 0.45;        // three-quarter view, rider facing out
+    og.scale.setScalar(0.8);                   // the blocky build reads bigger than the others
+    s.g.add(og);
+    return;
+  }
+  loadRider(i).then(g => {
+    const m = SkeletonUtils.clone(g.scene);
+    m.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
+    m.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(m), sz = b.getSize(new THREE.Vector3()), k = RIDER_HEIGHT / sz.y;
+    m.scale.setScalar(k);
+    m.position.set(-(b.min.x + sz.x / 2) * k, -b.min.y * k, -(b.min.z + sz.z / 2) * k);
+    s.g.add(m);
+    s.mixer = new THREE.AnimationMixer(m);
+    const clip = n => g.animations.find(c => c.name.endsWith('|' + n));
+    s.idle = s.mixer.clipAction(clip('Idle')); s.idle.play(); s.idle.time = Math.random() * s.idle.getClip().duration;
+    s.wave = s.mixer.clipAction(clip('Wave')); s.wave.setLoop(THREE.LoopOnce, 1);
+    s.mixer.addEventListener('finished', () => { s.idle.reset().fadeIn(0.3).play(); s.wave.fadeOut(0.3); });
+    if (gameState === 'SELECT' && sel.idx === i) selWave(i);
+  }).catch(e => console.warn('[assets] rider model unavailable:', e?.message || e));
+}
+function selWave(i) {
+  const s = selSlots[i];
+  if (!s.wave) return;
+  s.wave.reset().setEffectiveWeight(1).fadeIn(0.2).play(); s.idle.fadeOut(0.2);
+}
+function renderSelect() {
+  const n = RIDERS.length;
+  selEl.querySelector('.sel-name').textContent = RIDERS[sel.idx].name;
+  selEl.querySelector('.sel-count').textContent = `${sel.idx + 1} / ${n}`;
+  for (let d = -SEL_AHEAD; d <= SEL_AHEAD; d++) fillSlot((sel.idx + d + n) % n);
+}
+function openSelect() {
+  if (brawl.on) exitBrawl();
+  gameState = 'SELECT'; sel.idx = riderIdx;
+  sel.ang = -sel.idx / RIDERS.length * Math.PI * 2;
+  results.el.classList.add('hidden'); titleEl.classList.add('hidden'); lightsEl.classList.remove('show');
+  selEl.classList.remove('hidden'); document.body.classList.add('selecting');
+  renderSelect(); selWave(sel.idx);
+}
+function selMove(d) { sel.idx = (sel.idx + d + RIDERS.length) % RIDERS.length; renderSelect(); selWave(sel.idx); }
+function confirmSelect() {
+  selEl.classList.add('hidden'); document.body.classList.remove('selecting');
+  if (sel.idx !== riderIdx || (RIDERS[sel.idx].file && !rig.ready && !rig.loading)) setRider(sel.idx);
+  beginRun();
+}
+selEl.querySelectorAll('button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); if (gameState === 'SELECT') selMove(+b.dataset.d); }));
+function updateSelect(dt) {
+  const target = -sel.idx / RIDERS.length * Math.PI * 2;
+  let diff = target - sel.ang; diff = Math.atan2(Math.sin(diff), Math.cos(diff));   // the short way round
+  sel.ang += diff * Math.min(1, dt * SEL_SPIN);
+  selTable.rotation.y = sel.ang;
+  selSlots.forEach((s, i) => {
+    const k = i === sel.idx ? 1.12 : 1;
+    s.g.scale.setScalar(s.g.scale.x + (k - s.g.scale.x) * Math.min(1, dt * 8));
+    s.mixer?.update(dt);
+  });
+  // behind it: a slow, high orbit around the start line
+  sel.orbit += dt * 0.07;
+  const P = frames[0].p;
+  camPos.set(P.x + Math.cos(sel.orbit) * 34, P.y + 12, P.z + Math.sin(sel.orbit) * 34);
+  camera.position.copy(keepAboveGround(camPos)); camera.lookAt(P.x, P.y + 2, P.z);
+}
+function renderSelectPass() {
+  renderer.autoClear = false;
+  renderer.render(selDimScene, hudCam);         // dim the world behind
+  renderer.clearDepth();
+  selScene.environment = scene.environment;
+  renderer.render(selScene, selCam);
+  renderer.autoClear = true;
+}
+
+// ------------------------------------------------------------------
 // Loop
 // ------------------------------------------------------------------
 // Adaptive resolution — hold the frame rate by trading render resolution. Steps down when the
@@ -3784,6 +3966,8 @@ function frame(now) {
     updateStart(dt);
   } else if (gameState === 'BRAWL') {
     updateBrawl(dt);
+  } else if (gameState === 'SELECT') {
+    updateSelect(dt);
   } else if (finish.stopped) {
     pitCam(dt);   // PIT → STATS → ENTRY → RESULTS: keep circling the rider
   }
@@ -3801,17 +3985,18 @@ function frame(now) {
   } else {
     renderer.render(scene, camera);
   }
+  if (gameState === 'SELECT') renderSelectPass();
   renderHudPass();
   requestAnimationFrame(frame);
 }
-beginRun();   // every run opens with the flyover + countdown
+openSelect();   // pick a rider, then every run opens with the flyover + countdown
 requestAnimationFrame(frame);
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
-  layoutPop(); layoutTimer();
+  layoutPop(); layoutTimer(); layoutSelect();
 });
 </script>
 </body>

@@ -95,8 +95,10 @@ content. The carving rewrite is the big one: do it before building more switchba
   pit brawl below.
 
 ## 👤 Characters & customization
-- [ ] **Character select** — a carousel before the race: cycle through the riders and pick one
-  (no stats yet; stats later). One character is the OG plain-shapes guy with his own board.
+- [x] **Character select** — *done: a turntable carousel before the race (on load, from the title
+  screen, and "Change Rider" on the end screen); ← → spins, Enter rides, last pick remembered.
+  Eight Quaternius riders on the same rig + THE OG (box rider, own board).* Still open: stats per
+  rider, the OG in the pit brawl (he has no animations), rider-specific boards.
 - [ ] **Keep the OG version playable** — the pre-visual-upgrade build is commit `c66d8dc`
   ("Gameplay batch"). Tag it (`og`) and optionally serve it at `/og/`.
 - [ ] Customizable board/player colors.
