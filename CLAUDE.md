@@ -42,6 +42,8 @@ Anything new placed along the course should use frames too.
 
 **Global leaderboard:** Supabase over its REST API (plain `fetch`, no SDK). `supabase/schema.sql` holds the table, the row-level-security policies (read + insert only) and the sanity trigger (time floor per level, air/score/combo limits, a small initials blocklist, a throttle). A new level needs its id added to the table's `level` check and to the trigger's `min_time`. The game only goes online when `SUPABASE_URL` and `SUPABASE_KEY` are set and the page is served over http(s); otherwise the WORLD page is skipped.
 
+**Free riding** (`state.free`, `updateFree`): leaving the road switches the rider from track space (`u` / `lateral`) to world space (`free.pos` / `free.dir`). Level 2: hop a rail. Level 1: go past `FREE_CLIFF_EDGE`. The ground is `groundAt(x, z)`: the terrain on level 2, the valley floor on level 1. `place()` builds a stand-in frame (`freeFrame()`) so the cameras and pose code don't change. Landing on any road (`nearestRoad`) calls `rejoinRoad`, which puts you back on the track there. Falling too far calls `leaveFree`, which respawns you where you left the road. Rails and edges cost speed once on impact (`state.atEdge`); riding along them doesn't.
+
 **CPU racers** (`cpus`, `updateCpus`): each CPU keeps its own `u` / `lat` / `speed` and runs a simplified copy of the player physics. Its roster model wears the player's current bone pose (`snapshotPose`; same rig), falling back to Idle when the player is THE OG. Balance knobs: `CPU_SKILL`, `CPU_RUBBER`, `CPU_KICK_BELOW`. `racePlace()` feeds the POS readout and `lastRun.place`.
 
 **Rider** (`buildRig`/`poseRider`):

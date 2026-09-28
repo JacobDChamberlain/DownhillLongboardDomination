@@ -2372,7 +2372,7 @@ function resetRun() {
   state.u = START_U; state.lateral = 0; state.speed = 8;
   state.heading = 0; state.height = 0; state.vy = 0; state.airborne = false;
   run.t = 0; run.topSpeed = 0; run.dist = 0; run.airTime = 0; run.score = 0; run.bestCombo = 0;
-  combo.n = combo.pts = combo.t = 0; state.crashT = 0;
+  combo.n = combo.pts = combo.t = 0; state.crashT = 0; state.free = false; state.atEdge = false;
   push.meter = 1; push.cd = 0; kickWasDown = false;
   trick.type = null; trick.spin = 0; trick.air = 0; trick.grab = false;
   if (rig.mixer) rig.mixer.stopAllAction();
@@ -2526,6 +2526,130 @@ function updateGrind(dt, inp, f, slope, jumpPressed) {
   if (!finish.crossed && state.u >= FINISH_U) crossFinish();
   return info;
 }
+
+// ------------------------------------------------------------------
+// Free riding — off the road. On level 2 hop a rail and ride the mountainside itself: gravity
+// along the actual slope (uphill slows you), steering, jumps and air spins; land on any road and
+// you're back on the track there, so you can drop to the next traverse or bomb all the way down.
+// On level 1, riding off the grass means going off the cliff. Drop below the finish level (or
+// fall long enough off a cliff) and you respawn where you left the road.
+// ------------------------------------------------------------------
+const FREE_RAIL_CLEAR = 1.15;   // airborne this high clears the rail (level 2)
+const FREE_CLIFF_EDGE = 58;     // level 1: past this far from the centreline there's no more grass
+const FREE_MIN_U   = 0.012;     // not off the start line
+const FREE_TURN    = 1.6;       // steering rate off-road (rad/s)
+const FREE_FALL_LINE = 0.9;     // the board swings toward straight downhill this fast (rad/s, on steep ground) — steer to fight it
+const FREE_DRAG    = 0.3;       // × the grass drag, riding the mountainside
+const FREE_STICK   = 14;        // the ground dropping away faster than this (u/s) throws you off it
+const FREE_FALL_RESPAWN = 70;   // fallen this far below where you left the road → respawn…
+const FREE_FALL_SECS = 3;       // …or been falling this long
+const FREE_REJOIN_SECS = 0.4;   // off the road at least this long before landing on one rejoins it
+const FREE_STUCK_SECS = 4;      // stopped off-road this long → back to the road
+const free = { pos: new THREE.Vector3(), dir: new THREE.Vector3(0, 0, 1), sideSign: 1, vyG: 0, t: 0, fallT: 0,
+               stuckT: 0, lastU: 0, leftY: 0, frame: { p: new THREE.Vector3(), tan: new THREE.Vector3(), side: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0) } };
+const UP = new THREE.Vector3(0, 1, 0);
+const groundAt = (x, z) => terrainHeightAt ? terrainHeightAt(x, z) : CLIFF_FLOOR;   // level 1: the valley floor
+function freeFrame() {                          // a stand-in track frame for place() and the cameras
+  const fr = free.frame;
+  fr.p.copy(free.pos); fr.tan.copy(free.dir);
+  fr.side.crossVectors(UP, free.dir).multiplyScalar(free.sideSign);
+  return fr;
+}
+function enterFree(inp, f) {
+  const dir = f.tan.clone().multiplyScalar(Math.cos(state.heading)).addScaledVector(f.side, Math.sin(state.heading)).setY(0).normalize();
+  free.pos.copy(f.p).addScaledVector(f.side, state.lateral).addScaledVector(f.up, state.height);
+  free.dir.copy(dir);
+  // +heading turns toward +side on the track; match that off it so steering doesn't flip
+  free.sideSign = Math.sign(new THREE.Vector3().crossVectors(UP, f.tan).dot(f.side)) || 1;
+  free.vyG = 0; free.t = 0; free.fallT = 0; free.stuckT = 0; free.lastU = state.u; free.leftY = free.pos.y;
+  if (!state.airborne) { state.airborne = true; state.vy = 0; }   // rolled off an edge
+  state.free = true; grind.on = false;
+  return { f: freeFrame(), slope: 0, offroad: true, tuck: inp.tuck, carving: false };
+}
+function leaveFree(msg) {                       // respawn on the road where you left it
+  state.free = false;
+  Object.assign(state, { u: free.lastU, lateral: 0, height: 0, vy: 0, airborne: false, heading: 0, speed: Math.min(state.speed, 20) });
+  trick.type = null; trick.grab = false; trickPivot.rotation.set(0, 0, 0);
+  endCombo(false);
+  if (msg) { showTrick(msg); flash(0.4); }
+}
+function rejoinRoad(i) {                        // landed on a road: back onto the track right there
+  const f = frames[i];
+  const off = free.pos.clone().sub(f.p);
+  const along = free.dir.dot(f.tan), across = free.dir.dot(f.side);
+  state.free = false;
+  state.u = i / SAMPLES;
+  state.lateral = THREE.MathUtils.clamp(off.dot(f.side), -(ROAD_HALF_WIDTH - 0.6), ROAD_HALF_WIDTH - 0.6);
+  state.height = Math.max(0, off.dot(f.up));
+  state.heading = THREE.MathUtils.clamp(Math.atan2(across, Math.max(along, 0.2)), -MAX_HEADING, MAX_HEADING);
+  state.speed *= THREE.MathUtils.clamp(along, 0.35, 1);    // turning onto the road costs speed
+  if (state.height <= 0.05) { state.height = 0; if (state.airborne) land(); }
+}
+function updateFree(dt, inp, jumpPressed) {
+  free.t += dt;
+  const P = free.pos;
+  // steer: rotate your line about world up (tucking/braking/kicking still work)
+  const yawRate = -state.steerSmooth * FREE_TURN * free.sideSign * (state.airborne ? AIR_STEER : 1);
+  free.dir.applyAxisAngle(UP, yawRate * dt).normalize();
+  if (!state.airborne) {                        // the fall line pulls your line downhill
+    const gx = (groundAt(P.x + 1, P.z) - groundAt(P.x - 1, P.z)) / 2, gz = (groundAt(P.x, P.z + 1) - groundAt(P.x, P.z - 1)) / 2;
+    const steep = Math.hypot(gx, gz);
+    if (steep > 0.05) {
+      const want = Math.atan2(-gx, -gz), cur = Math.atan2(free.dir.x, free.dir.z);
+      const d = Math.atan2(Math.sin(want - cur), Math.cos(want - cur));
+      free.dir.applyAxisAngle(UP, THREE.MathUtils.clamp(d, -1, 1) * FREE_FALL_LINE * Math.min(1, steep * 2) * dt).normalize();
+    }
+  }
+  const gy = groundAt(P.x, P.z);
+  const slope = (groundAt(P.x + free.dir.x * 1.5, P.z + free.dir.z * 1.5) - groundAt(P.x - free.dir.x * 1.5, P.z - free.dir.z * 1.5)) / 3;
+  if (!state.airborne) {
+    const drag = inp.tuck ? DRAG_TUCK : DRAG_UP;
+    let accel = -G * slope - drag * state.speed * state.speed - ROLL - OFFROAD_DRAG * FREE_DRAG;
+    if (inp.brake || state.crashT > 0) accel -= BRAKE_DECEL + state.speed * 0.3;
+    state.speed = Math.max(0, state.speed + accel * dt);
+    push.cd = Math.max(0, push.cd - dt);
+    const kick = inp.kick && !kickWasDown; kickWasDown = inp.kick;
+    if (kick && push.cd <= 0 && state.speed < KICK_MAX_SPEED) { state.speed += KICK_IMPULSE; push.cd = KICK_CD; }
+    if (jumpPressed) { state.airborne = true; state.vy = Math.min(14, 8 + state.speed * 0.04) + Math.max(0, free.vyG); armTrick(); }
+  }
+  P.addScaledVector(free.dir, state.speed * dt);
+  const gy2 = groundAt(P.x, P.z);
+  if (!state.airborne) {
+    const vyG = (gy2 - P.y) / Math.max(dt, 1e-3);
+    if (vyG < -FREE_STICK) { state.airborne = true; state.vy = free.vyG; trick.type = null; }   // the ground fell away
+    else { P.y = gy2; free.vyG = vyG; }
+  }
+  if (state.airborne) {
+    run.airTime += dt; trick.air += dt;
+    if (trick.type) {
+      trick.spin -= SPIN_RATE * inp.steer * dt;
+      if (Math.abs(trick.spin) > 0.35) trick.type = 'spin';
+      trick.grab = !!inp.tuck && trick.type !== 'spin';
+      if (trick.grab) trick.grabT += dt;
+    }
+    state.vy -= 34 * dt; P.y += state.vy * dt;
+    if (P.y <= gy2) { P.y = gy2; free.vyG = 0; land(); }   // (a bad landing crashes you right here)
+  }
+  run.t += dt; run.dist += state.speed * dt;
+  run.topSpeed = Math.max(run.topSpeed, state.speed); topSpeed = Math.max(topSpeed, state.speed);
+  if (combo.n && !state.airborne) { combo.t -= dt; if (combo.t <= 0) endCombo(); }
+  const info = { f: freeFrame(), slope: Math.max(0, -slope), offroad: true, tuck: inp.tuck, carving: Math.abs(state.steerSmooth) > 0.2, brake: inp.brake };
+
+  // back onto a road you've come down to
+  if (free.t > FREE_REJOIN_SECS && (!state.airborne || state.vy < 0)) {
+    const nr = nearestRoad(P.x, P.z, ROAD_HALF_WIDTH + 2);
+    if (nr.i >= 0 && nr.d < ROAD_HALF_WIDTH - 0.6 && Math.abs(P.y - frames[nr.i].p.y) < 1.8 && !inPit(nr.i / SAMPLES)) { rejoinRoad(nr.i); return info; }
+  }
+  // gone too far: below the finish, into the lake, off a level-1 cliff for good, or stuck
+  if (state.airborne && P.y < free.leftY) free.fallT += dt; else free.fallT = 0;
+  free.stuckT = state.speed < 1 && !state.airborne ? free.stuckT + dt : 0;
+  const floorY = IS_SWITCH ? frames[SAMPLES].p.y - 20 : free.leftY - FREE_FALL_RESPAWN;
+  if (P.y < floorY || P.y < LAKE_Y + 1) leaveFree(IS_SWITCH ? 'TOO FAR DOWN!' : 'OFF THE CLIFF!');
+  else if (!IS_SWITCH && free.fallT > FREE_FALL_SECS) leaveFree('OFF THE CLIFF!');
+  else if (free.stuckT > FREE_STUCK_SECS) leaveFree('BACK TO THE ROAD');
+  return info;
+}
+
 // land a spin in whichever stance you're facing: an odd number of half-turns switches your stance
 // instead of unwinding the rider back to where the spin started (the rest eases to the nearest 180)
 function settleSpin() {
@@ -2609,6 +2733,7 @@ function update(dt) {
   const jumpPressed = inp.jump && !jumpWasDown; jumpWasDown = inp.jump;
   revertCd = Math.max(0, revertCd - dt);
 
+  if (state.free) return updateFree(dt, inp, jumpPressed);
   const f = frameAt(state.u);
   const slope = Math.max(0, -f.tan.y); // 0..1 how steeply downhill
   if (finish.crossed) return updateCoast(dt, inp, f, slope);
@@ -2624,9 +2749,11 @@ function update(dt) {
   let accel = G * slope;
   accel -= drag * state.speed * state.speed;
   accel -= ROLL;
-  accel -= Math.abs(state.heading) * state.speed * (CARVE_SCRUB / 100);
+  if (!state.atEdge) accel -= Math.abs(state.heading) * state.speed * (CARVE_SCRUB / 100);   // pinned on a rail isn't a carve
 
-  const offroad = Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1.0;
+  // grass drag past the road edge — but not where rails hold you on the asphalt (level 2, the bridge):
+  // riding along the rail there counted as off-road and dragged you to a stop
+  const offroad = Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1.0 && !IS_SWITCH && !onBridge(state.u);
   if (offroad && !state.airborne) accel -= OFFROAD_DRAG;
   // brakes (B / LT): a foot-drag stop — strong enough to hold you still on the steepest pitch
   if ((inp.brake || state.crashT > 0) && !state.airborne) accel -= BRAKE_DECEL + state.speed * 0.3;
@@ -2711,15 +2838,28 @@ function update(dt) {
   run.topSpeed = Math.max(run.topSpeed, state.speed);
 
   // soft wall at shoulder edge
-  const limit = IS_SWITCH ? ROAD_HALF_WIDTH - 0.5 : ROAD_HALF_WIDTH + 45;   // level 2: the rails hold you on the shelf
-  if (Math.abs(state.lateral) > limit) {
-    state.lateral = Math.sign(state.lateral) * limit; state.heading *= -0.3; state.speed *= IS_SWITCH ? 0.9 : 0.6;
-  }
-  // on the bridge there's no shoulder — the rails hold you on the deck
-  const railLim = ROAD_HALF_WIDTH - 0.5;
-  if (onBridge(state.u) && Math.abs(state.lateral) > railLim) {
-    state.lateral = Math.sign(state.lateral) * railLim; state.heading *= -0.3; state.speed *= 0.9;
-  }
+  // edges: level 2's rails (hop them to ride the mountain), level 1's cliff edges (ride off and
+  // you fall); walls where there's nowhere to go — the bridge rails, mountain walls, the pits
+  const canLeave = !inPit(state.u) && state.u > FREE_MIN_U && !finish.crossed;
+  let limit = Infinity;
+  if (IS_SWITCH) {
+    const overRail = state.airborne && state.height > FREE_RAIL_CLEAR;
+    if (canLeave && overRail && Math.abs(state.lateral) > RAIL_LAT + 0.8) return enterFree(inp, f);   // over the rail
+    if (!overRail) limit = ROAD_HALF_WIDTH - 0.5;
+  } else if (onBridge(state.u)) limit = ROAD_HALF_WIDTH - 0.5;       // the bridge rails hold you on the deck
+  else if (!canLeave || wallAt(state.u, state.lateral)) limit = ROAD_HALF_WIDTH + 45;
+  else if (Math.abs(state.lateral) > FREE_CLIFF_EDGE) return enterFree(inp, f);                      // off the cliff
+  if (Math.abs(state.lateral) >= limit - 0.01) {           // at (or past) the edge — still "at" it while sliding along
+    const out = Math.sign(state.lateral);
+    state.lateral = out * limit;
+    if (Math.sign(state.heading) === out) {
+      // hit it: a knock off your speed the first frame, then you just slide along it (it used to
+      // take 10% every frame you leaned on it — hold a steer into a rail and you'd stop dead)
+      if (!state.atEdge) state.speed *= 1 - Math.min(0.1, Math.abs(Math.sin(state.heading)) * 0.2);
+      state.heading = 0;
+    }
+    state.atEdge = true;
+  } else state.atEdge = false;
 
   if (!finish.crossed && state.u >= FINISH_U) crossFinish();   // over the line — coast into the pit
 
@@ -2753,12 +2893,13 @@ function cycleHud() {
 }
 
 function place(info) {
-  const f = frameAt(state.u);
-  const pos = f.p.clone().addScaledVector(f.side, state.lateral).addScaledVector(f.up, 0.05 + state.height);
+  const f = state.free ? freeFrame() : frameAt(state.u);
+  const pos = state.free ? free.pos.clone().addScaledVector(UP, 0.05)
+    : f.p.clone().addScaledVector(f.side, state.lateral).addScaledVector(f.up, 0.05 + state.height);
   skater.position.copy(pos);
 
   // orient board along heading (blend tangent + side)
-  const dir = f.tan.clone().multiplyScalar(Math.cos(state.heading))
+  const dir = state.free ? free.dir.clone() : f.tan.clone().multiplyScalar(Math.cos(state.heading))
     .addScaledVector(f.side, Math.sin(state.heading)).normalize();
   skater.quaternion.setFromRotationMatrix(new THREE.Matrix4().lookAt(new THREE.Vector3(), dir.clone().negate(), f.up));
 
@@ -3077,7 +3218,7 @@ function updateMap() {
   mapGroup.visible = hudMode === 0 && ['COUNTDOWN', 'PLAYING', 'PIT'].includes(gameState);
   if (!mapGroup.visible) return;
   const put = (dot, u) => { const p = mapProject(frameAt(Math.min(1, u)).p); dot.position.set(p[0], p[1], 0); };
-  put(mapMe, state.u);
+  if (state.free) { const p = mapProject(free.pos); mapMe.position.set(p[0], p[1], 0); } else put(mapMe, state.u);
   cpus.forEach((c, i) => { if (mapCpuDots[i]) put(mapCpuDots[i], c.u); });
 }
 
@@ -4472,7 +4613,7 @@ function updateCpus(dt) {
   kickT = Math.max(0, kickT - dt);
   cpus.forEach((c, i) => updateCpu(c, i, dt));
   // shoulder bumps with you (racing only): both get pushed apart sideways
-  if (gameState === 'PLAYING' && !finish.crossed && !grind.on) for (const c of cpus) {
+  if (gameState === 'PLAYING' && !finish.crossed && !grind.on && !state.free) for (const c of cpus) {
     const du = (c.u - state.u) * TOTAL_LEN, dl = c.lat - state.lateral;
     if (c.crashT <= 0 && Math.abs(du) < 2.2 && Math.abs(dl) < CPU_BUMP && Math.abs(c.height - state.height) < 1) {
       const push = (CPU_BUMP - Math.abs(dl)) * (Math.sign(dl) || 1);
@@ -4507,7 +4648,7 @@ function placeCpu(c, dt) {
 // K: kick a racer riding right beside you — they eat it (Road Rash rules)
 let kickT = 0;
 function kickRacer() {
-  if (gameState !== 'PLAYING' || finish.crossed || kickT > 0 || grind.on || state.crashT > 0) return;
+  if (gameState !== 'PLAYING' || finish.crossed || kickT > 0 || grind.on || state.crashT > 0 || state.free) return;
   kickT = KICK_CDOWN;
   const c = cpus.find(c => c.crashT <= 0 && !c.finished && Math.abs((c.u - state.u) * TOTAL_LEN) < KICK_REACH_U
                           && Math.abs(c.lat - state.lateral) < KICK_REACH_LAT && Math.abs(c.height - state.height) < 1.2);
