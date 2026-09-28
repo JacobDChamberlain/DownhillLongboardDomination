@@ -143,9 +143,10 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
 - [ ] **Keep the OG version playable** — the pre-visual-upgrade build is commit `c66d8dc`
   ("Gameplay batch"). Tag it (`og`) and optionally serve it at `/og/`.
 - [ ] Customizable board/player colors.
-- [ ] **New riders:** **Hesher**, **Mime**, **Cthulhu** (the original story is public domain now).
-  Built as custom models on the shared rig so they can ride and brawl, or from CC0 base characters
-  re-dressed.
+- [x] **New riders:** **Hesher**, **Mime**, **Cthulhu** — *done as looks on the existing models
+  (`LOOKS`): recolors by material name, shader stripes (the mime's shirt), glowing eyes, and
+  procedural bits pinned to bones (long hair + mustache; beret + scarf; face tentacles + bat
+  wings). They ride, crash and brawl like everyone else, and show up as CPU rivals too.*
 - [ ] **Unlockable riders** — needs an unlock system first (what earns each: beat a track, a
   score, a secret) plus a locked slot on the carousel. Wishlist: Godzilla, Otto (The Simpsons),
   Pennywise, Freddy Krueger, Jackie Chan, LeBron James, Jak & Daxter, Ratchet & Clank, Courage
