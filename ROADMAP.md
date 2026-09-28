@@ -117,10 +117,10 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
 - [ ] **Starry mode** — brighter stars, more cosmic activity: huge nearby planets with flowing
   storms, and once in a blue moon a UFO zips by.
 - [ ] Meme/image skies (need image assets).
-- [ ] **Pre-race course flyover:** before the start cam cuts to you, a short tour of the track's
+- [x] **Pre-race course flyover:** before the start cam cuts to you, a short tour of the track's
   highlights (the gap, the loops, the bridge). Hand-picked camera points per level, skippable like
   the current flyover.
-- [ ] **Level 1 sea giants:** mountain-sized whales and dolphins breaching out of the lake beside
+- [x] **Level 1 sea giants:** mountain-sized whales and dolphins breaching out of the lake beside
   the course and arcing *over the bridge*. Needs a CC0 whale/dolphin model (or a stylized
   procedural one), a breach path + splash, and one timed to cross as you ride the viaduct.
 
