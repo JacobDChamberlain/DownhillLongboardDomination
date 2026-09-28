@@ -1826,11 +1826,13 @@ function buildRig(charScene, boardScene, boxParts, clips = []) {
 const ridingPoses = { cruise: null, tuck: null };
 function captureRidingPoses() {
   const grab = s => ({ bones: rig.bones.map(([b]) => [b.position.clone(), b.quaternion.clone()]), root: rig.root.position.clone() });
-  const keep = { steer: state.steerSmooth, air: state.airborne };
-  state.steerSmooth = 0; state.airborne = false;
+  // always in regular stance: poseRider faces the body up the road when stanceYaw says switch, and a
+  // rebuild (Change Rider) can land while that's still set from your last run — CPUs rode backwards
+  const keep = { steer: state.steerSmooth, air: state.airborne, yaw: stanceYaw };
+  state.steerSmooth = 0; state.airborne = false; stanceYaw = 0;
   poseRider({ tuck: false }, 1); ridingPoses.cruise = grab();
   poseRider({ tuck: true }, 1);  ridingPoses.tuck = grab();
-  state.steerSmooth = keep.steer; state.airborne = keep.air;
+  state.steerSmooth = keep.steer; state.airborne = keep.air; stanceYaw = keep.yaw;
 }
 
 // --- small world-space bone helpers (work regardless of each bone's local axes) ---
