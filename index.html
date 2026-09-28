@@ -2528,13 +2528,12 @@ function updateGrind(dt, inp, f, slope, jumpPressed) {
 }
 
 // ------------------------------------------------------------------
-// Free riding — off the road. On level 2 hop a rail and ride the mountainside itself: gravity
+// Free riding — off the road. On level 2 go through a rail and ride the mountainside itself: gravity
 // along the actual slope (uphill slows you), steering, jumps and air spins; land on any road and
 // you're back on the track there, so you can drop to the next traverse or bomb all the way down.
 // On level 1, riding off the grass means going off the cliff. Drop below the finish level (or
 // fall long enough off a cliff) and you respawn where you left the road.
 // ------------------------------------------------------------------
-const FREE_RAIL_CLEAR = 1.15;   // airborne this high clears the rail (level 2)
 const FREE_CLIFF_EDGE = 58;     // level 1: past this far from the centreline there's no more grass
 const FREE_MIN_U   = 0.012;     // not off the start line
 const FREE_TURN    = 1.6;       // steering rate off-road (rad/s)
@@ -2843,9 +2842,10 @@ function update(dt) {
   const canLeave = !inPit(state.u) && state.u > FREE_MIN_U && !finish.crossed;
   let limit = Infinity;
   if (IS_SWITCH) {
-    const overRail = state.airborne && state.height > FREE_RAIL_CLEAR;
-    if (canLeave && overRail && Math.abs(state.lateral) > RAIL_LAT + 0.8) return enterFree(inp, f);   // over the rail
-    if (!overRail) limit = ROAD_HALF_WIDTH - 0.5;
+    // like level 1: the rails don't hold you — ride or jump through one and you're on the mountain
+    // (except by the start and finish pits)
+    if (canLeave && Math.abs(state.lateral) > RAIL_LAT + 0.8) return enterFree(inp, f);
+    if (!canLeave) limit = ROAD_HALF_WIDTH - 0.5;
   } else if (onBridge(state.u)) limit = ROAD_HALF_WIDTH - 0.5;       // the bridge rails hold you on the deck
   else if (!canLeave || wallAt(state.u, state.lateral)) limit = ROAD_HALF_WIDTH + 45;
   else if (Math.abs(state.lateral) > FREE_CLIFF_EDGE) return enterFree(inp, f);                      // off the cliff
