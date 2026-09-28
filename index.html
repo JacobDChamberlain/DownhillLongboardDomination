@@ -151,9 +151,14 @@
   .rboard { width: min(640px, 94vw); }
   .rtitle { font-size: 48px; font-weight: 900; letter-spacing: 6px; text-align: center;
     color: #ffd23c; text-shadow: 0 0 18px rgba(255,210,60,.6); margin-bottom: 14px; }
-  .rstats { display: flex; justify-content: center; gap: 26px; font-size: 13px; letter-spacing: 2px;
+  .rstats { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; letter-spacing: 2px;
     opacity: .9; margin-bottom: 22px; text-transform: uppercase; }
-  .rstats b { color: #3ca6ff; font-size: 20px; margin-left: 8px; }
+  .rstats span { display: flex; justify-content: space-between; align-items: baseline; width: 300px;
+    border-bottom: 1px solid rgba(255,255,255,.08); padding-bottom: 4px; }
+  .rstats b { color: #3ca6ff; font-size: 22px; margin-left: 8px; }
+  /* your stats live on the FINISH page only; the later pages are titled by scope */
+  #results:not([data-stage="stats"]) .rstats, #results:not([data-stage="stats"]) .rtitle { display: none; }
+  #results[data-stage="entry"] #rcat, #results[data-stage="entry"] #rcontinue { display: none; }
   .rentry { text-align: center; margin-bottom: 22px; }
   .rentry.hidden { display: none; }
   .rentry-label { font-size: 14px; letter-spacing: 3px; color: #ff5a3c; margin-bottom: 12px; }
@@ -175,7 +180,8 @@
     font-size: 15px; letter-spacing: 3px; font-weight: 800; }
   .rcat .lbl { min-width: 220px; text-align: center; color: #3ca6ff; }
   .rcat .arr { opacity: .5; font-size: 12px; }
-  .rscope { text-align: center; font-size: 11px; letter-spacing: 4px; opacity: .55; margin-bottom: 4px; }
+  .rscope { text-align: center; font-size: 30px; font-weight: 900; letter-spacing: 6px; color: #ffd23c;
+    text-shadow: 0 0 18px rgba(255,210,60,.5); margin-bottom: 12px; }
   #results[data-stage="stats"] #rscope, #results[data-stage="entry"] #rscope { display: none; }
   #results[data-stage="race"] #rentry, #results[data-stage="race"] #rnext { display: none; }
   .rhead { font-size: 11px; letter-spacing: 2px; opacity: .5; text-transform: uppercase; padding-bottom: 6px; }
@@ -337,7 +343,7 @@
         <span class="init" data-i="1">A</span>
         <span class="init" data-i="2">A</span>
       </div>
-      <div class="rhint">↑ ↓ letter · ← → move · type A–Z · Enter / A to confirm · Tab rankings</div>
+      <div class="rhint">↑ ↓ letter · ← → move · type A–Z · Enter / A to confirm</div>
     </div>
     <div id="rscope" class="rscope">ALL TIME</div>
     <div id="rcat" class="rcat"><span class="arr">◀</span><span class="lbl">FASTEST TIME</span><span class="arr">▶</span></div>
@@ -1820,11 +1826,13 @@ function buildRig(charScene, boardScene, boxParts, clips = []) {
 const ridingPoses = { cruise: null, tuck: null };
 function captureRidingPoses() {
   const grab = s => ({ bones: rig.bones.map(([b]) => [b.position.clone(), b.quaternion.clone()]), root: rig.root.position.clone() });
-  const keep = { steer: state.steerSmooth, air: state.airborne };
-  state.steerSmooth = 0; state.airborne = false;
+  // always in regular stance: poseRider faces the body up the road when stanceYaw says switch, and a
+  // rebuild (Change Rider) can land while that's still set from your last run — CPUs rode backwards
+  const keep = { steer: state.steerSmooth, air: state.airborne, yaw: stanceYaw };
+  state.steerSmooth = 0; state.airborne = false; stanceYaw = 0;
   poseRider({ tuck: false }, 1); ridingPoses.cruise = grab();
   poseRider({ tuck: true }, 1);  ridingPoses.tuck = grab();
-  state.steerSmooth = keep.steer; state.airborne = keep.air;
+  state.steerSmooth = keep.steer; state.airborne = keep.air; stanceYaw = keep.yaw;
 }
 
 // --- small world-space bone helpers (work regardless of each bone's local axes) ---
@@ -3650,7 +3658,7 @@ function lbCycle(d) {
 // This race: you and the CPUs, same columns and rankings. Anyone still out on the course shows
 // no time yet (and ranks last on time); the table refreshes as they come in.
 function raceRows() {
-  const me = { name: 'YOU', timeS: lastRun.timeS, topSpeed: lastRun.topSpeed, airTime: lastRun.airTime,
+  const me = { name: lastRun.rec ? lastRun.rec.name : 'YOU', timeS: lastRun.timeS, topSpeed: lastRun.topSpeed, airTime: lastRun.airTime,
                score: lastRun.score, combo: lastRun.combo || 0, me: true };
   return [me, ...cpus.map(c => ({ name: c.name, timeS: c.finished ? c.finishT : Infinity, topSpeed: c.topSpeed,
                                   airTime: c.airTime, score: c.score, combo: c.combo }))];
@@ -3755,11 +3763,12 @@ function finishRun(reason) {
   gameState = 'STATS';                       // 1) stats alone, then continue →
   results.el.dataset.stage = 'stats';
 }
-function advanceStats() { showRace(); }
-function advanceRace() {                      // 3) initials if the run placed on any ranking, 4) the all-time board
+// FINISH (your stats) → initials, if the run placed on any ranking → THIS RACE → ALL TIME → the choices
+function advanceStats() {
   const scores = loadScores(), probe = { ...lastRun, score: lastRun.score, combo: lastRun.combo || 0 };
-  if (placesAnywhere(scores, probe)) startEntry(scores); else showBoard(scores);
+  if (placesAnywhere(scores, probe)) startEntry(scores); else showRace();
 }
+function advanceRace() { showBoard(loadScores()); }
 
 function renderBoard(scores) {
   lbScores = scores;
@@ -3815,8 +3824,8 @@ function submitInitials() {
                 score: lastRun.score, combo: lastRun.combo || 0 };
   const scores = pruneScores([...loadScores(), rec]);
   saveScores(scores);
-  lastRun.rec = rec;                    // highlight the player's row
-  showBoard(scores);
+  lastRun.rec = rec;                    // highlight the player's row on the all-time board
+  showRace();
 }
 
 
@@ -3827,7 +3836,6 @@ function handleEntryKey(code) {
   else if (code === 'ArrowLeft') entryMove(-1);
   else if (code === 'ArrowRight')entryMove(1);
   else if (code === 'Backspace') { entry.slots[entry.pos] = 'A'; entryMove(-1); }
-  else if (code === 'Tab') lbCycle(1);
   else if (code === 'Enter' || code === 'Space') submitInitials();
 }
 
@@ -4202,12 +4210,12 @@ function renderSelectPass() {
 // longboards wearing YOUR current riding pose (same rig), leaning into their own carves.
 // ------------------------------------------------------------------
 const CPU_NAMES   = ['RAZ', 'KOJI', 'MEL'];
-const CPU_SKILL   = [0.95, 0.975, 1.0];     // multiplies the slope pull — beatable if you race clean
+const CPU_SKILL   = [0.8, 0.84, 0.87];      // multiplies the slope pull — beatable without a perfect run
 const CPU_GRID    = [{ lat: -5.5, back: 0 }, { lat: 5.5, back: 0 }, { lat: -2.2, back: 7 }];   // start positions
 const CPU_RUBBER  = 0.0012;                  // per unit of gap to you: speed up behind, ease off ahead
-const CPU_RUBBER_UP   = 0.05;              // max catch-up boost when they're behind you…
+const CPU_RUBBER_UP   = 0.03;              // max catch-up boost when they're behind you…
 const CPU_RUBBER_DOWN = 0.12;              // …and max ease-off when they're ahead
-const CPU_TUCK_ON  = [4, 9];               // seconds tucked, then…
+const CPU_TUCK_ON  = [3, 7];               // seconds tucked, then…
 const CPU_TUCK_OFF = [1, 2.5];             // …seconds sitting up for a breather
 const CPU_SITUP_DRAG = 1.7;                // sitting up costs this × the tucked drag (a half-crouch, not standing tall)
 const CPU_WOBBLE   = 1.4;                  // their line drifts this much (u) — nobody rides a perfect line
@@ -4216,7 +4224,9 @@ const CPU_STUMBLE  = 0.003;                // chance per second to eat it at spe
 const KICK_REACH_U = 2.6, KICK_REACH_LAT = 2.8;   // K kicks a racer this close beside you
 const KICK_CDOWN   = 0.9;                  // seconds between your kicks
 const KICK_PTS     = 100;
-const CPU_KICK_BELOW = 14;                 // they only kick-push when slower than this (off the line, after a bail)
+const CPU_KICK_BELOW = 14;                 // they only kick-push when slower than this (off the line)…
+const CPU_RECOVER_KICK = 34;               // …or this, for CPU_RECOVER_SECS after getting up from a bail
+const CPU_RECOVER_SECS = 6;
 const CPU_LINE    = 0.5;                     // how far toward the inside of a bend they cut (× half width)
 const CPU_LAT_RATE = 3.2;                    // how fast they move across the road (u/s)
 const CPU_BUMP    = 1.5;                     // riders closer than this (sideways) bump apart
@@ -4300,7 +4310,7 @@ function updateCpu(c, i, dt) {
   if (c.crashT > 0) {                          // down: no control, skid to a stop, then get back up
     c.crashT -= dt;
     c.speed = Math.max(0, c.speed - (BRAKE_DECEL + c.speed * 0.3) * dt);
-    if (c.crashT <= 0 && c.model?.mixer) { c.model.mixer.stopAllAction(); c.model.idle?.reset().play(); }
+    if (c.crashT <= 0) { c.recoverT = CPU_RECOVER_SECS; if (c.model?.mixer) { c.model.mixer.stopAllAction(); c.model.idle?.reset().play(); } }
   } else if (!c.finished) {
     // line: toward the inside of the bend ahead, around whoever's just in front, never quite perfect
     cpuTan.copy(frameAt(Math.min(1, c.u + 30 / TOTAL_LEN)).tan).sub(f.tan);
@@ -4316,7 +4326,8 @@ function updateCpu(c, i, dt) {
     let accel = G * slope * c.skill * (1 + behind) - DRAG_TUCK * (tucked ? 1 : CPU_SITUP_DRAG) * c.speed * c.speed - ROLL - Math.abs(c.heading) * c.speed * (CARVE_SCRUB / 100);
     c.speed = Math.max(0, c.speed + accel * dt);
     c.kickCd -= dt;
-    if (!c.airborne && c.speed < CPU_KICK_BELOW && c.kickCd <= 0) { c.speed += KICK_IMPULSE; c.kickCd = KICK_CD * 1.6; }
+    c.recoverT = Math.max(0, (c.recoverT || 0) - dt);
+    if (!c.airborne && c.speed < (c.recoverT > 0 ? CPU_RECOVER_KICK : CPU_KICK_BELOW) && c.kickCd <= 0) { c.speed += KICK_IMPULSE; c.kickCd = KICK_CD * 1.6; }
     if (!c.airborne && c.speed > 40 && Math.random() < CPU_STUMBLE * dt) cpuCrash(c, c.name + ' WIPES OUT!');
     c.topSpeed = Math.max(c.topSpeed, c.speed);
     let target = bend * CPU_LINE * ROAD_HALF_WIDTH + Math.sin(c.t * 0.45 + c.seed) * CPU_WOBBLE;
@@ -4378,8 +4389,8 @@ function updateCpus(dt) {
   if (gameState === 'PLAYING' && !finish.crossed && !grind.on) for (const c of cpus) {
     const du = (c.u - state.u) * TOTAL_LEN, dl = c.lat - state.lateral;
     if (c.crashT <= 0 && Math.abs(du) < 2.2 && Math.abs(dl) < CPU_BUMP && Math.abs(c.height - state.height) < 1) {
-      const push = (CPU_BUMP - Math.abs(dl)) / 2 * (Math.sign(dl) || 1);
-      c.lat += push; state.lateral -= push;
+      const push = (CPU_BUMP - Math.abs(dl)) * (Math.sign(dl) || 1);
+      c.lat += push * 0.8; state.lateral -= push * 0.2;          // they give way — a bump barely moves you
     }
   }
   for (const c of cpus) placeCpu(c, dt);
