@@ -3,8 +3,11 @@
 --
 -- Anyone can read scores and add a score; nobody can edit or delete them (row-level security).
 -- The game runs in the browser, so a determined cheater can still post a fake run — the checks
--- below just reject the impossible ones (times faster than the course allows, absurd speeds or
--- scores for the time) and throttle floods.
+-- below just reject the impossible ones (absurd speeds, more air than run, scores out of all
+-- proportion to the time) and throttle floods. There's no minimum time: riding off the road and
+-- down the mountain is a legit shortcut, so short runs are real.
+--
+-- Safe to re-run: everything below is create-if-missing / create-or-replace.
 
 create table if not exists public.scores (
   id         bigint generated always as identity primary key,
@@ -22,14 +25,11 @@ create table if not exists public.scores (
 create index if not exists scores_level_time  on public.scores (level, time_s);
 create index if not exists scores_level_score on public.scores (level, score desc);
 
--- Plausibility: no run beats the course's floor time, air time fits inside the run, and points
--- can't pile up faster than tricks allow.
+-- Plausibility: air time fits inside the run, and points can't pile up faster than tricks allow.
 create or replace function public.scores_sanity() returns trigger language plpgsql as $$
 declare
-  min_time real := case new.level when 'ridge' then 30 else 55 end;   -- seconds; well under a great run
-  recent   integer;
+  recent integer;
 begin
-  if new.time_s < min_time then raise exception 'time too fast'; end if;
   if new.air_time > new.time_s then raise exception 'air time longer than the run'; end if;
   if new.score > new.time_s * 600 + 5000 then raise exception 'score too high for the time'; end if;
   if new.combo > new.score then raise exception 'combo bigger than the score'; end if;
