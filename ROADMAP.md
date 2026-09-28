@@ -35,17 +35,17 @@ content. The carving rewrite is the big one: do it before building more switchba
 ---
 
 ## 🐛 Bugs & feel fixes
-- [ ] **Gap respawn loop** — falling in respawns you just before the kicker at half speed,
+- [x] **Gap respawn loop** — falling in respawns you just before the kicker at half speed,
   usually below `GAP_MIN_SPEED`, so you can never clear it (the free-death pickup just happens to
   sit before it). Respawn further back and/or restore enough speed for the jump.
-- [ ] **Spin landing** — landing a half-turn unwinds the rider back to the original facing
+- [x] **Spin landing** — landing a half-turn unwinds the rider back to the original facing
   (`trickPivot.rotation.y *= 0.7`). Land in whichever stance you're facing (odd 180s = switch).
-- [ ] **Kicker ramps** — they only fire if you're on the ground as you cross them
+- [x] **Kicker ramps** — they only fire if you're on the ground as you cross them
   (`kickerLaunch`), so jumping into one goes straight through. Make them real kickers that launch
   you whenever you touch them.
-- [ ] **Steer during the finish coast** — keep A/D lateral control while the pit stop brakes you
+- [x] **Steer during the finish coast** — keep A/D lateral control while the pit stop brakes you
   (only speed is automatic).
-- [ ] **Boardslide lean** — balance lean should rock across the rail (forward/back from the
+- [x] **Boardslide lean** — balance lean should rock across the rail (forward/back from the
   rider's view), not along it.
 
 ## 🛹 Tricks & scoring
