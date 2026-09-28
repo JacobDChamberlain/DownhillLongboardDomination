@@ -93,16 +93,16 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
 - [ ] Keep the rider out of the mountain on level 1 (parked — "reminds me of the old days").
 
 ## ✨ Quick wins (from the second wishlist)
-- [ ] **Rename riders:** HARD HAT → **BOB**, THE SUIT → **CIA** (just labels in `RIDERS`).
-- [ ] **Brawl tuning:**
+- [x] **Rename riders:** HARD HAT → **BOB**, THE SUIT → **CIA** (just labels in `RIDERS`).
+- [x] **Brawl tuning:**
   - walk and sprint **twice as fast** (currently 5.2 / 9.5 u/s)
   - a **quicker punch**, and spectators **fall down faster** (speed up those two animation clips)
   - **mouse moves the camera** while you walk, the same as on the board
   - **K kicks** spectators too, not just racers
-- [ ] **HUD moves:**
+- [x] **HUD moves:**
   - the landing call (**clean / SKETCHY!**) pops just above the rider's head
   - the race **place** (POS x/4) moves from under the timer to under the minimap
-- [ ] **Clean landings pay speed:** land any trick clean and get a small speed boost (sketchy ones
+- [x] **Clean landings pay speed:** land any trick clean and get a small speed boost (sketchy ones
   don't).
 - [x] **FINISH page stats in two columns** (names left, numbers right, before initials). *Already
   done in the finish-flow update.*

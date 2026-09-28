@@ -234,7 +234,7 @@
     <div class="menu-hint">← → choose · Enter / A to ride</div>
   </div>
 </div>
-<div id="brawlhint" class="hidden">WASD / arrows walk · double-tap W or Shift to sprint · <b>F</b> / <b>J</b> punch · C camera · Esc back to results</div>
+<div id="brawlhint" class="hidden">WASD / arrows walk · double-tap W or Shift to sprint · <b>F</b> / <b>J</b> punch · <b>K</b> kick · mouse looks · C camera · Esc back to results</div>
 <div id="nowplaying">
   <div class="np-eyebrow">♪ Now playing</div>
   <div class="np-title">—</div>
@@ -280,7 +280,8 @@
         <dt><kbd>Shift</kbd> hold</dt><dd>tuck — go faster</dd>
         <dt><kbd>W</kbd> / <kbd>↑</kbd></dt><dd>kick-push</dd>
         <dt><kbd>B</kbd> hold</dt><dd>brake to a stop</dd>
-        <dt><kbd>K</kbd></dt><dd>kick a racer riding beside you</dd>
+        <dt><kbd>K</kbd></dt><dd>kick a racer (or a fan) riding beside you</dd>
+        <dt><kbd>9</kbd></dt><dd>skip to just before the finish (testing)</dd>
         <dt><kbd>0</kbd></dt><dd>reset run</dd>
       </dl></section>
       <section><h3>TRICKS — IN THE AIR</h3><dl class="tricks">
@@ -302,6 +303,7 @@
         <dt>Step off</dt><dd><kbd>F</kbd> + <kbd>J</kbd><small>in the pit, on the stats or the end screen</small></dd>
         <dt>Walk</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows<small>double-tap <kbd>W</kbd> or hold <kbd>Shift</kbd> to sprint</small></dd>
         <dt>Punch</dt><dd><kbd>F</kbd> left · <kbd>J</kbd> right<small>your weapon pickup changes the swing</small></dd>
+        <dt>Kick</dt><dd><kbd>K</kbd></dd>
         <dt>Back</dt><dd><kbd>Esc</kbd></dd>
       </dl></section>
       <section><h3>CAMERA &amp; LOOK</h3><dl>
@@ -1882,8 +1884,8 @@ const RIDERS = [
   { name: 'ROCKER',     file: 'assets/models/riders/rocker.glb' },
   { name: 'BEACH BUM',  file: 'assets/models/riders/beach.glb' },
   { name: 'ADVENTURER', file: 'assets/models/riders/adventurer.glb' },
-  { name: 'THE SUIT',   file: 'assets/models/riders/suit.glb' },
-  { name: 'HARD HAT',   file: 'assets/models/riders/hardhat.glb' },
+  { name: 'CIA',        file: 'assets/models/riders/suit.glb' },
+  { name: 'BOB',        file: 'assets/models/riders/hardhat.glb' },
   { name: 'THE OG',     file: null },
 ];
 const RIDER_KEY = 'downhill.rider';            // last pick (localStorage)
@@ -2456,6 +2458,7 @@ addEventListener('keydown', e => {
   if (gameState !== 'PLAYING' || e.repeat) return;
   if (e.code === 'KeyR' && e.shiftKey) revert();
   else if (e.code === 'KeyK') kickRacer();
+  else if (e.code === 'Digit9' || e.code === 'Numpad9') skipToFinish();   // debug
   else if (e.code === 'Digit0' || e.code === 'Numpad0') beginRun();
   else if (e.code === 'KeyC') cycleCam();
   else if (e.code === 'KeyX') cycleChaos();
@@ -2620,7 +2623,9 @@ function land(h = 0) {
   if (off > LAND_SKETCHY) { crash(); return; }                // came down sideways
   settleSpin();
   const sketchy = off > LAND_CLEAN || grabbing;                // still holding the grab counts too
-  if (!scoreTrick(sketchy ? 0.5 : 1) && sketchy) showTrick('SKETCHY!');
+  const scored = scoreTrick(sketchy ? 0.5 : 1);
+  if (scored || sketchy) showLandCall(sketchy);                // CLEAN! / SKETCHY! over your head
+  if (scored && !sketchy) state.speed += CLEAN_BOOST;          // a clean landing pays speed
   lastLandT = run.t;
   if (state.speed > 4) flash(sketchy ? 0.25 : 0.15);
 }
@@ -2905,6 +2910,33 @@ function padBoost(pd) {
   state.speed = THREE.MathUtils.clamp(state.speed + PAD_BOOST, pd.min, pd.max ?? PAD_MAX);
   flash(0.1);
 }
+// Landing call — CLEAN! / SKETCHY! pops just above the rider's head for a moment after a trick
+const CLEAN_BOOST = 5;         // u/s for landing a trick clean
+const LAND_CALL_SECS = 1.1;
+const landCall = (() => {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
+  sp.scale.set(3.4, 0.85, 1); sp.renderOrder = 999; sp.visible = false; scene.add(sp);
+  return { cv, cx: cv.getContext('2d'), tex, sp, t: 0 };
+})();
+function showLandCall(sketchy) {
+  const { cv, cx, tex } = landCall, txt = sketchy ? 'SKETCHY!' : 'CLEAN!';
+  cx.clearRect(0, 0, cv.width, cv.height);
+  cx.font = '900 84px ui-monospace, Menlo, monospace'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.lineWidth = 14; cx.strokeStyle = 'rgba(0,0,0,.6)'; cx.strokeText(txt, 256, 64);
+  cx.fillStyle = sketchy ? '#ff9b3c' : '#7dff3c'; cx.fillText(txt, 256, 64);
+  tex.needsUpdate = true; landCall.t = LAND_CALL_SECS;
+}
+function updateLandCall(dt) {
+  const L = landCall;
+  L.t = Math.max(0, L.t - dt);
+  L.sp.visible = L.t > 0 && hudMode === 0;
+  if (!L.sp.visible) return;
+  const k = 1 - L.t / LAND_CALL_SECS;
+  L.sp.position.copy(skater.position).add(new THREE.Vector3(0, RIDER_HEIGHT + 0.9 + k * 0.6, 0));   // drifts up as it fades
+  L.sp.material.opacity = Math.min(1, L.t * 3);
+}
 // how far (degrees) a spin is from the nearest clean stance
 function spinOff() {
   if (trick.type !== 'spin') return 0;
@@ -2944,7 +2976,7 @@ function scoreTrick(quality = 1) {
   if (!parts.length && trick.air > 0.45) { pts += Math.round(trick.air * 120); parts.push('BIG AIR'); }
   trick.type = null; trick.grab = false;
   if (pts <= 0) return false;
-  award((quality < 1 ? 'SKETCHY ' : '') + parts.join(' + '), Math.round(pts * quality));
+  award(parts.join(' + '), Math.round(pts * quality));
   return true;
 }
 function collectItem(it) {
@@ -3411,10 +3443,10 @@ hudScene.add(posMesh);
 let posTxt = '';
 function layoutPos() {
   posMesh.scale.set(posCv.width / POP_RES, posCv.height / POP_RES, 1);
-  posMesh.position.set(innerWidth / 2, -POS_Y, 0);
+  posMesh.position.set(MAP_X + MAP_W / 2, -(MAP_Y + MAP_H + 16), 0);   // under the minimap
 }
 function updatePos() {
-  posMesh.visible = timerMesh.visible && cpus.length > 0;
+  posMesh.visible = timerMesh.visible && cpus.length > 0 && ['COUNTDOWN', 'PLAYING', 'PIT'].includes(gameState);   // with the minimap
   if (!posMesh.visible) return;
   const txt = `POS ${racePlace()}/${cpus.length + 1}`;
   if (txt === posTxt) return;
@@ -3430,7 +3462,7 @@ function updatePos() {
   posTex.needsUpdate = true;
 }
 document.fonts?.load(`400 ${TIMER_PX * POP_RES}px "Share Tech Mono"`).then(() => { timerTxt = posTxt = ''; }).catch(() => {});   // redraw once the font lands
-layoutTimer(); layoutPos();
+layoutTimer();
 
 // Minimap — top left, under the Esc pill: the course drawn to shape (turned so downhill runs down
 // the screen) and a dot per racer. Built from geometry in the HUD pass, so nothing redraws a texture.
@@ -3479,6 +3511,7 @@ const mapDot = (r, color, order) => {
   const grp = new THREE.Group(); o.renderOrder = order; d.renderOrder = order + 1; grp.add(o, d); mapGroup.add(grp);
   return grp;
 };
+layoutPos();                                   // (needs the map's box, declared just above)
 const mapCpuDots = MAP_CPU_COLORS.map((col, i) => mapDot(MAP_DOT, col, 2 + i * 2));
 const mapMe = mapDot(MAP_DOT_ME, 0xffd23c, 10);                 // you, drawn on top
 function updateMap() {
@@ -3927,6 +3960,7 @@ addEventListener('keydown', e => {
     }
     else if (e.code === 'KeyF') throwPunch(-1);
     else if (e.code === 'KeyJ') throwPunch(1);
+    else if (e.code === 'KeyK') throwPunch(1, true);
     else if (e.code === 'KeyC') cycleCam();
     else if (e.code === 'KeyH') cycleHud();
     else if (e.code === 'KeyX') cycleChaos();
@@ -4416,8 +4450,10 @@ function updateStart(dt) {
 // upgraded to changes the swing and the reach (a stick sweeps everyone in front of you). The rider
 // model's own clips play here (walk / run / punches); its procedural board pose resumes on exit.
 // ------------------------------------------------------------------
-const BRAWL_WALK  = 5.2;      // walk speed (u/s)
-const BRAWL_RUN   = 9.5;      // sprint: hold Shift, or double-tap W / ↑
+const BRAWL_WALK  = 10.4;     // walk speed (u/s)
+const BRAWL_RUN   = 19;       // sprint: hold Shift, or double-tap W / ↑
+const PUNCH_SPEED = 1.7;      // punches (and kicks) play this much faster than the clips
+const FALL_SPEED  = 1.8;      // knocked-down people hit the floor this much faster
 const BRAWL_DTAP  = 0.3;      // seconds between taps that count as a double tap
 const BRAWL_TURN  = 2.8;      // turn rate (rad/s)
 const BRAWL_ROOM  = 3;        // stay this far inside the finish pit's rim
@@ -4464,17 +4500,26 @@ function exitBrawl() {
   gameState = brawl.from;
   if (gameState !== 'PIT') results.el.classList.remove('hidden');   // the pit orbit carries on to the stats
 }
-function throwPunch(side) {
+function throwPunch(side, kick = false) {
   if (brawl.punch && brawl.punchT < brawl.punchDur * 0.7) return;   // still mid-swing
   const w = WEAPONS[weaponTier];
-  const a = rig.mixer.clipAction(brawlClip(w === 'STICK' ? 'Sword_Slash' : side < 0 ? 'Punch_Left' : 'Punch_Right'));
-  a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false;
+  const name = kick ? 'Kick_Right' : w === 'STICK' ? 'Sword_Slash' : side < 0 ? 'Punch_Left' : 'Punch_Right';
+  const a = rig.mixer.clipAction(brawlClip(name));
+  a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false; a.timeScale = PUNCH_SPEED;
   a.setEffectiveWeight(5).fadeIn(0.05).play();                    // dominates the walk underneath
   if (brawl.punch && brawl.punch !== a) brawl.punch.fadeOut(0.1);
-  brawl.punch = a; brawl.punchT = 0; brawl.punchDur = a.getClip().duration; brawl.hit = false;
+  brawl.punch = a; brawl.punchT = 0; brawl.punchDur = a.getClip().duration / PUNCH_SPEED; brawl.hit = false; brawl.kick = kick;
+}
+// knock a spectator down, falling away from `fwd` (the death clip falls forward: turn them first)
+function knockDown(c, fwd) {
+  c.down = true;
+  c.obj.rotation.y = Math.atan2(fwd.x, fwd.z);
+  c.obj.position.addScaledVector(fwd, 0.35);
+  c.mixer.stopAllAction();
+  const a = c.mixer.clipAction(c.death); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.timeScale = FALL_SPEED; a.play();
 }
 function landBlow() {
-  const w = WEAPONS[weaponTier], reach = WEAPON_REACH[w] || 1.9, P = brawl.walker.position;
+  const w = WEAPONS[weaponTier], reach = brawl.kick ? 2.4 : WEAPON_REACH[w] || 1.9, P = brawl.walker.position;
   const fwd = new THREE.Vector3(Math.sin(brawl.heading), 0, Math.cos(brawl.heading));
   const inReach = crowd.filter(c => {
     if (c.down) return false;
@@ -4496,15 +4541,11 @@ function landBlow() {
       m.lean.rotation.set(0, 0, 0); m.root.rotation.y = 0; m.root.position.set(0, 0, 0); m.tag.visible = false;
       m.mixer.stopAllAction();
       const a = cp.model.mixer.clipAction(cp.model.clips.find(k => k.name.endsWith('|Death')));
-      a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+      a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.timeScale = FALL_SPEED; a.play();
       brawl.kos++;
       continue;
     }
-    c.down = true;
-    c.obj.rotation.y = brawl.heading;                                 // the death clip falls forward: turn them
-    c.obj.position.addScaledVector(fwd, 0.35);                        //   away from the blow and shove them back
-    c.mixer.stopAllAction();
-    const a = c.mixer.clipAction(c.death); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+    knockDown(c, fwd);
     brawl.kos++;
   }
   if (hits.length) { showTrick((hits.length > 1 ? hits.length + 'x ' : '') + 'KO!  ' + brawl.kos); flash(0.12); }
@@ -4567,8 +4608,13 @@ function updateBrawl(dt) {
   if (camMode === 'trackside') {
     camPos.copy(pc).addScaledVector(off.lengthSq() > 1 ? off.clone().normalize().negate() : fwd, lim * 0.6).add(new THREE.Vector3(0, 6, 0));
   } else {
-    const want = fwd.clone().multiplyScalar(camMode === 'drone' ? -11 : -5.5).add(new THREE.Vector3(0, camMode === 'drone' ? 8 : 2.6, 0));
-    brawl.camOff.lerp(want, Math.min(1, dt * 4));
+    let want = fwd.clone().multiplyScalar(camMode === 'drone' ? -11 : -5.5).add(new THREE.Vector3(0, camMode === 'drone' ? 8 : 2.6, 0));
+    // mouse orbits the camera round you, like on the board (eases back when you let go)
+    if (performance.now() - look.last > 160) { look.yaw *= Math.exp(-dt * 3); look.pitch *= Math.exp(-dt * 3); }
+    const right = new THREE.Vector3().crossVectors(fwd, UP).normalize();
+    want = want.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(UP, look.yaw)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(right, look.pitch)));
+    brawl.camOff.lerp(want, Math.min(1, dt * 8));
     camPos.copy(P).add(brawl.camOff);
   }
   camera.position.copy(keepAboveGround(camPos));
@@ -4930,10 +4976,25 @@ function kickRacer() {
     const a = rig.mixer.clipAction(clip); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false; a.play();
     rig.kickAnim = a.getClip().duration * 0.8;
   }
-  if (!c) return;
+  if (!c) {                                                      // no racer — a spectator beside the road?
+    const P = skater.position;
+    const sp = crowd.find(p => !p.down && p.obj.visible && p.obj.position.distanceTo(P) < KICK_REACH_LAT + 0.6);
+    if (sp) { knockDown(sp, sp.obj.position.clone().sub(P).setY(0).normalize()); award('KICKED A FAN', KICK_PTS / 2); }
+    return;
+  }
   c.lat += side * 1.2;
   cpuCrash(c);
   award('KICKED ' + c.name, KICK_PTS);
+}
+// debug (9): drop you just before the finish line on whatever course you're on
+const SKIP_BACK = 80;          // world units short of the line
+function skipToFinish() {
+  if (gameState !== 'PLAYING' || finish.crossed) return;
+  if (state.free) state.free = false;
+  grind.on = false; trick.type = null; trickPivot.rotation.set(0, 0, 0);
+  Object.assign(state, { u: FINISH_U - SKIP_BACK / TOTAL_LEN, lateral: 0, height: 0, vy: 0, airborne: false,
+                         heading: 0, slideV: 0, crashT: 0, speed: Math.max(state.speed, 25) });
+  showTrick('SKIP TO FINISH');
 }
 // your place right now (1-based): finishers ahead of you, then everyone further down the hill
 function racePlace() {
@@ -5006,6 +5067,7 @@ function frame(now) {
     pitCam(dt);   // PIT → STATS → ENTRY → RESULTS: keep circling the rider
   }
   updateCrowd(dt);
+  updateLandCall(dt);
   updateCpus(dt);
   updatePads(dt);
   updateDetailLOD(dt);
