@@ -153,9 +153,9 @@
     color: #ffd23c; text-shadow: 0 0 18px rgba(255,210,60,.6); margin-bottom: 14px; }
   .rstats { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; letter-spacing: 2px;
     opacity: .9; margin-bottom: 22px; text-transform: uppercase; }
-  .rstats span { display: flex; justify-content: space-between; align-items: baseline; width: 300px;
+  .rstats span { display: flex; justify-content: space-between; align-items: baseline; width: 340px;
     border-bottom: 1px solid rgba(255,255,255,.08); padding-bottom: 4px; }
-  .rstats b { color: #3ca6ff; font-size: 22px; margin-left: 8px; }
+  .rstats b { color: #3ca6ff; font-size: 22px; margin-left: 8px; text-transform: none; }   /* 1st, 82 mph */
   /* your stats live on the FINISH page only; the later pages are titled by scope */
   #results:not([data-stage="stats"]) .rstats, #results:not([data-stage="stats"]) .rtitle { display: none; }
   #results[data-stage="entry"] #rcat, #results[data-stage="entry"] #rcontinue { display: none; }
@@ -331,11 +331,11 @@
     <div class="rtitle blink">FINISH!</div>
     <div class="rstats">
       <span>Time<b id="r-time">0:00.000</b></span>
-      <span>Top<b id="r-top">0</b></span>
-      <span>Dist<b id="r-dist">0</b></span>
-      <span>Air<b id="r-air">0.0s</b></span>
+      <span>Top Speed<b id="r-top">0</b></span>
+      <span>Distance<b id="r-dist">0</b></span>
+      <span>Total Hangtime<b id="r-air">0.0s</b></span>
       <span>Score<b id="r-score">0</b></span>
-      <span>Combo<b id="r-combo">0</b></span>
+      <span>Biggest Combo<b id="r-combo">0</b></span>
       <span>Place<b id="r-place">1st</b></span>
     </div>
     <div id="rentry" class="rentry hidden">
@@ -3767,12 +3767,12 @@ function finishRun(reason) {
   if (!lastRun || !finish.crossed) lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, combo: run.bestCombo, reason, rank: -1 };
   document.exitPointerLock?.();
   results.time.textContent = fmtTime(lastRun.timeS);
-  results.top.textContent  = Math.round(lastRun.topSpeed * MPH);
-  results.dist.textContent = Math.round(lastRun.dist);
+  results.top.textContent  = Math.round(lastRun.topSpeed * MPH) + ' mph';
+  results.dist.textContent = Math.round(lastRun.dist) + ' m';
   results.air.textContent  = lastRun.airTime.toFixed(1) + 's';
   results.score.textContent = lastRun.score;
   results.combo.textContent = lastRun.combo || 0;
-  results.place.textContent = ordinal(lastRun.place || racePlace()) + '/' + (cpus.length + 1);
+  results.place.textContent = ordinal(lastRun.place || racePlace());
 
   results.el.classList.remove('hidden');
   refreshWorld();                            // so qualifying + the WORLD page have fresh boards
