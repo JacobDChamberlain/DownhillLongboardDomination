@@ -23,14 +23,17 @@ we deliberately defer those.
 ---
 
 ## 🎯 Up next — suggested order
-Quick feel fixes first (they make every run better), then the tricks/scoring overhaul, then
-content. The carving rewrite is the big one: do it before building more switchback-style maps.
-1. Bug & feel fixes (below) — respawn loop, spin landing stance, kicker ramps, coast steering
-2. Tricks & scoring overhaul — spin controls, landing judgement + crashes, grind boost/scoring
-3. Sound effects (ollie, grind, landing, crash, crowd)
-4. Free carving / real steering (engine-level change to the rider model)
-5. Night tracks + unlocks, then the loop-de-loop track
-6. Characters, weapons, mobile, online
+*(Done since the last list: the feel fixes, the tricks & scoring overhaul, CPU racers, the global
+board, off-road riding, and level 3 with its loops.)* Quick wins first, then the bigger systems.
+1. **Quick wins:** rider renames (Bob, CIA), brawl tuning (walk ×2, faster punch + fall, mouse look,
+   K kicks the crowd), HUD moves (landing call over your head, place under the map), speed boost
+   for clean landings.
+2. **Sound effects** (ollie, grind, landing, crash, crowd).
+3. **Pre-race course flyover:** the highlights of the track before the camera cuts to you.
+4. **Difficulty levels + cheat codes** (both just set knobs we already have).
+5. **New riders** (Hesher, Mime, Cthulhu), then **unlockables** (needs an unlock system and models).
+6. **Level 1 sea giants:** whales and dolphins breaching beside and over the bridge.
+7. Free carving, night tracks, weapons in hand (water bottle explosions), mobile, online.
 
 ---
 
@@ -91,6 +94,21 @@ content. The carving rewrite is the big one: do it before building more switchba
   in the Esc menu + Next Race are done)*.
 - [ ] Keep the rider out of the mountain on level 1 (parked — "reminds me of the old days").
 
+## ✨ Quick wins (from the second wishlist)
+- [ ] **Rename riders:** HARD HAT → **BOB**, THE SUIT → **CIA** (just labels in `RIDERS`).
+- [ ] **Brawl tuning:**
+  - walk and sprint **twice as fast** (currently 5.2 / 9.5 u/s)
+  - a **quicker punch**, and spectators **fall down faster** (speed up those two animation clips)
+  - **mouse moves the camera** while you walk, the same as on the board
+  - **K kicks** spectators too, not just racers
+- [ ] **HUD moves:**
+  - the landing call (**clean / SKETCHY!**) pops just above the rider's head
+  - the race **place** (POS x/4) moves from under the timer to under the minimap
+- [ ] **Clean landings pay speed:** land any trick clean and get a small speed boost (sketchy ones
+  don't).
+- [x] **FINISH page stats in two columns** (names left, numbers right, before initials). *Already
+  done in the finish-flow update.*
+
 ## 🎨 Presentation & chaos modes
 - [ ] **Pickups brighter**, stand out more (labels and beams are in; push the glow/size).
 - [ ] **Sound effects** — ollie pop, grind loop, landing, crash, crowd cheers (synth or CC0).
@@ -99,6 +117,12 @@ content. The carving rewrite is the big one: do it before building more switchba
 - [ ] **Starry mode** — brighter stars, more cosmic activity: huge nearby planets with flowing
   storms, and once in a blue moon a UFO zips by.
 - [ ] Meme/image skies (need image assets).
+- [ ] **Pre-race course flyover:** before the start cam cuts to you, a short tour of the track's
+  highlights (the gap, the loops, the bridge). Hand-picked camera points per level, skippable like
+  the current flyover.
+- [ ] **Level 1 sea giants:** mountain-sized whales and dolphins breaching out of the lake beside
+  the course and arcing *over the bridge*. Needs a CC0 whale/dolphin model (or a stylized
+  procedural one), a breach path + splash, and one timed to cross as you ride the viaduct.
 
 ## ⚔️ Combat & weapons
 - [ ] **Weapons in hand** — stick, bottle, rock visibly held by the rider.
@@ -107,6 +131,9 @@ content. The carving rewrite is the big one: do it before building more switchba
   crowd in the pit brawl.
 - [ ] **Punches** — F / J for left / right fist, with a first-person view option. Ties into the
   pit brawl below.
+- [ ] **Water bottle explosions:** some spectators blow up when hit with the water bottle: a small
+  mushroom cloud and body parts flying. It's a tone call (cartoony or gory?); cheapest is a
+  particle burst plus the model split into a few flung chunks.
 
 ## 👤 Characters & customization
 - [x] **Character select** — *done: a turntable carousel before the race (on load, from the title
@@ -116,6 +143,26 @@ content. The carving rewrite is the big one: do it before building more switchba
 - [ ] **Keep the OG version playable** — the pre-visual-upgrade build is commit `c66d8dc`
   ("Gameplay batch"). Tag it (`og`) and optionally serve it at `/og/`.
 - [ ] Customizable board/player colors.
+- [ ] **New riders:** **Hesher**, **Mime**, **Cthulhu** (the original story is public domain now).
+  Built as custom models on the shared rig so they can ride and brawl, or from CC0 base characters
+  re-dressed.
+- [ ] **Unlockable riders** — needs an unlock system first (what earns each: beat a track, a
+  score, a secret) plus a locked slot on the carousel. Wishlist: Godzilla, Otto (The Simpsons),
+  Pennywise, Freddy Krueger, Jackie Chan, LeBron James, Jak & Daxter, Ratchet & Clank, Courage
+  the Cowardly Dog, the Grim Reaper, and **Wyatt** (a friend, modeled in Meshy; probably no
+  animations, so he rides stiff, which is fine).
+  - *Heads-up:* nearly all of these are someone else's characters or a real person's likeness.
+    Fine in a private build, but a public or paid release would need licences, so ship
+    look-alike originals instead (a giant lizard, a creepy clown, a horror-slasher, a kung-fu
+    star…). The Grim Reaper and Wyatt (with his OK) are free to use.
+  - None have CC0 models; each needs a custom model rigged to the shared skeleton to ride.
+
+## 🎮 Game options
+- [ ] **Difficulty levels** (Easy / Normal / Hard): scales the CPU racers (`CPU_SKILL`, rubber band,
+  how often they crash) and maybe landing generosity.
+- [ ] **Cheat codes:** typed on the title screen or in the pause menu. Ideas: big head, moon
+  gravity, infinite boost, always clean landings, all riders unlocked, chaos mode forced on.
+  Cheated runs should skip the world board.
 
 ## 🚀 Platform & release
 - [ ] **Mobile friendly** — touch controls (steer by tilt or thumb zones, tap to jump), perf
