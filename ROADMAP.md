@@ -129,7 +129,7 @@ content. The carving rewrite is the big one: do it before building more switchba
 ---
 
 ## 🟡 Needs a backend or a fundamental architecture change
-- **Global scoreboard** — needs a backend, *not* an engine. Cheapest: a BaaS
+- **Global scoreboard** — *built: Supabase table + RLS + sanity trigger (`supabase/schema.sql`), WORLD board after ALL TIME; turns on once `SUPABASE_URL` / `SUPABASE_KEY` are set in `index.html`.* Originally: needs a backend, *not* an engine. Cheapest: a BaaS
   (Supabase / Firebase) or tiny serverless + KV. Worth doing even in prototype.
 - **Character animations** (walk-with-board, get-on/off, dances, polished tricks)
   — rigged glTF + `AnimationMixer`; the authoring pipeline is the real cost.

@@ -130,7 +130,7 @@
   }
   #results.hidden { display: none; }
   .rhint.brawl { opacity: .55; margin-top: 6px; }
-  #results:not([data-stage="stats"]):not([data-stage="race"]):not([data-stage="board"]):not([data-stage="end"]) .rhint.brawl { display: none; }
+  #results:not([data-stage="stats"]):not([data-stage="race"]):not([data-stage="board"]):not([data-stage="world"]):not([data-stage="end"]) .rhint.brawl { display: none; }
   #brawlhint { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); color: #fff; font-size: 13px;
     letter-spacing: 1px; opacity: .7; text-shadow: 0 2px 8px rgba(0,0,0,.7); pointer-events: none; user-select: none; white-space: nowrap; }
   #brawlhint.hidden { display: none; }
@@ -192,7 +192,9 @@
   /* results come in stages: stats → initials → board */
   #results[data-stage="stats"] #rentry, #results[data-stage="stats"] .rhead, #results[data-stage="stats"] #rlist,
   #results[data-stage="stats"] #rcontinue, #results[data-stage="stats"] #rcat, #results[data-stage="entry"] .rhead, #results[data-stage="entry"] #rlist,
-  #results[data-stage="entry"] #rnext, #results[data-stage="board"] #rnext { display: none; }
+  #results[data-stage="entry"] #rnext, #results[data-stage="board"] #rnext,
+  #results[data-stage="world"] #rentry, #results[data-stage="world"] #rnext { display: none; }
+  .rlist li.msg { display: block; text-align: center; font-size: 14px; opacity: .6; font-weight: 600; }
   /* final screen: nothing but the choices (Restart / Quit — room for Next Race later) */
   #results:not([data-stage="end"]) #rend { display: none; }
   #results[data-stage="end"] .rboard > :not(#rend) { display: none; }
@@ -3435,7 +3437,7 @@ function updateChaos(dt) {
 // ------------------------------------------------------------------
 // Pause menu + settings — keyboard & gamepad navigable
 // ------------------------------------------------------------------
-let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE | BRAWL | SELECT | RACE
+let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE | BRAWL | SELECT | RACE | WORLD
 let menuIndex = 0;
 const settings = { volume: 70, sens: 100 };
 audio.volume = settings.volume / 100;
@@ -3532,8 +3534,14 @@ addEventListener('keydown', e => {
     else if (e.code === 'ArrowRight' || e.code === 'Tab') { e.preventDefault(); lbCycle(1); }
     return;
   }
-  if (gameState === 'RESULTS') {
+  if (gameState === 'WORLD') {
     if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') showEnd();
+    else if (e.code === 'ArrowLeft') lbCycle(-1);
+    else if (e.code === 'ArrowRight' || e.code === 'Tab') { e.preventDefault(); lbCycle(1); }
+    return;
+  }
+  if (gameState === 'RESULTS') {
+    if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') afterBoard();
     else if (e.code === 'ArrowLeft') lbCycle(-1);
     else if (e.code === 'ArrowRight' || e.code === 'Tab') { e.preventDefault(); lbCycle(1); }
     return;
@@ -3581,7 +3589,8 @@ function pollMenuGamepad(dt) {
   if (gameState === 'SELECT') { if (lf) selMove(-1); if (rt) selMove(1); if (a) confirmSelect(); return; }
   if (gameState === 'STATS') { if (a || b) advanceStats(); return; }
   if (gameState === 'RACE') { if (lf) lbCycle(-1); if (rt) lbCycle(1); if (a || b) advanceRace(); return; }
-  if (gameState === 'RESULTS') { if (lf) lbCycle(-1); if (rt) lbCycle(1); if (a || b) showEnd(); return; }
+  if (gameState === 'RESULTS') { if (lf) lbCycle(-1); if (rt) lbCycle(1); if (a || b) afterBoard(); return; }
+  if (gameState === 'WORLD') { if (lf) lbCycle(-1); if (rt) lbCycle(1); if (a || b) showEnd(); return; }
   if (gameState === 'END') {
     if (up || lf) rmenuMove(-1); if (dn || rt) rmenuMove(1);
     if (a) rmenuPick();
@@ -3624,6 +3633,12 @@ function pollMenuGamepad(dt) {
 // distance and score so a future rank-toggle can sort by any metric via compareBy[].
 // ------------------------------------------------------------------
 const LB_KEY = LV.lbKey;               // localStorage key for this level's leaderboard (level 1 keeps 'downhill.scores')
+// Global leaderboard (Supabase). Paste the project URL and its anon / publishable key to turn on the
+// WORLD board; left blank, scores stay local only. The key is meant to be public: the table's
+// row-level security only lets anyone read and add scores (see supabase/schema.sql).
+const SUPABASE_URL = '';
+const SUPABASE_KEY = '';
+const WORLD_ON = !!(SUPABASE_URL && SUPABASE_KEY) && location.protocol.startsWith('http');
 const NAME_KEY = 'downhill.initials';  // last initials the player entered
 const LB_MAX = 8;                      // rows kept on the board
 const ENTRY_LEN = 3;                   // arcade initials
@@ -3653,7 +3668,7 @@ function pruneScores(scores) {                 // keep only runs that are still 
 }
 function lbCycle(d) {
   lbCat = (lbCat + d + LB_CATS.length) % LB_CATS.length;
-  if (gameState === 'RACE') renderRace(); else renderBoard(lbScores);
+  if (gameState === 'RACE') renderRace(); else if (gameState === 'WORLD') renderWorld(); else renderBoard(lbScores);
 }
 // This race: you and the CPUs, same columns and rankings. Anyone still out on the course shows
 // no time yet (and ranks last on time); the table refreshes as they come in.
@@ -3760,13 +3775,14 @@ function finishRun(reason) {
   results.place.textContent = ordinal(lastRun.place || racePlace()) + '/' + (cpus.length + 1);
 
   results.el.classList.remove('hidden');
+  refreshWorld();                            // so qualifying + the WORLD page have fresh boards
   gameState = 'STATS';                       // 1) stats alone, then continue →
   results.el.dataset.stage = 'stats';
 }
 // FINISH (your stats) → initials, if the run placed on any ranking → THIS RACE → ALL TIME → the choices
 function advanceStats() {
   const scores = loadScores(), probe = { ...lastRun, score: lastRun.score, combo: lastRun.combo || 0 };
-  if (placesAnywhere(scores, probe)) startEntry(scores); else showRace();
+  if (placesAnywhere(scores, probe) || placesWorld(probe)) startEntry(scores); else showRace();
 }
 function advanceRace() { showBoard(loadScores()); }
 
@@ -3779,7 +3795,8 @@ function renderBoard(scores) {
   results.list.innerHTML = '';
   topOf(scores, cat.key).forEach((s, i) => {
     const li = document.createElement('li');
-    if (lastRun && s === lastRun.rec) li.classList.add('me');
+    const r = lastRun?.rec;               // reloaded boards hold copies, so match on the run itself too
+    if (r && (s === r || (s.name === r.name && s.timeS === r.timeS && s.score === r.score))) li.classList.add('me');
     li.innerHTML = `<span class="rk">${i + 1}</span><span class="nm">${s.name}</span>`
       + `<span class="tm">${fmtTime(s.timeS)}</span><span class="sc">${s.score || 0}</span><span class="cb">${s.combo || 0}</span>`
       + `<span class="sp">${Math.round(s.topSpeed * MPH)}</span><span class="ht">${(s.airTime || 0).toFixed(1)}s</span>`;
@@ -3800,6 +3817,74 @@ function startEntry(scores) {   // arcade initials — only when the run placed
   renderEntry();
   renderBoard(scores);          // show the standing board while the player types
 }
+
+// ---- WORLD board: the global top LB_MAX per ranking, fetched from Supabase as needed
+const WORLD_COLS = { time: 'time_s.asc', score: 'score.desc', combo: 'combo.desc', air: 'air_time.desc', top: 'top_speed.desc' };
+const world = { tops: {}, loading: {}, error: '', myId: null };
+function sbHeaders(extra = {}) {
+  const h = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json', ...extra };
+  if (SUPABASE_KEY.startsWith('eyJ')) h.Authorization = 'Bearer ' + SUPABASE_KEY;   // legacy anon (JWT) keys
+  return h;
+}
+const fromRow = r => ({ id: r.id, name: r.name, timeS: r.time_s, score: r.score, combo: r.combo, airTime: r.air_time, topSpeed: r.top_speed });
+function fetchWorld(key, force = false) {
+  if (!WORLD_ON || (world.tops[key] && !force) || world.loading[key]) return world.loading[key] || Promise.resolve();
+  const url = `${SUPABASE_URL}/rest/v1/scores?select=id,name,time_s,score,combo,air_time,top_speed`
+            + `&level=eq.${LV.id}&order=${WORLD_COLS[key]}&limit=${LB_MAX}`;
+  return world.loading[key] = fetch(url, { headers: sbHeaders() })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error(r.status + ' ' + r.statusText)))
+    .then(rows => { world.tops[key] = rows.map(fromRow); world.error = ''; })
+    .catch(e => { world.error = 'couldn\'t reach the world board'; console.warn('[world] fetch failed:', e?.message || e); })
+    .finally(() => { delete world.loading[key]; if (gameState === 'WORLD') renderWorld(); });
+}
+function refreshWorld() { world.tops = {}; for (const c of LB_CATS) fetchWorld(c.key); }
+// would this run make the world top LB_MAX on any ranking? (unknown boards count as "yes")
+function placesWorld(rec) {
+  if (!WORLD_ON) return false;
+  return LB_CATS.some(c => {
+    const top = world.tops[c.key];
+    return !top || top.length < LB_MAX || top.filter(s => compareBy[c.key](s, rec) < 0).length < LB_MAX;
+  });
+}
+function postWorld(rec) {
+  if (!WORLD_ON) return;
+  const body = { level: LV.id, name: rec.name, time_s: rec.timeS, score: rec.score, combo: rec.combo || 0,
+                 air_time: rec.airTime || 0, top_speed: rec.topSpeed, rider: RIDERS[riderIdx]?.name || null };
+  fetch(`${SUPABASE_URL}/rest/v1/scores`, { method: 'POST', headers: sbHeaders({ Prefer: 'return=representation' }), body: JSON.stringify(body) })
+    .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(new Error(j.message || r.status))))
+    .then(rows => { world.myId = rows?.[0]?.id ?? null; refreshWorld(); })
+    .catch(e => { world.error = 'world board said no: ' + (e?.message || e); console.warn('[world] submit failed:', e?.message || e); });
+}
+function renderWorld() {
+  const cat = LB_CATS[lbCat];
+  results.el.dataset.cat = cat.key;
+  results.cat.textContent = cat.label;
+  results.scope.textContent = 'WORLD';
+  results.list.innerHTML = '';
+  const rows = world.tops[cat.key];
+  if (!rows) {
+    results.list.innerHTML = `<li class="msg">${world.error || 'loading…'}</li>`;
+    fetchWorld(cat.key);
+    return;
+  }
+  if (!rows.length) results.list.innerHTML = '<li class="msg">no world scores yet — be the first</li>';
+  rows.forEach((s, i) => {
+    const li = document.createElement('li');
+    if (s.id != null && s.id === world.myId) li.classList.add('me');
+    li.innerHTML = `<span class="rk">${i + 1}</span><span class="nm">${s.name}</span>`
+      + `<span class="tm">${fmtTime(s.timeS)}</span><span class="sc">${s.score || 0}</span><span class="cb">${s.combo || 0}</span>`
+      + `<span class="sp">${Math.round(s.topSpeed * MPH)}</span><span class="ht">${(s.airTime || 0).toFixed(1)}s</span>`;
+    results.list.appendChild(li);
+  });
+  if (world.error) results.list.insertAdjacentHTML('beforeend', `<li class="msg">${world.error}</li>`);
+}
+function showWorld() {                         // after ALL TIME: the global board
+  gameState = 'WORLD';
+  results.el.dataset.stage = 'world';
+  renderWorld();
+}
+const afterBoard = () => WORLD_ON ? showWorld() : showEnd();
+
 function showBoard(scores) {
   gameState = 'RESULTS';
   results.el.dataset.stage = 'board';
@@ -3825,6 +3910,7 @@ function submitInitials() {
   const scores = pruneScores([...loadScores(), rec]);
   saveScores(scores);
   lastRun.rec = rec;                    // highlight the player's row on the all-time board
+  world.myId = null; postWorld(rec);
   showRace();
 }
 
@@ -3839,7 +3925,7 @@ function handleEntryKey(code) {
   else if (code === 'Enter' || code === 'Space') submitInitials();
 }
 
-results.el.addEventListener('click', () => { if (gameState === 'STATS') advanceStats(); else if (gameState === 'RACE') advanceRace(); else if (gameState === 'RESULTS') showEnd(); });
+results.el.addEventListener('click', () => { if (gameState === 'STATS') advanceStats(); else if (gameState === 'RACE') advanceRace(); else if (gameState === 'RESULTS') afterBoard(); else if (gameState === 'WORLD') showEnd(); });
 
 // ------------------------------------------------------------------
 // Start — a flyover that rises from the ground in front of you (the crowd and the start pit
@@ -3936,7 +4022,7 @@ const brawl = { on: false, from: null, walker: new THREE.Group(), heading: 0, ba
 const brawlRay = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0);
 scene.add(brawl.walker);
 const brawlHintEl = document.getElementById('brawlhint');
-const canBrawl = () => rig.ready && rig.clips.length && !brawl.on && ['PIT', 'STATS', 'RACE', 'RESULTS', 'END'].includes(gameState);
+const canBrawl = () => rig.ready && rig.clips.length && !brawl.on && ['PIT', 'STATS', 'RACE', 'RESULTS', 'WORLD', 'END'].includes(gameState);
 const brawlClip = n => rig.clips.find(c => c.name.endsWith('|' + n));
 function brawlBase(name) {                     // idle / walk / run, cross-faded
   if (brawl.baseName === name) return;
