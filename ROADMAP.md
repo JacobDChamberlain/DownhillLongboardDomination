@@ -74,7 +74,7 @@ content. The carving rewrite is the big one: do it before building more switchba
   time, high score, biggest combo, longest hangtime, speed demon (top speed), etc.
 
 ## 🗺️ Tracks & levels
-- [ ] **Free carving / real steering** — right now the rider is locked to the track (`u` +
+- [ ] **Free carving / real steering** — *partly there: off the road you already ride free (hop a level-2 rail and bomb the mountainside, or ride off a level-1 cliff); the road itself is still track-locked.* — right now the rider is locked to the track (`u` +
   lateral offset), like changing lanes in a drag race: you can't carve a corner or miss one.
   Real steering means a free heading on the road surface, so you can take hairpins with
   a drift/carve (NFS Underground 2-style grip → slide), or miss the turn, hit the rail and fly
