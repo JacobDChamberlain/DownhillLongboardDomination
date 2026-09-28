@@ -130,7 +130,7 @@
   }
   #results.hidden { display: none; }
   .rhint.brawl { opacity: .55; margin-top: 6px; }
-  #results:not([data-stage="stats"]):not([data-stage="board"]):not([data-stage="end"]) .rhint.brawl { display: none; }
+  #results:not([data-stage="stats"]):not([data-stage="race"]):not([data-stage="board"]):not([data-stage="end"]) .rhint.brawl { display: none; }
   #brawlhint { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); color: #fff; font-size: 13px;
     letter-spacing: 1px; opacity: .7; text-shadow: 0 2px 8px rgba(0,0,0,.7); pointer-events: none; user-select: none; white-space: nowrap; }
   #brawlhint.hidden { display: none; }
@@ -148,7 +148,7 @@
   #select .sel-count { margin-top: 8px; font-size: 13px; letter-spacing: 3px; opacity: .6; }
   body.selecting #hud, body.selecting #best, body.selecting #help, body.selecting #powerups, body.selecting #balance { display: none; }
   body.brawling #hud, body.brawling #powerups, body.brawling #balance { display: none; }   /* off the board: no ride HUD */
-  .rboard { width: min(520px, 92vw); }
+  .rboard { width: min(640px, 94vw); }
   .rtitle { font-size: 48px; font-weight: 900; letter-spacing: 6px; text-align: center;
     color: #ffd23c; text-shadow: 0 0 18px rgba(255,210,60,.6); margin-bottom: 14px; }
   .rstats { display: flex; justify-content: center; gap: 26px; font-size: 13px; letter-spacing: 2px;
@@ -164,20 +164,28 @@
   }
   .inits .init.cur { color: #ffd23c; border-bottom-color: #ffd23c; text-shadow: 0 0 14px rgba(255,210,60,.7); }
   .rhead, .rlist li {
-    display: grid; grid-template-columns: 40px 1fr 108px 52px 56px; align-items: center; padding: 0 12px;
+    display: grid; grid-template-columns: 36px 1fr 104px 72px 72px 60px 70px; align-items: center; padding: 0 12px;
   }
+  .rhead span:nth-child(n+3), .rlist li span:nth-child(n+3) { text-align: right; }
+  .rlist li span:nth-child(n+3) { opacity: .55; }
+  /* the ranking being shown: its column lights up */
+  #results[data-cat="time"] .tm, #results[data-cat="score"] .sc, #results[data-cat="combo"] .cb,
+  #results[data-cat="top"] .sp, #results[data-cat="air"] .ht { opacity: 1 !important; color: #ffd23c; }
+  .rcat { display: flex; justify-content: center; align-items: center; gap: 18px; margin-bottom: 10px;
+    font-size: 15px; letter-spacing: 3px; font-weight: 800; }
+  .rcat .lbl { min-width: 220px; text-align: center; color: #3ca6ff; }
+  .rcat .arr { opacity: .5; font-size: 12px; }
+  .rscope { text-align: center; font-size: 11px; letter-spacing: 4px; opacity: .55; margin-bottom: 4px; }
+  #results[data-stage="stats"] #rscope, #results[data-stage="entry"] #rscope { display: none; }
+  #results[data-stage="race"] #rentry, #results[data-stage="race"] #rnext { display: none; }
   .rhead { font-size: 11px; letter-spacing: 2px; opacity: .5; text-transform: uppercase; padding-bottom: 6px; }
-  .rhead span:nth-child(3), .rhead span:nth-child(4), .rhead span:nth-child(5) { text-align: right; }
   .rlist { list-style: none; margin: 0; padding: 0; }
   .rlist li { font-size: 20px; font-weight: 700; padding-top: 6px; padding-bottom: 6px; border-radius: 6px; opacity: .85; }
   .rlist li .rk { color: #ffd23c; }
-  .rlist li .tm { text-align: right; color: #3ca6ff; }
-  .rlist li .sp { text-align: right; opacity: .8; }
-  .rlist li .ht { text-align: right; color: #ffd23c; opacity: .85; }
   .rlist li.me { background: rgba(255,210,60,.16); opacity: 1; }
   /* results come in stages: stats → initials → board */
   #results[data-stage="stats"] #rentry, #results[data-stage="stats"] .rhead, #results[data-stage="stats"] #rlist,
-  #results[data-stage="stats"] #rcontinue, #results[data-stage="entry"] .rhead, #results[data-stage="entry"] #rlist,
+  #results[data-stage="stats"] #rcontinue, #results[data-stage="stats"] #rcat, #results[data-stage="entry"] .rhead, #results[data-stage="entry"] #rlist,
   #results[data-stage="entry"] #rnext, #results[data-stage="board"] #rnext { display: none; }
   /* final screen: nothing but the choices (Restart / Quit — room for Next Race later) */
   #results:not([data-stage="end"]) #rend { display: none; }
@@ -264,12 +272,15 @@
         <dt><kbd>Shift</kbd> hold</dt><dd>tuck — go faster</dd>
         <dt><kbd>W</kbd> / <kbd>↑</kbd></dt><dd>kick-push</dd>
         <dt><kbd>B</kbd> hold</dt><dd>brake to a stop</dd>
+        <dt><kbd>K</kbd></dt><dd>kick a racer riding beside you</dd>
         <dt><kbd>0</kbd></dt><dd>reset run</dd>
       </dl></section>
       <section><h3>TRICKS — IN THE AIR</h3><dl class="tricks">
         <dt>Ollie</dt><dd><kbd>Space</kbd></dd>
-        <dt>Spin</dt><dd>hold <kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd> + <kbd>Space</kbd><small>each 180° landed scores</small></dd>
-        <dt>Grab</dt><dd>hold <kbd>Shift</kbd> + <kbd>Space</kbd><small>no steering, or it's a spin</small></dd>
+        <dt>Spin</dt><dd><kbd>Space</kbd>, then hold <kbd>A</kbd>/<kbd>D</kbd> in the air<small>each 180° landed scores; let go on a clean 180</small></dd>
+        <dt>Grab</dt><dd>hold <kbd>Shift</kbd> in the air<small>let go before you land, or it's sketchy</small></dd>
+        <dt>Landing</dt><dd>clean · sketchy (half points) · bail<small>come down too far off a 180 and you crash</small></dd>
+        <dt>Combo</dt><dd>land tricks back to back<small>start the next within 2.5s on the ground; bails lose it</small></dd>
         <dt>Big Air</dt><dd><kbd>Space</kbd> off a ramp<small>long hangtime scores</small></dd>
         <dt>Revert</dt><dd><kbd>Shift</kbd> + <kbd>R</kbd> on the ground<small>switches your stance; scores right after a landing</small></dd>
       </dl></section>
@@ -316,6 +327,8 @@
       <span>Dist<b id="r-dist">0</b></span>
       <span>Air<b id="r-air">0.0s</b></span>
       <span>Score<b id="r-score">0</b></span>
+      <span>Combo<b id="r-combo">0</b></span>
+      <span>Place<b id="r-place">1st</b></span>
     </div>
     <div id="rentry" class="rentry hidden">
       <div class="rentry-label blink">NEW RECORD — ENTER INITIALS</div>
@@ -324,12 +337,14 @@
         <span class="init" data-i="1">A</span>
         <span class="init" data-i="2">A</span>
       </div>
-      <div class="rhint">↑ ↓ letter · ← → move · type A–Z · Enter / A to confirm</div>
+      <div class="rhint">↑ ↓ letter · ← → move · type A–Z · Enter / A to confirm · Tab rankings</div>
     </div>
-    <div class="rhead"><span>#</span><span>Name</span><span>Time</span><span>Mph</span><span>Air</span></div>
+    <div id="rscope" class="rscope">ALL TIME</div>
+    <div id="rcat" class="rcat"><span class="arr">◀</span><span class="lbl">FASTEST TIME</span><span class="arr">▶</span></div>
+    <div class="rhead"><span>#</span><span>Name</span><span class="tm">Time</span><span class="sc">Score</span><span class="cb">Combo</span><span class="sp">Mph</span><span class="ht">Air</span></div>
     <ol id="rlist" class="rlist"></ol>
     <div id="rnext" class="rhint blink">Enter / A / click — continue</div>
-    <div id="rcontinue" class="rhint blink">Enter / A / click — continue</div>
+    <div id="rcontinue" class="rhint blink">Enter / A / click — continue · ← → rankings</div>
     <div class="rhint brawl">F + J — step off your board</div>
     <div id="rend">
       <ul class="menu-list rmenu"><li data-r="restart" class="sel">Restart</li><li data-r="next">Next Race</li><li data-r="rider">Change Rider</li><li data-r="quit">Quit</li></ul>
@@ -1740,22 +1755,25 @@ function dropRig() {                           // back to the box rider
 }
 setRider(riderIdx);
 
-function buildRig(charScene, boardScene, boxParts, clips = []) {
-  const prep = o => o.traverse(m => {
-    if (!m.isMesh) return;
-    m.castShadow = true; m.frustumCulled = false;
-    if (m.material) m.material.envMapIntensity = ENV_INTENSITY;
-  });
-  prep(charScene); prep(boardScene);
-
-  // board: model's long axis is X — turn it down the travel axis (+Z), wheels on the ground
+const prepModel = o => o.traverse(m => {
+  if (!m.isMesh) return;
+  m.castShadow = true; m.frustumCulled = false;
+  if (m.material) m.material.envMapIntensity = ENV_INTENSITY;
+});
+// board: model's long axis is X — turn it down the travel axis (+Z), wheels on the ground
+function makeBoard(boardScene) {
   const bb = new THREE.Box3().setFromObject(boardScene), bsz = bb.getSize(new THREE.Vector3());
   const bs = BOARD_LEN / bsz.x;
   const board = new THREE.Group();
   boardScene.scale.setScalar(bs);
   boardScene.position.set(-(bb.min.x + bsz.x / 2) * bs, -bb.min.y * bs, -(bb.min.z + bsz.z / 2) * bs);
   board.add(boardScene); board.rotation.y = Math.PI / 2;
-  rig.deckTop = bsz.y * bs * 0.92;
+  return { board, deckTop: bsz.y * bs * 0.92 };
+}
+function buildRig(charScene, boardScene, boxParts, clips = []) {
+  prepModel(charScene); prepModel(boardScene);
+  const { board, deckTop } = makeBoard(boardScene);
+  rig.deckTop = deckTop;
 
   // rider: sideways, regular stance (left foot toward the nose) — the model faces +Z, so turn it
   // to face -X; `root` is the node we raise/lower for crouch
@@ -1796,6 +1814,17 @@ function buildRig(charScene, boardScene, boxParts, clips = []) {
   // chest orientation relative to lean at rest — arm poses ride along with the chest's change from it
   rig.chestRest = lean.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(rig.chest.getWorldQuaternion(new THREE.Quaternion()));
   rig.ready = true;
+  captureRidingPoses();
+}
+// the CPUs wear these: this rig's upright and tucked riding poses (same skeleton across the roster)
+const ridingPoses = { cruise: null, tuck: null };
+function captureRidingPoses() {
+  const grab = s => ({ bones: rig.bones.map(([b]) => [b.position.clone(), b.quaternion.clone()]), root: rig.root.position.clone() });
+  const keep = { steer: state.steerSmooth, air: state.airborne };
+  state.steerSmooth = 0; state.airborne = false;
+  poseRider({ tuck: false }, 1); ridingPoses.cruise = grab();
+  poseRider({ tuck: true }, 1);  ridingPoses.tuck = grab();
+  state.steerSmooth = keep.steer; state.airborne = keep.air;
 }
 
 // --- small world-space bone helpers (work regardless of each bone's local axes) ---
@@ -1831,7 +1860,7 @@ function ik2(a, b, c, target, pole) {
 function poseRider(info, dt) {
   const k = Math.min(1, dt * 8);
   const fwd = Math.cos(stanceYaw) >= 0 ? 1 : -1;   // lean +Z is down the road in regular, up it in switch
-  const grab = state.airborne && trick.type === 'grab' ? 1 : 0;
+  const grab = state.airborne && trick.grab ? 1 : 0;
   const target = grind.on ? 0.55 : grab ? 0.85 : state.airborne ? 0.5 : info.tuck ? 0.8 : 0.3;
   rig.crouch += (target - rig.crouch) * k;
   rig.grab += (grab - rig.grab) * k;
@@ -2187,6 +2216,7 @@ addEventListener('keydown', e => {
   if (!e.repeat) tapped[e.code] = true;
   if (gameState !== 'PLAYING' || e.repeat) return;
   if (e.code === 'KeyR' && e.shiftKey) revert();
+  else if (e.code === 'KeyK') kickRacer();
   else if (e.code === 'Digit0' || e.code === 'Numpad0') beginRun();
   else if (e.code === 'KeyC') cycleCam();
   else if (e.code === 'KeyX') cycleChaos();
@@ -2250,7 +2280,7 @@ const state = {
 let topSpeed = 0;                              // session best, shown in the HUD
 
 // Per-run stats that feed the results board (time / top speed / distance / hangtime / score).
-const run = { t: 0, topSpeed: 0, dist: 0, airTime: 0, score: 0 };
+const run = { t: 0, topSpeed: 0, dist: 0, airTime: 0, score: 0, bestCombo: 0 };
 
 const G = 26;              // gravity pull along slope
 const DRAG_TUCK = 0.00055; // aero drag tucked
@@ -2279,9 +2309,19 @@ const KICK_MAX_SPEED = 55;     // above this, kicking does nothing
 const push = { meter: 1, cd: 0 };
 let kickWasDown = false;
 
-// --- Tricks: jump + a held direction/tuck picks a trick; points scored on landing.
-const SPIN_RATE = 7.5;         // radians/sec while spinning in the air
-const trick = { type: null, spin: 0, dir: 1, air: 0 };
+// --- Tricks: Space jumps; in the air A/D spins (each 180° landed scores) and Shift grabs. A landing
+//     is judged by how far off a clean stance you come down: clean, SKETCHY! (half points) or a bail.
+//     Tricks landed within COMBO_WINDOW of each other chain into a combo that pays a bonus.
+const SPIN_RATE    = 7.5;      // radians/sec while A/D is held in the air
+const AIR_STEER    = 0.3;      // A/D still drifts you this much in the air (mostly they spin you)
+const GRAB_MIN     = 0.35;     // seconds of grab that count as a grab
+const LAND_CLEAN   = 30;       // degrees off a clean stance that still land clean…
+const LAND_SKETCHY = 75;       // …and sketchy; any further round and you bail
+const CRASH_SECS   = 1.8;      // a bail puts the rider down this long before he gets back up
+const COMBO_WINDOW = 2.5;      // seconds on the ground to start the next trick and keep the combo
+const COMBO_BONUS  = 0.1;      // combo bonus = this × chain points × (tricks − 1)
+const trick = { type: null, spin: 0, air: 0, grabT: 0, grab: false };
+const combo = { n: 0, pts: 0, t: 0 };
 
 // --- Rail grinds (THPS-style): jump onto either guardrail to lock on, keep the balance needle
 //     centered with steer, Space hops off. More grind tricks are a TODO (see ROADMAP).
@@ -2290,10 +2330,14 @@ const RAIL_H         = 1.07;   // rider height above the road with the board on 
 const GRIND_SNAP     = 1.8;    // lateral lock-on reach — a little snap assist, like THPS
 const GRIND_BUFFER   = 0.3;    // an I press this many seconds early still catches the rail
 const GRIND_FRICTION = 3.5;    // extra drag while grinding (u/s²)
-const GRIND_PTS      = 300;    // points per second of clean grind
+const GRIND_PTS      = 14;     // points per unit of rail covered — fast grinds pay more
+const GRIND_SLIDE_X  = 1.5;    // boardslides are worth this much more
+const GRIND_BOOST_ON  = 2.5;   // speed kick when you lock on…
+const GRIND_BOOST_OFF = 2.5;   // …and when you hop off
 const BAL_TIP        = 1.4;    // how fast the needle falls away from center (grows with grind time)
 const BAL_CONTROL    = 2.6;    // how hard steering pushes the needle
-const grind = { on: false, side: 1, t: 0, bal: 0, drift: 0, name: '', cd: 0, buffer: 0 };
+const grind = { on: false, side: 1, t: 0, dist: 0, bal: 0, drift: 0, name: '', cd: 0, buffer: 0 };
+const grindPts = () => Math.round(grind.dist * GRIND_PTS * (grind.name === 'BOARDSLIDE' ? GRIND_SLIDE_X : 1));
 let jumpWasDown = false, grindWasDown = false;
 const railAt = u => !GAPS.some(g => u > g.u0 && u < g.u1) && !inPit(u);   // breaks at the gaps; none in the pit
 
@@ -2317,21 +2361,29 @@ let curInput = { steer: 0, tuck: 0, jump: false, kick: false };
 function resetRun() {
   state.u = START_U; state.lateral = 0; state.speed = 8;
   state.heading = 0; state.height = 0; state.vy = 0; state.airborne = false;
-  run.t = 0; run.topSpeed = 0; run.dist = 0; run.airTime = 0; run.score = 0;
+  run.t = 0; run.topSpeed = 0; run.dist = 0; run.airTime = 0; run.score = 0; run.bestCombo = 0;
+  combo.n = combo.pts = combo.t = 0; state.crashT = 0;
   push.meter = 1; push.cd = 0; kickWasDown = false;
-  trick.type = null; trick.spin = 0; trick.air = 0;
+  trick.type = null; trick.spin = 0; trick.air = 0; trick.grab = false;
+  if (rig.mixer) rig.mixer.stopAllAction();
   enduranceT = 0; freeDeath = false; weaponTier = 0;
   grind.on = false; grind.cd = 0; grind.buffer = 0;
   stance = 1; lastLandT = -1e9;
   Object.assign(finish, { crossed: false, stopped: false, t: 0 });
+  resetCpus();
   for (const it of ITEMS) { if (it.mesh) it.mesh.visible = true; it.taken = false; }
 }
 
 // Gameplay actions (declarations hoist, so update() can call these).
 function land(h = 0) {
   state.height = h; state.airborne = false; state.vy = 0;
-  settleSpin(); scoreTrick(); lastLandT = run.t;
-  if (state.speed > 4) flash(0.15);
+  const off = spinOff(), grabbing = trick.grab;
+  if (off > LAND_SKETCHY) { crash(); return; }                // came down sideways
+  settleSpin();
+  const sketchy = off > LAND_CLEAN || grabbing;                // still holding the grab counts too
+  if (!scoreTrick(sketchy ? 0.5 : 1) && sketchy) showTrick('SKETCHY!');
+  lastLandT = run.t;
+  if (state.speed > 4) flash(sketchy ? 0.25 : 0.15);
 }
 function takeoff(vy) { if (state.airborne) return; state.airborne = true; state.vy = vy; armTrick(); }
 // A kicker that feeds a gap launches you far enough to clear it (with margin) as long as you're
@@ -2357,7 +2409,9 @@ const COAST_LAT      = ROAD_HALF_WIDTH - 1;   // how far off centre you can stee
 const finish = { crossed: false, stopped: false, t: 0, orbitAng: 0 };
 function crossFinish() {
   finish.crossed = true;
-  lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, reason: 'end', rank: -1 };
+  endCombo();
+  lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, combo: run.bestCombo, reason: 'end', rank: -1,
+              place: 1 + cpus.filter(c => c.finished).length };
   if (grind.on) endGrind();
   showTrick('FINISH!'); flash(0.3);
 }
@@ -2407,29 +2461,27 @@ let lastLandT = -1e9, revertCd = 0;
 function revert() {
   if (state.airborne || grind.on || revertCd > 0) return;
   stance = -stance; revertCd = 0.45;
-  if (run.t - lastLandT < REVERT_WINDOW) { run.score += REVERT_PTS; showTrick('REVERT  +' + REVERT_PTS); }
+  if (run.t - lastLandT < REVERT_WINDOW) award('REVERT', REVERT_PTS);
   else showTrick(stance === 1 ? 'REGULAR' : 'SWITCH');
 }
 function startGrind(side, inp) {
   settleSpin(); scoreTrick();                               // the air trick that got you up there still counts
-  Object.assign(grind, { on: true, side, t: 0, bal: (Math.random() - 0.5) * 0.2, drift: 0,
+  Object.assign(grind, { on: true, side, t: 0, dist: 0, bal: (Math.random() - 0.5) * 0.2, drift: 0,
                          name: inp.tuck ? 'BOARDSLIDE' : '50-50 GRIND' });
+  state.speed += GRIND_BOOST_ON;
   Object.assign(state, { airborne: false, vy: 0, height: RAIL_H, lateral: side * RAIL_LAT });
 }
 function endGrind() {                         // clean exit — hop off or ride off the end
-  const pts = Math.round(grind.t * GRIND_PTS);
-  if (grind.t > 0.2) { run.score += pts; showTrick(grind.name + '  +' + pts); }
+  if (grind.t > 0.2) award(grind.name, grindPts());
   grind.on = false; grind.cd = 0.4;
 }
 function bailGrind() {                        // lost the balance — slam onto the road
   grind.on = false; grind.cd = 0.8;
-  Object.assign(state, { airborne: false, vy: 0, height: 0, heading: 0,
-                         lateral: grind.side * (ROAD_HALF_WIDTH - 1.2), speed: state.speed * 0.5 });
-  trick.type = null;
-  flash(0.45); showTrick('BAILED!');
+  Object.assign(state, { lateral: grind.side * (ROAD_HALF_WIDTH - 1.2) });
+  crash();
 }
 function updateGrind(dt, inp, f, slope, jumpPressed) {
-  grind.t += dt;
+  grind.t += dt; grind.dist += state.speed * dt;
   // the rail follows the road, so the slope still pulls you along it — with extra friction
   const drag = inp.tuck ? DRAG_TUCK : DRAG_UP;
   state.speed = Math.max(0, state.speed + (G * slope - drag * state.speed * state.speed - ROLL - GRIND_FRICTION) * dt);
@@ -2451,6 +2503,7 @@ function updateGrind(dt, inp, f, slope, jumpPressed) {
   if (jumpPressed) {
     // hop off toward the steer direction (or back toward the road)
     endGrind();
+    state.speed += GRIND_BOOST_OFF;
     state.heading = inp.steer ? -inp.steer * 0.45 : -grind.side * 0.3;
     takeoff(Math.min(13, 8 + state.speed * 0.03));
   } else if (!railAt(state.u + 3 / TOTAL_LEN)) {
@@ -2458,7 +2511,7 @@ function updateGrind(dt, inp, f, slope, jumpPressed) {
     Object.assign(state, { airborne: true, vy: 1.5 });
     armTrick();
   } else {
-    showTrick(grind.name + '  ' + Math.round(grind.t * GRIND_PTS));
+    showTrick(grind.name + '  ' + grindPts());
   }
   if (!finish.crossed && state.u >= FINISH_U) crossFinish();
   return info;
@@ -2471,25 +2524,48 @@ function settleSpin() {
   if (halves % 2) { stance = -stance; stanceYaw = stance === 1 ? 0 : Math.PI; }
   trickPivot.rotation.y = trick.spin - Math.sign(trick.spin) * halves * Math.PI;
 }
-function armTrick() {
-  trick.spin = 0; trick.air = 0;
-  if (Math.abs(state.steerSmooth) > 0.35) { trick.type = 'spin'; trick.dir = Math.sign(state.steerSmooth); }
-  else if (curInput.tuck) trick.type = 'grab';
-  else trick.type = 'ollie';
+function armTrick() { trick.spin = 0; trick.air = 0; trick.grabT = 0; trick.grab = false; trick.type = 'ollie'; }
+// how far (degrees) a spin is from the nearest clean stance
+function spinOff() {
+  if (trick.type !== 'spin') return 0;
+  const halves = Math.round(Math.abs(trick.spin) / Math.PI);
+  return Math.abs(Math.abs(trick.spin) - halves * Math.PI) * 180 / Math.PI;
 }
-function scoreTrick() {
-  if (!trick.type) return;
-  let pts = 0, label = '';
-  if (trick.type === 'spin') {
-    const halves = Math.round(Math.abs(trick.spin) / Math.PI);   // count 180s landed
-    if (halves >= 1) { pts = halves * 150; label = (halves * 180) + '° SPIN'; }
-  } else if (trick.type === 'grab' && trick.air > 0.35) {
-    pts = Math.round(trick.air * 400); label = 'GRAB';
-  } else if (trick.air > 0.45) {
-    pts = Math.round(trick.air * 120); label = 'BIG AIR';
+// points for the air trick just landed; quality 1 = clean, 0.5 = sketchy
+function award(label, pts) {
+  run.score += pts; combo.n++; combo.pts += pts; combo.t = COMBO_WINDOW;
+  showTrick(`${label}  +${pts}` + (combo.n > 1 ? `  x${combo.n}` : ''));
+}
+function endCombo(keep = true) {             // the chain ends: bank the bonus (a bail loses it)
+  if (keep && combo.n >= 2) {
+    const bonus = Math.round(combo.pts * COMBO_BONUS * (combo.n - 1));
+    run.score += bonus; run.bestCombo = Math.max(run.bestCombo, combo.pts + bonus);
+    showTrick(`COMBO x${combo.n}  +${bonus}`);
   }
-  trick.type = null;
-  if (pts > 0) { run.score += pts; showTrick(label + '  +' + pts); }
+  combo.n = combo.pts = combo.t = 0;
+}
+function crash() {                             // bail: the rider goes down and slides to a stop
+  Object.assign(state, { crashT: CRASH_SECS, speed: state.speed * 0.4, heading: 0, airborne: false, height: 0, vy: 0 });
+  trick.type = null; trick.grab = false; trickPivot.rotation.set(0, 0, 0);
+  endCombo(false);
+  flash(0.45); showTrick('BAILED!');
+  const clip = rig.ready && rig.clips?.find(c => c.name.endsWith('|Death'));
+  if (clip) {
+    rig.mixer.stopAllAction();
+    const a = rig.mixer.clipAction(clip); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+  }
+}
+function scoreTrick(quality = 1) {
+  if (!trick.type) return false;
+  const parts = []; let pts = 0;
+  const halves = trick.type === 'spin' ? Math.round(Math.abs(trick.spin) / Math.PI) : 0;   // 180s landed
+  if (halves >= 1) { pts += halves * 150; parts.push(halves * 180 + '° SPIN'); }
+  if (trick.grabT > GRAB_MIN) { pts += Math.round(trick.grabT * 400); parts.push('GRAB'); }
+  if (!parts.length && trick.air > 0.45) { pts += Math.round(trick.air * 120); parts.push('BIG AIR'); }
+  trick.type = null; trick.grab = false;
+  if (pts <= 0) return false;
+  award((quality < 1 ? 'SKETCHY ' : '') + parts.join(' + '), Math.round(pts * quality));
+  return true;
 }
 function collectItem(it) {
   it.taken = true; it.mesh.visible = false;
@@ -2513,6 +2589,11 @@ function fallInGap(g) {
 
 function update(dt) {
   const inp = readInput();
+  if (state.crashT > 0) {                      // down after a bail: no control, slide to a stop, get up
+    state.crashT -= dt;
+    Object.assign(inp, { steer: 0, tuck: 0, jump: false, kick: false, grind: false, brake: false });
+    if (state.crashT <= 0 && rig.mixer) rig.mixer.stopAllAction();
+  }
   curInput = inp;
   state.steerSmooth += (inp.steer - state.steerSmooth) * Math.min(1, dt * 12);
   const jumpPressed = inp.jump && !jumpWasDown; jumpWasDown = inp.jump;
@@ -2525,7 +2606,7 @@ function update(dt) {
 
   // steering -> heading (less authority at very high speed, like real carving)
   const authority = THREE.MathUtils.clamp(1.3 - state.speed / 120, 0.35, 1.1);
-  const targetHeading = -state.steerSmooth * MAX_HEADING * authority;
+  const targetHeading = -state.steerSmooth * MAX_HEADING * authority * (state.airborne ? AIR_STEER : 1);
   state.heading += (targetHeading - state.heading) * Math.min(1, dt * TURN_RATE * 3);
 
   // speed integration
@@ -2538,7 +2619,7 @@ function update(dt) {
   const offroad = Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1.0;
   if (offroad && !state.airborne) accel -= OFFROAD_DRAG;
   // brakes (B / LT): a foot-drag stop — strong enough to hold you still on the steepest pitch
-  if (inp.brake && !state.airborne) accel -= BRAKE_DECEL + state.speed * 0.3;
+  if ((inp.brake || state.crashT > 0) && !state.airborne) accel -= BRAKE_DECEL + state.speed * 0.3;
 
   state.speed = Math.max(0, state.speed + accel * dt);
 
@@ -2559,11 +2640,20 @@ function update(dt) {
   if (state.airborne) {
     run.airTime += dt;   // hangtime — wheels off the ground
     trick.air += dt;
-    if (trick.type === 'spin') trick.spin += SPIN_RATE * trick.dir * dt;
+    if (trick.type) {
+      // A/D spins while held (let go to stop on a clean 180); Shift grabs when you're not spinning
+      trick.spin -= SPIN_RATE * inp.steer * dt;   // D spins you right, A left
+      if (Math.abs(trick.spin) > 0.35) trick.type = 'spin';
+      trick.grab = !!inp.tuck && trick.type !== 'spin';
+      if (trick.grab) trick.grabT += dt;
+    }
     state.vy -= 34 * dt;
     state.height += state.vy * dt;
     if (state.height <= 0) land();
   }
+
+  // combo: the next trick has to start within COMBO_WINDOW of touching down
+  if (combo.n && !state.airborne) { combo.t -= dt; if (combo.t <= 0) endCombo(); }
 
   // rail lock-on (I): airborne, at rail height, within reach of a beam — rising into it while
   // drifting toward it, or coming down onto it
@@ -2671,12 +2761,12 @@ function place(info) {
   slideYawAnim += (slideYaw - slideYawAnim) * Math.min(1, dt * 14);
   lean.rotation.y = stanceYaw + slideYawAnim;
   lean.rotation.z = grind.on ? -grind.bal * 0.45 * (grind.name === 'BOARDSLIDE' ? -1 : 1) : -state.steerSmooth * 0.5;   // board across the rail: needle side flips
-  lean.rotation.x = !rig.ready && info.tuck ? 0.18 : 0;   // the rigged rider tucks with its body instead
+  lean.rotation.x = !rig.ready ? (state.crashT > 0 ? 1.35 : info.tuck ? 0.18 : 0) : 0;   // the rigged rider tucks (and falls) with its body instead
 
   // trick pose in the air (spin about up, grab = tuck-and-hold); settle back on the ground
   if (state.airborne) {
     trickPivot.rotation.y = trick.spin;
-    trickPivot.rotation.x = trick.type === 'grab' && !rig.ready ? 0.5 : 0;
+    trickPivot.rotation.x = trick.grab && !rig.ready ? 0.5 : 0;
   } else {
     trickPivot.rotation.y *= 0.7;
     trickPivot.rotation.x *= 0.7;
@@ -2778,7 +2868,11 @@ function place(info) {
   setSpeedFx(pos, dir, speedT, blurMul);
 
   // wind streaks stream past, aligned with travel
-  if (rig.ready) poseRider(info, dt);
+  if (rig.ready) {
+    if (state.crashT > 0 && rig.clips?.length) { rig.root.position.set(0, 0, 0); rig.mixer.update(dt); }   // down on the road
+    else if (rig.kickAnim > 0) { rig.kickAnim -= dt; rig.root.position.set(0, rig.deckTop, 0); rig.mixer.update(dt); if (rig.kickAnim <= 0) rig.mixer.stopAllAction(); }
+    else poseRider(info, dt);
+  }
   updateSparks(dt, pos);
 
   wind(pos, skater.quaternion, state.speed, speedT, dt);
@@ -2887,13 +2981,100 @@ function updateTimer() {
   const txt = String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(Math.floor(secs % 60)).padStart(2, '0');
   if (txt !== timerTxt) drawTimer(txt);
 }
-document.fonts?.load(`400 ${TIMER_PX * POP_RES}px "Share Tech Mono"`).then(() => { timerTxt = ''; }).catch(() => {});   // redraw once the font lands
-layoutTimer();
+// race position under it: POS 2/4 (same treatment, smaller)
+const POS_PX = 20, POS_Y = TIMER_Y + 30;
+const posCv = document.createElement('canvas');
+posCv.width = 256; posCv.height = Math.ceil(POS_PX * POP_RES * 1.8);
+const posCx = posCv.getContext('2d');
+const posTex = new THREE.CanvasTexture(posCv); posTex.colorSpace = THREE.SRGBColorSpace;
+const posMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ map: posTex, transparent: true, opacity: TIMER_OPACITY, depthTest: false, depthWrite: false, toneMapped: false }));
+hudScene.add(posMesh);
+let posTxt = '';
+function layoutPos() {
+  posMesh.scale.set(posCv.width / POP_RES, posCv.height / POP_RES, 1);
+  posMesh.position.set(innerWidth / 2, -POS_Y, 0);
+}
+function updatePos() {
+  posMesh.visible = timerMesh.visible && cpus.length > 0;
+  if (!posMesh.visible) return;
+  const txt = `POS ${racePlace()}/${cpus.length + 1}`;
+  if (txt === posTxt) return;
+  posTxt = txt;
+  const W = posCv.width, H = posCv.height;
+  posCx.clearRect(0, 0, W, H);
+  posCx.font = `400 ${POS_PX * POP_RES}px ${TIMER_FONT}`;
+  posCx.letterSpacing = 2 * POP_RES + 'px';
+  posCx.textAlign = 'center'; posCx.textBaseline = 'middle';
+  posCx.fillStyle = '#fff';
+  posCx.shadowColor = 'rgba(0,0,0,.6)'; posCx.shadowBlur = 8 * POP_RES; posCx.shadowOffsetY = 2 * POP_RES;
+  posCx.fillText(txt, W / 2, H / 2);
+  posTex.needsUpdate = true;
+}
+document.fonts?.load(`400 ${TIMER_PX * POP_RES}px "Share Tech Mono"`).then(() => { timerTxt = posTxt = ''; }).catch(() => {});   // redraw once the font lands
+layoutTimer(); layoutPos();
+
+// Minimap — top left, under the Esc pill: the course drawn to shape (turned so downhill runs down
+// the screen) and a dot per racer. Built from geometry in the HUD pass, so nothing redraws a texture.
+const MAP_X = 24, MAP_Y = 66, MAP_W = 150, MAP_H = 190, MAP_PAD = 12;   // CSS px
+const MAP_LINE = 2.2;                          // track line width (px)
+const MAP_DOT_ME = 5, MAP_DOT = 4;
+const MAP_CPU_COLORS = [0xff5a3c, 0x3ca6ff, 0x7dff3c];
+const mapGroup = new THREE.Group(); hudScene.add(mapGroup);
+const mapProject = (() => {
+  // rotate so the start → finish run points straight down the screen, then fit the box
+  const a = frames[0].p, b = frames[frames.length - 1].p;
+  const ang = Math.atan2(b.x - a.x, b.z - a.z);
+  const rot = p => { const c = Math.cos(-ang), s = Math.sin(-ang); return [p.x * c + p.z * s, -p.x * s + p.z * c]; };
+  const pts = frames.map(f => rot(f.p));
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const k = Math.min((MAP_W - 2 * MAP_PAD) / Math.max(maxX - minX, 1), (MAP_H - 2 * MAP_PAD) / Math.max(maxY - minY, 1));
+  const ox = MAP_X + (MAP_W - (maxX - minX) * k) / 2, oy = MAP_Y + (MAP_H - (maxY - minY) * k) / 2;
+  return p => { const r = rot(p); return [ox + (r[0] - minX) * k, -(oy + (r[1] - minY) * k)]; };   // → HUD coords
+})();
+{
+  const bg = new THREE.Mesh(new THREE.PlaneGeometry(MAP_W, MAP_H),
+    new THREE.MeshBasicMaterial({ color: 0x0a1020, transparent: true, opacity: 0.35, depthTest: false, depthWrite: false, toneMapped: false }));
+  bg.position.set(MAP_X + MAP_W / 2, -(MAP_Y + MAP_H / 2), 0); bg.renderOrder = 0;
+  // the course as a ribbon a couple of pixels wide
+  const pts = []; for (let i = 0; i < frames.length; i += 3) pts.push(mapProject(frames[i].p));
+  pts.push(mapProject(frames[frames.length - 1].p));
+  const pos = [], idx = [];
+  pts.forEach((p, i) => {
+    const q0 = pts[Math.max(0, i - 1)], q1 = pts[Math.min(pts.length - 1, i + 1)];
+    let nx = -(q1[1] - q0[1]), ny = q1[0] - q0[0]; const l = Math.hypot(nx, ny) || 1; nx *= MAP_LINE / 2 / l; ny *= MAP_LINE / 2 / l;
+    pos.push(p[0] + nx, p[1] + ny, 0, p[0] - nx, p[1] - ny, 0);
+    if (i) { const a = 2 * i - 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+  const line = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthTest: false, depthWrite: false, toneMapped: false }));
+  line.renderOrder = 1;
+  const fin = new THREE.Mesh(new THREE.RingGeometry(3, 4.6, 20),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, depthWrite: false, toneMapped: false }));
+  const fp = mapProject(frameAt(FINISH_U).p); fin.position.set(fp[0], fp[1], 0); fin.renderOrder = 1;
+  mapGroup.add(bg, line, fin);
+}
+const mapDot = (r, color, order) => {
+  const d = new THREE.Mesh(new THREE.CircleGeometry(r, 18), new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false, toneMapped: false }));
+  const o = new THREE.Mesh(new THREE.CircleGeometry(r + 1.3, 18), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6, depthTest: false, depthWrite: false, toneMapped: false }));
+  const grp = new THREE.Group(); o.renderOrder = order; d.renderOrder = order + 1; grp.add(o, d); mapGroup.add(grp);
+  return grp;
+};
+const mapCpuDots = MAP_CPU_COLORS.map((col, i) => mapDot(MAP_DOT, col, 2 + i * 2));
+const mapMe = mapDot(MAP_DOT_ME, 0xffd23c, 10);                 // you, drawn on top
+function updateMap() {
+  mapGroup.visible = hudMode === 0 && ['COUNTDOWN', 'PLAYING', 'PIT'].includes(gameState);
+  if (!mapGroup.visible) return;
+  const put = (dot, u) => { const p = mapProject(frameAt(Math.min(1, u)).p); dot.position.set(p[0], p[1], 0); };
+  put(mapMe, state.u);
+  cpus.forEach((c, i) => { if (mapCpuDots[i]) put(mapCpuDots[i], c.u); });
+}
 
 function renderHudPass() {
-  updateTimer();
+  updateTimer(); updatePos(); updateMap();
   popMesh.visible = popMat.opacity > 0;
-  if (!popMesh.visible && !timerMesh.visible) return;
+  if (!popMesh.visible && !timerMesh.visible && !posMesh.visible && !mapGroup.visible) return;
   renderer.autoClear = false;
   renderer.render(hudScene, hudCam);
   renderer.autoClear = true;
@@ -3246,7 +3427,7 @@ function updateChaos(dt) {
 // ------------------------------------------------------------------
 // Pause menu + settings — keyboard & gamepad navigable
 // ------------------------------------------------------------------
-let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE | BRAWL | SELECT
+let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE | BRAWL | SELECT | RACE
 let menuIndex = 0;
 const settings = { volume: 70, sens: 100 };
 audio.volume = settings.volume / 100;
@@ -3337,7 +3518,18 @@ addEventListener('keydown', e => {
   if (gameState === 'COUNTDOWN') { if (startSeq.phase === 'fly') skipFly(); return; }
   if (gameState === 'ENTRY') { e.preventDefault(); handleEntryKey(e.code); return; }
   if (gameState === 'STATS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') advanceStats(); return; }
-  if (gameState === 'RESULTS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') showEnd(); return; }
+  if (gameState === 'RACE') {
+    if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') advanceRace();
+    else if (e.code === 'ArrowLeft') lbCycle(-1);
+    else if (e.code === 'ArrowRight' || e.code === 'Tab') { e.preventDefault(); lbCycle(1); }
+    return;
+  }
+  if (gameState === 'RESULTS') {
+    if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') showEnd();
+    else if (e.code === 'ArrowLeft') lbCycle(-1);
+    else if (e.code === 'ArrowRight' || e.code === 'Tab') { e.preventDefault(); lbCycle(1); }
+    return;
+  }
   if (gameState === 'END') {
     if (e.code === 'ArrowUp' || e.code === 'ArrowLeft') rmenuMove(-1);
     else if (e.code === 'ArrowDown' || e.code === 'ArrowRight') rmenuMove(1);
@@ -3380,7 +3572,8 @@ function pollMenuGamepad(dt) {
   if (gameState === 'TITLE') { if (a) startFromTitle(); return; }
   if (gameState === 'SELECT') { if (lf) selMove(-1); if (rt) selMove(1); if (a) confirmSelect(); return; }
   if (gameState === 'STATS') { if (a || b) advanceStats(); return; }
-  if (gameState === 'RESULTS') { if (a || b) showEnd(); return; }
+  if (gameState === 'RACE') { if (lf) lbCycle(-1); if (rt) lbCycle(1); if (a || b) advanceRace(); return; }
+  if (gameState === 'RESULTS') { if (lf) lbCycle(-1); if (rt) lbCycle(1); if (a || b) showEnd(); return; }
   if (gameState === 'END') {
     if (up || lf) rmenuMove(-1); if (dn || rt) rmenuMove(1);
     if (a) rmenuPick();
@@ -3427,14 +3620,65 @@ const NAME_KEY = 'downhill.initials';  // last initials the player entered
 const LB_MAX = 8;                      // rows kept on the board
 const ENTRY_LEN = 3;                   // arcade initials
 
-// Sort seams — only `time` is wired up today; the rest are ready for a rank toggle.
+// Rankings — the board cycles through these (← → / Tab). A run earns initials if it would make
+// the top LB_MAX of ANY of them; stored runs are pruned to those still on some board.
 const compareBy = {
   time:  (a, b) => a.timeS - b.timeS,      // fastest first
-  score: (a, b) => b.score - a.score,
-  top:   (a, b) => b.topSpeed - a.topSpeed,
-  dist:  (a, b) => b.dist - a.dist,
+  score: (a, b) => (b.score || 0) - (a.score || 0),
+  combo: (a, b) => (b.combo || 0) - (a.combo || 0),
   air:   (a, b) => (b.airTime || 0) - (a.airTime || 0),
+  top:   (a, b) => b.topSpeed - a.topSpeed,
 };
+const LB_CATS = [
+  { key: 'time',  label: 'FASTEST TIME' },
+  { key: 'score', label: 'HIGH SCORE' },
+  { key: 'combo', label: 'BIGGEST COMBO' },
+  { key: 'air',   label: 'LONGEST HANGTIME' },
+  { key: 'top',   label: 'SPEED DEMON' },
+];
+let lbCat = 0, lbScores = [];
+const topOf = (scores, key) => [...scores].sort(compareBy[key]).slice(0, LB_MAX);
+const placesAnywhere = (scores, rec) => LB_CATS.some(c => scores.filter(s => compareBy[c.key](s, rec) < 0).length < LB_MAX);
+function pruneScores(scores) {                 // keep only runs that are still on some board
+  const keep = new Set(LB_CATS.flatMap(c => topOf(scores, c.key)));
+  return scores.filter(s => keep.has(s));
+}
+function lbCycle(d) {
+  lbCat = (lbCat + d + LB_CATS.length) % LB_CATS.length;
+  if (gameState === 'RACE') renderRace(); else renderBoard(lbScores);
+}
+// This race: you and the CPUs, same columns and rankings. Anyone still out on the course shows
+// no time yet (and ranks last on time); the table refreshes as they come in.
+function raceRows() {
+  const me = { name: 'YOU', timeS: lastRun.timeS, topSpeed: lastRun.topSpeed, airTime: lastRun.airTime,
+               score: lastRun.score, combo: lastRun.combo || 0, me: true };
+  return [me, ...cpus.map(c => ({ name: c.name, timeS: c.finished ? c.finishT : Infinity, topSpeed: c.topSpeed,
+                                  airTime: c.airTime, score: c.score, combo: c.combo }))];
+}
+function renderRace() {
+  const cat = LB_CATS[lbCat];
+  results.el.dataset.cat = cat.key;
+  results.cat.textContent = cat.label;
+  results.scope.textContent = 'THIS RACE';
+  results.list.innerHTML = '';
+  raceRows().sort(compareBy[cat.key]).forEach((s, i) => {
+    const li = document.createElement('li');
+    if (s.me) li.classList.add('me');
+    li.innerHTML = `<span class="rk">${i + 1}</span><span class="nm">${s.name}</span>`
+      + `<span class="tm">${isFinite(s.timeS) ? fmtTime(s.timeS) : '—'}</span><span class="sc">${s.score || 0}</span><span class="cb">${s.combo || 0}</span>`
+      + `<span class="sp">${Math.round(s.topSpeed * MPH)}</span><span class="ht">${(s.airTime || 0).toFixed(1)}s</span>`;
+    results.list.appendChild(li);
+  });
+}
+let raceTimer = 0;
+function showRace() {                         // 2) this race's standings
+  gameState = 'RACE';
+  results.el.dataset.stage = 'race';
+  results.entry.classList.add('hidden'); results.cont.classList.remove('hidden');
+  lbCat = 0; renderRace();
+  clearInterval(raceTimer);
+  raceTimer = setInterval(() => { if (gameState === 'RACE') renderRace(); else clearInterval(raceTimer); }, 500);
+}
 
 function loadScores() { try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; } catch { return []; } }
 function saveScores(s) { try { localStorage.setItem(LB_KEY, JSON.stringify(s)); } catch {} }
@@ -3452,6 +3696,10 @@ const results = {
   dist:  document.getElementById('r-dist'),
   air:   document.getElementById('r-air'),
   score: document.getElementById('r-score'),
+  combo: document.getElementById('r-combo'),
+  scope: document.getElementById('rscope'),
+  place: document.getElementById('r-place'),
+  cat:   document.querySelector('#rcat .lbl'),
   inits: document.querySelectorAll('#rentry .init'),
 };
 
@@ -3485,6 +3733,7 @@ rmenuItems.forEach((li, i) => {
 });
 const entry = { slots: ['A', 'A', 'A'], pos: 0 };
 
+const ordinal = n => { const sfx = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (sfx[(v - 20) % 10] || sfx[v] || sfx[0]); };
 function fmtTime(s) {
   const m = Math.floor(s / 60), sec = Math.floor(s % 60), ms = Math.floor((s * 1000) % 1000);
   return `${m}:${String(sec).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
@@ -3492,32 +3741,39 @@ function fmtTime(s) {
 
 // One entry point for "the run is over" — reached the end today; a crash could call this later.
 function finishRun(reason) {
-  if (!lastRun || !finish.crossed) lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, reason, rank: -1 };
+  if (!lastRun || !finish.crossed) lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, combo: run.bestCombo, reason, rank: -1 };
   document.exitPointerLock?.();
   results.time.textContent = fmtTime(lastRun.timeS);
   results.top.textContent  = Math.round(lastRun.topSpeed * MPH);
   results.dist.textContent = Math.round(lastRun.dist);
   results.air.textContent  = lastRun.airTime.toFixed(1) + 's';
   results.score.textContent = lastRun.score;
+  results.combo.textContent = lastRun.combo || 0;
+  results.place.textContent = ordinal(lastRun.place || racePlace()) + '/' + (cpus.length + 1);
 
   results.el.classList.remove('hidden');
   gameState = 'STATS';                       // 1) stats alone, then continue →
   results.el.dataset.stage = 'stats';
 }
-function advanceStats() {                     // 2) initials if the run placed, 3) the board
-  const scores = loadScores().sort(compareBy.time);
-  const qualifies = scores.length < LB_MAX || lastRun.timeS < scores[scores.length - 1].timeS;
-  if (qualifies) startEntry(scores); else showBoard(scores);
+function advanceStats() { showRace(); }
+function advanceRace() {                      // 3) initials if the run placed on any ranking, 4) the all-time board
+  const scores = loadScores(), probe = { ...lastRun, score: lastRun.score, combo: lastRun.combo || 0 };
+  if (placesAnywhere(scores, probe)) startEntry(scores); else showBoard(scores);
 }
 
 function renderBoard(scores) {
+  lbScores = scores;
+  results.scope.textContent = 'ALL TIME';
+  const cat = LB_CATS[lbCat];
+  results.el.dataset.cat = cat.key;
+  results.cat.textContent = cat.label;
   results.list.innerHTML = '';
-  scores.forEach((s, i) => {
+  topOf(scores, cat.key).forEach((s, i) => {
     const li = document.createElement('li');
-    if (lastRun && i === lastRun.rank) li.classList.add('me');
+    if (lastRun && s === lastRun.rec) li.classList.add('me');
     li.innerHTML = `<span class="rk">${i + 1}</span><span class="nm">${s.name}</span>`
-      + `<span class="tm">${fmtTime(s.timeS)}</span><span class="sp">${Math.round(s.topSpeed * MPH)}</span>`
-      + `<span class="ht">${(s.airTime || 0).toFixed(1)}s</span>`;
+      + `<span class="tm">${fmtTime(s.timeS)}</span><span class="sc">${s.score || 0}</span><span class="cb">${s.combo || 0}</span>`
+      + `<span class="sp">${Math.round(s.topSpeed * MPH)}</span><span class="ht">${(s.airTime || 0).toFixed(1)}s</span>`;
     results.list.appendChild(li);
   });
 }
@@ -3555,13 +3811,11 @@ function submitInitials() {
   const name = entry.slots.join('');
   lastInitials = name;
   try { localStorage.setItem(NAME_KEY, name); } catch {}
-  const rec = { name, timeS: lastRun.timeS, topSpeed: lastRun.topSpeed, dist: lastRun.dist, airTime: lastRun.airTime, score: lastRun.score };
-  const scores = loadScores();
-  scores.push(rec);
-  scores.sort(compareBy.time);
-  if (scores.length > LB_MAX) scores.length = LB_MAX;
+  const rec = { name, timeS: lastRun.timeS, topSpeed: lastRun.topSpeed, dist: lastRun.dist, airTime: lastRun.airTime,
+                score: lastRun.score, combo: lastRun.combo || 0 };
+  const scores = pruneScores([...loadScores(), rec]);
   saveScores(scores);
-  lastRun.rank = scores.indexOf(rec);   // highlight the player's row
+  lastRun.rec = rec;                    // highlight the player's row
   showBoard(scores);
 }
 
@@ -3573,10 +3827,11 @@ function handleEntryKey(code) {
   else if (code === 'ArrowLeft') entryMove(-1);
   else if (code === 'ArrowRight')entryMove(1);
   else if (code === 'Backspace') { entry.slots[entry.pos] = 'A'; entryMove(-1); }
+  else if (code === 'Tab') lbCycle(1);
   else if (code === 'Enter' || code === 'Space') submitInitials();
 }
 
-results.el.addEventListener('click', () => { if (gameState === 'STATS') advanceStats(); else if (gameState === 'RESULTS') showEnd(); });
+results.el.addEventListener('click', () => { if (gameState === 'STATS') advanceStats(); else if (gameState === 'RACE') advanceRace(); else if (gameState === 'RESULTS') showEnd(); });
 
 // ------------------------------------------------------------------
 // Start — a flyover that rises from the ground in front of you (the crowd and the start pit
@@ -3642,9 +3897,9 @@ function updateStart(dt) {
   while (startSeq.lit < want) {
     lightEls[startSeq.lit].classList.add('on');
     startSeq.lit++;
-    if (startSeq.lit < 3) beep(440, 0.16, 0.12);
+    if (startSeq.lit < 3) beep(440, 0.16, 0.17);
     else {
-      beep(880, 0.7, 0.16);
+      beep(880, 0.7, 0.22);
       gameState = 'PLAYING';
       state.speed = LAUNCH_SPEED;
       showTrick('GO!');
@@ -3673,7 +3928,7 @@ const brawl = { on: false, from: null, walker: new THREE.Group(), heading: 0, ba
 const brawlRay = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0);
 scene.add(brawl.walker);
 const brawlHintEl = document.getElementById('brawlhint');
-const canBrawl = () => rig.ready && rig.clips.length && !brawl.on && ['PIT', 'STATS', 'RESULTS', 'END'].includes(gameState);
+const canBrawl = () => rig.ready && rig.clips.length && !brawl.on && ['PIT', 'STATS', 'RACE', 'RESULTS', 'END'].includes(gameState);
 const brawlClip = n => rig.clips.find(c => c.name.endsWith('|' + n));
 function brawlBase(name) {                     // idle / walk / run, cross-faded
   if (brawl.baseName === name) return;
@@ -3724,8 +3979,25 @@ function landBlow() {
     const d = c.obj.position.clone().sub(P).setY(0), len = d.length();
     return len < reach && d.dot(fwd) > BRAWL_ARC * len;
   }).sort((a, b) => a.obj.position.distanceToSquared(P) - b.obj.position.distanceToSquared(P));
+  // the other racers are fair game too, once they're off their boards in the pit
+  for (const c of cpus) {
+    if (c.down || !c.model?.clips) continue;
+    const d = c.model.node.position.clone().sub(P).setY(0), len = d.length();
+    if (len < reach && d.dot(fwd) > BRAWL_ARC * len) inReach.push({ cpu: c, obj: c.model.node });
+  }
+  inReach.sort((a, b) => a.obj.position.distanceToSquared(P) - b.obj.position.distanceToSquared(P));
   const hits = w === 'STICK' ? inReach : inReach.slice(0, 1);        // a stick sweeps; fists hit one
   for (const c of hits) {
+    if (c.cpu) {                                                      // a racer: down he goes, off his board
+      const cp = c.cpu, m = cp.model; cp.down = true;
+      m.node.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), brawl.heading);   // turned away: falls away from the blow
+      m.lean.rotation.set(0, 0, 0); m.root.rotation.y = 0; m.root.position.set(0, 0, 0); m.tag.visible = false;
+      m.mixer.stopAllAction();
+      const a = cp.model.mixer.clipAction(cp.model.clips.find(k => k.name.endsWith('|Death')));
+      a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+      brawl.kos++;
+      continue;
+    }
     c.down = true;
     c.obj.rotation.y = brawl.heading;                                 // the death clip falls forward: turn them
     c.obj.position.addScaledVector(fwd, 0.35);                        //   away from the blow and shove them back
@@ -3922,6 +4194,245 @@ function renderSelectPass() {
 }
 
 // ------------------------------------------------------------------
+// CPU racers — three AI riders start beside you and race to the finish. They ride the same model
+// you do (u along the course + lateral offset) with the same slope/drag/rolling physics, always
+// tucked, each with its own skill and a light rubber band so the pack stays close. They take the
+// inside line through bends, dodge whoever's ahead, launch off kickers (gap assist; a miss
+// respawns them like you), then coast into the finish pit. Visually they're roster riders on
+// longboards wearing YOUR current riding pose (same rig), leaning into their own carves.
+// ------------------------------------------------------------------
+const CPU_NAMES   = ['RAZ', 'KOJI', 'MEL'];
+const CPU_SKILL   = [0.95, 0.975, 1.0];     // multiplies the slope pull — beatable if you race clean
+const CPU_GRID    = [{ lat: -5.5, back: 0 }, { lat: 5.5, back: 0 }, { lat: -2.2, back: 7 }];   // start positions
+const CPU_RUBBER  = 0.0012;                  // per unit of gap to you: speed up behind, ease off ahead
+const CPU_RUBBER_UP   = 0.05;              // max catch-up boost when they're behind you…
+const CPU_RUBBER_DOWN = 0.12;              // …and max ease-off when they're ahead
+const CPU_TUCK_ON  = [4, 9];               // seconds tucked, then…
+const CPU_TUCK_OFF = [1, 2.5];             // …seconds sitting up for a breather
+const CPU_SITUP_DRAG = 1.7;                // sitting up costs this × the tucked drag (a half-crouch, not standing tall)
+const CPU_WOBBLE   = 1.4;                  // their line drifts this much (u) — nobody rides a perfect line
+const CPU_CRASH_LAND = 0.12;               // chance to bail a kicker landing
+const CPU_STUMBLE  = 0.003;                // chance per second to eat it at speed (> 40 u/s)
+const KICK_REACH_U = 2.6, KICK_REACH_LAT = 2.8;   // K kicks a racer this close beside you
+const KICK_CDOWN   = 0.9;                  // seconds between your kicks
+const KICK_PTS     = 100;
+const CPU_KICK_BELOW = 14;                 // they only kick-push when slower than this (off the line, after a bail)
+const CPU_LINE    = 0.5;                     // how far toward the inside of a bend they cut (× half width)
+const CPU_LAT_RATE = 3.2;                    // how fast they move across the road (u/s)
+const CPU_BUMP    = 1.5;                     // riders closer than this (sideways) bump apart
+const CPU_TAG_DIST = 70;                     // name tags show within this of the camera
+const cpus = CPU_NAMES.map((name, i) => ({
+  name, skill: CPU_SKILL[i], u: START_U, lat: 0, speed: 0, height: 0, vy: 0, airborne: false, heading: 0,
+  t: 0, finished: false, finishT: 0, stopped: false, kickCd: 0, model: null, riderIdx: -1,
+  tuck: true, tuckT: 5, tuckAmt: 1, crashT: 0, down: false, seed: i * 2.1 + 0.7,
+  score: 0, combo: 0, airTime: 0, topSpeed: 0,
+}));
+function cpuCrash(c, why) {                      // bail: down on the road, slide to a stop, get back up
+  if (c.crashT > 0 || c.finished) return;
+  c.crashT = CRASH_SECS; c.speed *= 0.4; c.airborne = false; c.height = 0; c.vy = 0;
+  const m = c.model;
+  if (m?.clips) {
+    m.mixer.stopAllAction();
+    const a = m.mixer.clipAction(m.clips.find(k => k.name.endsWith('|Death'))); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+  }
+  if (why && m?.node.position.distanceTo(camera.position) < 80) showTrick(why);
+}
+function nameTag(text) {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+  const cx = cv.getContext('2d');
+  cx.font = '900 40px ui-monospace, Menlo, monospace'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.lineWidth = 8; cx.strokeStyle = 'rgba(0,0,0,.65)'; cx.strokeText(text, 128, 32);
+  cx.fillStyle = '#ffd23c'; cx.fillText(text, 128, 32);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.scale.set(2.4, 0.6, 1); sp.position.y = RIDER_HEIGHT + 0.9;
+  return sp;
+}
+function buildCpuModel(c, i) {                 // (re)dress a CPU as roster rider i
+  if (c.model) { scene.remove(c.model.node); c.model = null; }
+  c.riderIdx = i;
+  const node = new THREE.Group(), lean = new THREE.Group();
+  lean.rotation.order = 'ZYX';
+  node.add(lean); node.add(nameTag(c.name)); scene.add(node);
+  c.model = { node, lean, root: null, bones: null, mixer: null, tag: node.children[1] };
+  boardLoad ||= new GLTFLoader().loadAsync('assets/models/longboard.glb');
+  Promise.all([loadRider(i), boardLoad]).then(([g, bd]) => {
+    if (c.riderIdx !== i || !c.model) return;
+    const char = SkeletonUtils.clone(g.scene), bs = bd.scene.clone(true);
+    prepModel(char); prepModel(bs);
+    const { board } = makeBoard(bs);
+    char.updateMatrixWorld(true);
+    const cb = new THREE.Box3().setFromObject(char), csz = cb.getSize(new THREE.Vector3()), k = RIDER_HEIGHT / csz.y;
+    char.scale.setScalar(k);
+    char.position.set(-(cb.min.x + csz.x / 2) * k, -cb.min.y * k, -(cb.min.z + csz.z / 2) * k);
+    const root = new THREE.Group(); root.add(char); root.rotation.y = -Math.PI / 2;
+    lean.add(board, root);
+    const bones = []; char.traverse(o => { if (o.isBone) bones.push(o); });
+    const mixer = new THREE.AnimationMixer(char);
+    const idleClip = g.animations.find(a => a.name.endsWith('|Idle'));
+    const idle = idleClip ? mixer.clipAction(idleClip) : null;   // the action, so it can be restarted after a crash
+    idle?.play();
+    Object.assign(c.model, { root, bones, mixer, clips: g.animations, idle });
+  }).catch(e => console.warn('[assets] CPU rider unavailable:', e?.message || e));
+}
+function resetCpus() {
+  // dress them as three other riders from the roster (never your pick)
+  const pool = RIDERS.map((r, i) => i).filter(i => RIDERS[i].file && i !== riderIdx);
+  cpus.forEach((c, n) => {
+    const want = pool[(n * 2 + LEVEL_IDX) % pool.length];
+    if (c.riderIdx !== want || !c.model) buildCpuModel(c, want);
+    const g = CPU_GRID[n];
+    Object.assign(c, { u: Math.max(0.0002, START_U - g.back / TOTAL_LEN), lat: g.lat, speed: 0, height: 0, vy: 0,
+                       airborne: false, heading: 0, t: 0, finished: false, finishT: 0, stopped: false, kickCd: 0,
+                       tuck: true, tuckT: 3 + Math.random() * 4, tuckAmt: 1, crashT: 0, down: false,
+                       score: 0, combo: 0, airTime: 0, topSpeed: 0 });
+    if (c.model?.mixer) { c.model.mixer.stopAllAction(); c.model.idle?.reset().play(); }
+    if (c.model?.root) c.model.root.rotation.y = -Math.PI / 2;
+  });
+}
+const cpuTan = new THREE.Vector3();
+function updateCpu(c, i, dt) {
+  const racing = gameState === 'PLAYING' || finish.crossed;   // the green light has gone
+  if (!racing) return;
+  const f = frameAt(c.u), slope = Math.max(0, -f.tan.y);
+  if (c.t === 0 && !c.finished) c.speed = LAUNCH_SPEED;      // green light: roll off the line like you do
+  c.t += c.finished ? 0 : dt;
+  if (c.crashT > 0) {                          // down: no control, skid to a stop, then get back up
+    c.crashT -= dt;
+    c.speed = Math.max(0, c.speed - (BRAKE_DECEL + c.speed * 0.3) * dt);
+    if (c.crashT <= 0 && c.model?.mixer) { c.model.mixer.stopAllAction(); c.model.idle?.reset().play(); }
+  } else if (!c.finished) {
+    // line: toward the inside of the bend ahead, around whoever's just in front, never quite perfect
+    cpuTan.copy(frameAt(Math.min(1, c.u + 30 / TOTAL_LEN)).tan).sub(f.tan);
+    const bend = THREE.MathUtils.clamp(cpuTan.dot(f.side) * 6, -1, 1);
+    // tuck most of the time; sit up for a breather now and then and through tight bends
+    c.tuckT -= dt;
+    if (c.tuckT <= 0) { c.tuck = !c.tuck; const r = c.tuck ? CPU_TUCK_ON : CPU_TUCK_OFF; c.tuckT = r[0] + Math.random() * (r[1] - r[0]); }
+    const tucked = c.tuck;
+    c.tuckAmt += ((tucked ? 1 : 0) - c.tuckAmt) * Math.min(1, dt * 5);
+    // speed: skill + an asymmetric rubber band on the slope pull; kick only when slow
+    const gap = (state.u - c.u) * TOTAL_LEN * CPU_RUBBER;
+    const behind = THREE.MathUtils.clamp(gap, -CPU_RUBBER_DOWN, CPU_RUBBER_UP);
+    let accel = G * slope * c.skill * (1 + behind) - DRAG_TUCK * (tucked ? 1 : CPU_SITUP_DRAG) * c.speed * c.speed - ROLL - Math.abs(c.heading) * c.speed * (CARVE_SCRUB / 100);
+    c.speed = Math.max(0, c.speed + accel * dt);
+    c.kickCd -= dt;
+    if (!c.airborne && c.speed < CPU_KICK_BELOW && c.kickCd <= 0) { c.speed += KICK_IMPULSE; c.kickCd = KICK_CD * 1.6; }
+    if (!c.airborne && c.speed > 40 && Math.random() < CPU_STUMBLE * dt) cpuCrash(c, c.name + ' WIPES OUT!');
+    c.topSpeed = Math.max(c.topSpeed, c.speed);
+    let target = bend * CPU_LINE * ROAD_HALF_WIDTH + Math.sin(c.t * 0.45 + c.seed) * CPU_WOBBLE;
+    for (const o of [{ u: state.u, lat: state.lateral }, ...cpus.filter(x => x !== c)]) {
+      const ahead = (o.u - c.u) * TOTAL_LEN;
+      if (ahead > 0 && ahead < 9 && Math.abs(o.lat - target) < 2.2) target = o.lat + (target > o.lat ? 2.6 : -2.6);
+    }
+    // a gap coming up: line up on its kicker
+    if (GAPS.some(g => { const d = (g.u0 - c.u) * TOTAL_LEN; return d > 0 && d < 120; })) target = 0;
+    const lim = ROAD_HALF_WIDTH - 1.2;
+    target = THREE.MathUtils.clamp(target, -lim, lim);
+    const dLat = THREE.MathUtils.clamp(target - c.lat, -CPU_LAT_RATE * dt, CPU_LAT_RATE * dt);
+    c.heading += (Math.atan2(dLat / dt, Math.max(c.speed, 1)) - c.heading) * Math.min(1, dt * 6);   // same sign as yours: +heading drifts +lateral
+    c.lat += dLat;
+  } else {
+    // past the line: brake to a stop in the pit, spread out so nobody lands on you
+    const stopU = PIT_STOP_U - (6 + i * 5) / TOTAL_LEN;
+    const d = (stopU - c.u) * TOTAL_LEN;
+    if (d <= 0.3) c.speed = 0;
+    else c.speed = Math.max(Math.min(c.speed, 6), c.speed - (c.speed * c.speed) / (2 * Math.max(d, 0.5)) * dt);
+    c.heading *= Math.exp(-dt * 3);
+    if (c.speed === 0) c.stopped = true;
+  }
+  const uPrev = c.u;
+  c.u = Math.min(STOP_U, c.u + (c.speed * dt) / TOTAL_LEN);
+  // kickers (with the gap assist), flight, and gaps — same rules as yours
+  for (const ru of RAMPS) {
+    const s = (c.u - ru) * TOTAL_LEN, sPrev = (uPrev - ru) * TOTAL_LEN, half = KICKER_LEN / 2;
+    if (Math.abs(c.lat) > KICKER_HALF_W) continue;
+    if (!c.airborne && s >= -half && s < half) c.height = KICKER_H * (s + half) / KICKER_LEN;
+    if (!c.airborne && sPrev < half && s >= half) {
+      let vy = RAMP_BASE + c.speed * RAMP_FACTOR;
+      const g = GAPS.find(g => g.u0 > ru && g.u0 - ru < 0.02);
+      if (g) vy = Math.max(vy, Math.min(GAP_MAX_VY, (34 * ((g.u1 - ru) * TOTAL_LEN + GAP_MARGIN)) / (2 * Math.max(c.speed, 1))));
+      c.airborne = true; c.vy = vy;
+    }
+  }
+  if (c.airborne) {
+    c.vy -= 34 * dt; c.height += c.vy * dt; c.airTime += dt;
+    if (c.height <= 0) {
+      c.height = 0; c.airborne = false; c.vy = 0;
+      if (Math.random() < CPU_CRASH_LAND) cpuCrash(c, c.name + ' BAILS!');
+      else { const pts = 100 + Math.round(Math.random() * 3) * 150; c.score += pts; c.combo = Math.max(c.combo, pts); }   // they throw a trick off it
+    }
+  } else if (!RAMPS.some(ru => Math.abs((c.u - ru) * TOTAL_LEN) < KICKER_LEN / 2 && Math.abs(c.lat) <= KICKER_HALF_W)) c.height = 0;
+  for (const g of GAPS) if (!c.airborne && c.u > g.u0 && c.u < g.u1) {
+    const ru = RAMPS.find(r => g.u0 > r && g.u0 - r < 0.02) ?? g.u0;
+    c.u = ru - GAP_RESPAWN_BACK / TOTAL_LEN; c.speed = GAP_RESPAWN_SPEED; c.height = 0; c.lat = 0;
+  }
+  // rocket boosts work for them too (theirs don't use up yours)
+  for (const it of ITEMS) if (it.type === 'boost' && uPrev < it.u && c.u >= it.u && c.crashT <= 0) c.speed += ROCKET_BOOST;
+  if (!c.finished && c.u >= FINISH_U) { c.finished = true; c.finishT = c.t; }
+}
+function updateCpus(dt) {
+  if (gameState === 'SELECT' || gameState === 'TITLE') return;
+  kickT = Math.max(0, kickT - dt);
+  cpus.forEach((c, i) => updateCpu(c, i, dt));
+  // shoulder bumps with you (racing only): both get pushed apart sideways
+  if (gameState === 'PLAYING' && !finish.crossed && !grind.on) for (const c of cpus) {
+    const du = (c.u - state.u) * TOTAL_LEN, dl = c.lat - state.lateral;
+    if (c.crashT <= 0 && Math.abs(du) < 2.2 && Math.abs(dl) < CPU_BUMP && Math.abs(c.height - state.height) < 1) {
+      const push = (CPU_BUMP - Math.abs(dl)) / 2 * (Math.sign(dl) || 1);
+      c.lat += push; state.lateral -= push;
+    }
+  }
+  for (const c of cpus) placeCpu(c, dt);
+}
+function placeCpu(c, dt) {
+  const m = c.model;
+  if (!m) return;
+  if (c.down) { m.mixer.update(dt); return; }                    // knocked out in the pit: just lie there
+  const f = frameAt(c.u);
+  m.node.position.copy(f.p).addScaledVector(f.side, c.lat).addScaledVector(f.up, 0.05 + c.height);
+  const dir = f.tan.clone().multiplyScalar(Math.cos(c.heading)).addScaledVector(f.side, Math.sin(c.heading)).normalize();
+  m.node.quaternion.setFromRotationMatrix(new THREE.Matrix4().lookAt(new THREE.Vector3(), dir.negate(), f.up));
+  m.lean.rotation.z += (c.heading * 0.8 - m.lean.rotation.z) * Math.min(1, dt * 6);   // lean into the carve, like yours
+  m.tag.visible = m.node.position.distanceTo(camera.position) < CPU_TAG_DIST;
+  if (!m.root) return;
+  const A = ridingPoses.cruise, B = ridingPoses.tuck;
+  if (c.crashT > 0 || c.down || !A || A.bones.length !== m.bones.length) {
+    m.mixer.update(dt); m.root.position.set(0, 0, 0);          // down (death clip), or no riding pose yet: idle
+    return;
+  }
+  const t = c.tuckAmt;                                           // their own tuck, blended between the two poses
+  for (let k = 0; k < m.bones.length; k++) {
+    m.bones[k].position.lerpVectors(A.bones[k][0], B.bones[k][0], t);
+    m.bones[k].quaternion.slerpQuaternions(A.bones[k][1], B.bones[k][1], t);
+  }
+  m.root.position.lerpVectors(A.root, B.root, t);
+}
+// K: kick a racer riding right beside you — they eat it (Road Rash rules)
+let kickT = 0;
+function kickRacer() {
+  if (gameState !== 'PLAYING' || finish.crossed || kickT > 0 || grind.on || state.crashT > 0) return;
+  kickT = KICK_CDOWN;
+  const c = cpus.find(c => c.crashT <= 0 && !c.finished && Math.abs((c.u - state.u) * TOTAL_LEN) < KICK_REACH_U
+                          && Math.abs(c.lat - state.lateral) < KICK_REACH_LAT && Math.abs(c.height - state.height) < 1.2);
+  const side = c ? Math.sign(c.lat - state.lateral) || 1 : 1;
+  const clip = rig.ready && rig.clips?.find(k => k.name.endsWith(side > 0 ? '|Kick_Left' : '|Kick_Right'));
+  if (clip) {                                                    // the kick plays over the riding pose for a moment
+    rig.mixer.stopAllAction();
+    const a = rig.mixer.clipAction(clip); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false; a.play();
+    rig.kickAnim = a.getClip().duration * 0.8;
+  }
+  if (!c) return;
+  c.lat += side * 1.2;
+  cpuCrash(c);
+  award('KICKED ' + c.name, KICK_PTS);
+}
+// your place right now (1-based): finishers ahead of you, then everyone further down the hill
+function racePlace() {
+  if (finish.crossed && lastRun?.place) return lastRun.place;
+  return 1 + cpus.filter(c => c.finished || c.u > state.u).length;
+}
+
+// ------------------------------------------------------------------
 // Loop
 // ------------------------------------------------------------------
 // Adaptive resolution — hold the frame rate by trading render resolution. Steps down when the
@@ -3985,6 +4496,7 @@ function frame(now) {
     pitCam(dt);   // PIT → STATS → ENTRY → RESULTS: keep circling the rider
   }
   updateCrowd(dt);
+  updateCpus(dt);
   updateDetailLOD(dt);
   updateChaos(dt);
   updateRadio();
@@ -4009,7 +4521,7 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
-  layoutPop(); layoutTimer(); layoutSelect();
+  layoutPop(); layoutTimer(); layoutPos(); layoutSelect();
 });
 </script>
 </body>
