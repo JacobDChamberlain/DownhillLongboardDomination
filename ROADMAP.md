@@ -158,6 +158,33 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
     star…). The Grim Reaper and Wyatt (with his OK) are free to use.
   - None have CC0 models; each needs a custom model rigged to the shared skeleton to ride.
 
+## 🔊 Sounds to replace
+Every sound effect is currently a **synthesized placeholder** (Web Audio, no files), and they're all
+likely to be replaced with real recordings. Each one is a method on `sfx` (search for its name in
+`index.html`). The swap: load the file into an `AudioBuffer` once at startup, then play it from
+that method (keep the shared `audioCtx`; don't create a context mid-run).
+
+| Sound | Method | Plays when |
+|---|---|---|
+| [ ] Ollie pop | `sfx.pop()` | any jump: Space, kicker launch, grind hop-off |
+| [ ] Landing thud | `sfx.land(false)` | landing from the air |
+| [ ] Sketchy landing scrape | `sfx.land(true)` | a sketchy landing (added on top of the thud) |
+| [ ] Crash | `sfx.crash()` | you bail: a bad landing or losing a grind |
+| [ ] CPU crash (quieter, by distance) | `sfx.crash(k)` | a CPU racer wipes out near the camera |
+| [ ] Rolling wheels (loop) | `sfx.update` → `roll` | always while riding; louder with speed, grittier on grass |
+| [ ] Grind scrape (loop) | `sfx.update` → `grindL` / `grindH` | while grinding a rail |
+| [ ] Crowd (loop) + cheers | `sfx.update` → `crowdL`, `sfx.cheer()` | near any crowd; swells at the finish and on knockouts |
+| [ ] Pickup chime | `sfx.pickup()` | endurance / free death / weapon pickups |
+| [ ] Rocket boost whoosh | `sfx.whoosh(true)` | the rocket boost pickup |
+| [ ] Boost pad whoosh | `sfx.whoosh(false)` | level 3 boost pads |
+| [ ] Punch / kick swing | `sfx.swing()` | throwing a punch or kick in the pit brawl |
+| [ ] Hit smack | `sfx.hit()` | a punch/kick landing; kicking a racer or a fan |
+| [ ] Splash | `sfx.splash(dist)` | a whale or dolphin leaving or entering the lake (level 1) |
+| [ ] Countdown beeps | `beep()` | the three start lights (not in `sfx`; uses the music volume) |
+
+Nice-to-haves once real audio is in: wind rush at speed, board clack on kicks, a crowd "ohhh" on
+crashes, whale song, a separate volume for the crowd.
+
 ## 🎮 Game options
 - [ ] **Difficulty levels** (Easy / Normal / Hard): scales the CPU racers (`CPU_SKILL`, rubber band,
   how often they crash) and maybe landing generosity.
