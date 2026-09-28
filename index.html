@@ -218,7 +218,7 @@
     <div class="menu-hint">← → choose · Enter / A to ride</div>
   </div>
 </div>
-<div id="brawlhint" class="hidden">WASD / arrows walk · Shift run · <b>F</b> / <b>J</b> punch · C camera · Esc back to results</div>
+<div id="brawlhint" class="hidden">WASD / arrows walk · double-tap W or Shift to sprint · <b>F</b> / <b>J</b> punch · C camera · Esc back to results</div>
 <div id="nowplaying">
   <div class="np-eyebrow">♪ Now playing</div>
   <div class="np-title">—</div>
@@ -281,7 +281,7 @@
       </dl></section>
       <section><h3>AFTER THE FINISH</h3><dl class="tricks">
         <dt>Step off</dt><dd><kbd>F</kbd> + <kbd>J</kbd><small>in the pit, on the stats or the end screen</small></dd>
-        <dt>Walk</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows<small>hold <kbd>Shift</kbd> to run</small></dd>
+        <dt>Walk</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows<small>double-tap <kbd>W</kbd> or hold <kbd>Shift</kbd> to sprint</small></dd>
         <dt>Punch</dt><dd><kbd>F</kbd> left · <kbd>J</kbd> right<small>your weapon pickup changes the swing</small></dd>
         <dt>Back</dt><dd><kbd>Esc</kbd></dd>
       </dl></section>
@@ -1133,6 +1133,7 @@ if (IS_SWITCH) {
 // road comes through, and rock walls outside dropping to the valley. The crowd rings the rim.
 // ------------------------------------------------------------------
 const ARENAS = [];   // { c: centre (floor level), R, openAng, openHalf } — crowd placement reads this
+const PIT_FLOORS = [];   // the arenas' floor meshes (the pit brawl stands on these)
 {
   const FLOOR_DY = -0.55;   // a hair under the grass ribbon so the two never z-fight
   function ring(profile, c, openAng, openHalf, mat, uvFor) {
@@ -1168,7 +1169,7 @@ const ARENAS = [];   // { c: centre (floor level), R, openAng, openHalf } — cr
     const fuv = floor.geometry.attributes.uv, fp = floor.geometry.attributes.position;
     for (let i = 0; i < fuv.count; i++) fuv.setXY(i, (fp.getX(i) + c.x) / GRASS_TILE, (fp.getZ(i) + c.z) / GRASS_TILE);
     floor.position.set(c.x, c.y + FLOOR_DY, c.z); floor.receiveShadow = true;
-    scene.add(floor);
+    scene.add(floor); PIT_FLOORS.push(floor);
     // grass berm rim, then rock walls outside down to the valley floor
     ring([[R, FLOOR_DY], [R + 3, 0.6], [R + 7, 3.8], [R + 11, 5.2], [R + 17, 5.4]], c, openAng, openHalf, groundMeshes[0].material, planarUV);
     if (!IS_SWITCH)   // level 1's pits stand on the ridge; level 2's sit on the mountain terrain
@@ -2669,7 +2670,7 @@ function place(info) {
   const slideYaw = grind.on && grind.name === 'BOARDSLIDE' ? Math.PI / 2 : 0;
   slideYawAnim += (slideYaw - slideYawAnim) * Math.min(1, dt * 14);
   lean.rotation.y = stanceYaw + slideYawAnim;
-  lean.rotation.z = grind.on ? -grind.bal * 0.45 : -state.steerSmooth * 0.5;
+  lean.rotation.z = grind.on ? -grind.bal * 0.45 * (grind.name === 'BOARDSLIDE' ? -1 : 1) : -state.steerSmooth * 0.5;   // board across the rail: needle side flips
   lean.rotation.x = !rig.ready && info.tuck ? 0.18 : 0;   // the rigged rider tucks with its body instead
 
   // trick pose in the air (spin about up, grab = tuck-and-hold); settle back on the ground
@@ -3320,6 +3321,11 @@ addEventListener('keydown', e => {
   if (gameState === 'BRAWL') {
     if (e.repeat) return;
     if (e.code === 'Escape') exitBrawl();
+    else if (e.code === 'KeyW' || e.code === 'ArrowUp') {
+      const t = performance.now() / 1000;
+      if (t - brawl.lastFwdTap < BRAWL_DTAP) brawl.sprint = true;
+      brawl.lastFwdTap = t;
+    }
     else if (e.code === 'KeyF') throwPunch(-1);
     else if (e.code === 'KeyJ') throwPunch(1);
     else if (e.code === 'KeyC') cycleCam();
@@ -3653,8 +3659,9 @@ function updateStart(dt) {
 // upgraded to changes the swing and the reach (a stick sweeps everyone in front of you). The rider
 // model's own clips play here (walk / run / punches); its procedural board pose resumes on exit.
 // ------------------------------------------------------------------
-const BRAWL_WALK  = 3.4;      // walk speed (u/s)
-const BRAWL_RUN   = 7.5;      // with Shift
+const BRAWL_WALK  = 5.2;      // walk speed (u/s)
+const BRAWL_RUN   = 9.5;      // sprint: hold Shift, or double-tap W / ↑
+const BRAWL_DTAP  = 0.3;      // seconds between taps that count as a double tap
 const BRAWL_TURN  = 2.8;      // turn rate (rad/s)
 const BRAWL_ROOM  = 3;        // stay this far inside the finish pit's rim
 const BRAWL_BODY  = 0.7;      // you can't walk through standing spectators
@@ -3662,7 +3669,8 @@ const BRAWL_HIT_AT = 0.38;    // the blow lands this far (0–1) into the swing
 const BRAWL_ARC   = 0.35;     // cos of the half-angle in front of you that a swing covers
 const WEAPON_REACH = { FIST: 1.9, STICK: 2.8, 'WATER BOTTLE': 2.2, ROCK: 2.4 };
 const brawl = { on: false, from: null, walker: new THREE.Group(), heading: 0, base: null, baseName: '', punch: null,
-                punchT: 0, punchDur: 0, hit: false, kos: 0, camOff: null, padA: false, padB: false };
+                punchT: 0, punchDur: 0, hit: false, kos: 0, camOff: null, padA: false, padB: false, lastFwdTap: -1, sprint: false };
+const brawlRay = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0);
 scene.add(brawl.walker);
 const brawlHintEl = document.getElementById('brawlhint');
 const canBrawl = () => rig.ready && rig.clips.length && !brawl.on && ['PIT', 'STATS', 'RESULTS', 'END'].includes(gameState);
@@ -3740,7 +3748,8 @@ function updateBrawl(dt) {
   if (keys['KeyD'] || keys['ArrowRight']) turn -= 1;
   if (keys['KeyW'] || keys['ArrowUp']) move += 1;
   if (keys['KeyS'] || keys['ArrowDown']) move -= 1;
-  let sprint = keys['ShiftLeft'] || keys['ShiftRight'];
+  if (!(keys['KeyW'] || keys['ArrowUp'])) brawl.sprint = false;   // a double-tap sprint lasts while you hold it
+  let sprint = keys['ShiftLeft'] || keys['ShiftRight'] || brawl.sprint;
   const pad = navigator.getGamepads ? [...navigator.getGamepads()].find(p => p) : null;
   if (pad) {
     if (Math.abs(pad.axes[0]) > 0.15) turn -= pad.axes[0];
@@ -3763,6 +3772,10 @@ function updateBrawl(dt) {
   }
   const pc = frameAt(FINISH_PIT_U).p, off = P.clone().sub(pc).setY(0), lim = FINISH_PIT_R - BRAWL_ROOM;
   if (off.length() > lim) P.copy(pc).add(off.setLength(lim)).setY(P.y);
+  // stand on whatever is underneath — road or pit floor (the grass sits lower than the road)
+  brawlRay.set(new THREE.Vector3(P.x, P.y + 3, P.z), DOWN); brawlRay.far = 8;
+  const ground = brawlRay.intersectObjects([groundMeshes[1], ...PIT_FLOORS], false)[0];
+  if (ground) P.y = ground.point.y;
   brawl.walker.rotation.y = brawl.heading;
   brawlBase(speed > BRAWL_WALK + 0.5 ? 'Run' : Math.abs(speed) > 0.1 ? 'Walk' : 'Idle');
   if (brawl.base) brawl.base.timeScale = speed < 0 ? -1 : 1;
