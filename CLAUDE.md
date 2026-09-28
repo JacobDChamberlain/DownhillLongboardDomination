@@ -40,6 +40,8 @@ Anything new placed along the course should use frames too.
 
 **Riders / character select:** `RIDERS` is the roster. `setRider(i)` rebuilds the rig from a clone of a cached GLB (`loadRider`), or drops back to the box rider for THE OG (`file: null`). All rigged riders are Quaternius characters sharing one rig (`CharacterArmature`, same bone names + clips), so `poseRider` and the pit brawl work on any of them. New riders must use that rig. They're slimmed with gltf-transform: keep the clips the game uses, `prune({ keepLeaves: true })` (the `*_end` leaf bones are IK targets), `quantize`. The carousel (`openSelect` / `updateSelect` / `renderSelectPass`) is its own scene drawn over the dimmed world.
 
+**CPU racers** (`cpus`, `updateCpus`): each CPU keeps its own `u` / `lat` / `speed` and runs a simplified copy of the player physics. Its roster model wears the player's current bone pose (`snapshotPose`; same rig), falling back to Idle when the player is THE OG. Balance knobs: `CPU_SKILL`, `CPU_RUBBER`, `CPU_KICK_BELOW`. `racePlace()` feeds the POS readout and `lastRun.place`.
+
 **Rider** (`buildRig`/`poseRider`):
 - The Quaternius GLB is posed *procedurally* every frame: bones are reset to rest, then world-space helpers (`rotateWorld`, `turnWorld`, `aimWorld`, two-bone `ik2`) plant the feet, crouch, bend and twist the spine, and set the head and arms. There are no animation clips.
 - Quirks:

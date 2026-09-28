@@ -324,6 +324,7 @@
       <span>Air<b id="r-air">0.0s</b></span>
       <span>Score<b id="r-score">0</b></span>
       <span>Combo<b id="r-combo">0</b></span>
+      <span>Place<b id="r-place">1st</b></span>
     </div>
     <div id="rentry" class="rentry hidden">
       <div class="rentry-label blink">NEW RECORD — ENTER INITIALS</div>
@@ -1749,22 +1750,25 @@ function dropRig() {                           // back to the box rider
 }
 setRider(riderIdx);
 
-function buildRig(charScene, boardScene, boxParts, clips = []) {
-  const prep = o => o.traverse(m => {
-    if (!m.isMesh) return;
-    m.castShadow = true; m.frustumCulled = false;
-    if (m.material) m.material.envMapIntensity = ENV_INTENSITY;
-  });
-  prep(charScene); prep(boardScene);
-
-  // board: model's long axis is X — turn it down the travel axis (+Z), wheels on the ground
+const prepModel = o => o.traverse(m => {
+  if (!m.isMesh) return;
+  m.castShadow = true; m.frustumCulled = false;
+  if (m.material) m.material.envMapIntensity = ENV_INTENSITY;
+});
+// board: model's long axis is X — turn it down the travel axis (+Z), wheels on the ground
+function makeBoard(boardScene) {
   const bb = new THREE.Box3().setFromObject(boardScene), bsz = bb.getSize(new THREE.Vector3());
   const bs = BOARD_LEN / bsz.x;
   const board = new THREE.Group();
   boardScene.scale.setScalar(bs);
   boardScene.position.set(-(bb.min.x + bsz.x / 2) * bs, -bb.min.y * bs, -(bb.min.z + bsz.z / 2) * bs);
   board.add(boardScene); board.rotation.y = Math.PI / 2;
-  rig.deckTop = bsz.y * bs * 0.92;
+  return { board, deckTop: bsz.y * bs * 0.92 };
+}
+function buildRig(charScene, boardScene, boxParts, clips = []) {
+  prepModel(charScene); prepModel(boardScene);
+  const { board, deckTop } = makeBoard(boardScene);
+  rig.deckTop = deckTop;
 
   // rider: sideways, regular stance (left foot toward the nose) — the model faces +Z, so turn it
   // to face -X; `root` is the node we raise/lower for crouch
@@ -2349,6 +2353,7 @@ function resetRun() {
   grind.on = false; grind.cd = 0; grind.buffer = 0;
   stance = 1; lastLandT = -1e9;
   Object.assign(finish, { crossed: false, stopped: false, t: 0 });
+  resetCpus();
   for (const it of ITEMS) { if (it.mesh) it.mesh.visible = true; it.taken = false; }
 }
 
@@ -2388,7 +2393,8 @@ const finish = { crossed: false, stopped: false, t: 0, orbitAng: 0 };
 function crossFinish() {
   finish.crossed = true;
   endCombo();
-  lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, combo: run.bestCombo, reason: 'end', rank: -1 };
+  lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, combo: run.bestCombo, reason: 'end', rank: -1,
+              place: 1 + cpus.filter(c => c.finished).length };
   if (grind.on) endGrind();
   showTrick('FINISH!'); flash(0.3);
 }
@@ -2957,13 +2963,43 @@ function updateTimer() {
   const txt = String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(Math.floor(secs % 60)).padStart(2, '0');
   if (txt !== timerTxt) drawTimer(txt);
 }
-document.fonts?.load(`400 ${TIMER_PX * POP_RES}px "Share Tech Mono"`).then(() => { timerTxt = ''; }).catch(() => {});   // redraw once the font lands
-layoutTimer();
+// race position under it: POS 2/4 (same treatment, smaller)
+const POS_PX = 20, POS_Y = TIMER_Y + 30;
+const posCv = document.createElement('canvas');
+posCv.width = 256; posCv.height = Math.ceil(POS_PX * POP_RES * 1.8);
+const posCx = posCv.getContext('2d');
+const posTex = new THREE.CanvasTexture(posCv); posTex.colorSpace = THREE.SRGBColorSpace;
+const posMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ map: posTex, transparent: true, opacity: TIMER_OPACITY, depthTest: false, depthWrite: false, toneMapped: false }));
+hudScene.add(posMesh);
+let posTxt = '';
+function layoutPos() {
+  posMesh.scale.set(posCv.width / POP_RES, posCv.height / POP_RES, 1);
+  posMesh.position.set(innerWidth / 2, -POS_Y, 0);
+}
+function updatePos() {
+  posMesh.visible = timerMesh.visible && cpus.length > 0;
+  if (!posMesh.visible) return;
+  const txt = `POS ${racePlace()}/${cpus.length + 1}`;
+  if (txt === posTxt) return;
+  posTxt = txt;
+  const W = posCv.width, H = posCv.height;
+  posCx.clearRect(0, 0, W, H);
+  posCx.font = `400 ${POS_PX * POP_RES}px ${TIMER_FONT}`;
+  posCx.letterSpacing = 2 * POP_RES + 'px';
+  posCx.textAlign = 'center'; posCx.textBaseline = 'middle';
+  posCx.fillStyle = '#fff';
+  posCx.shadowColor = 'rgba(0,0,0,.6)'; posCx.shadowBlur = 8 * POP_RES; posCx.shadowOffsetY = 2 * POP_RES;
+  posCx.fillText(txt, W / 2, H / 2);
+  posTex.needsUpdate = true;
+}
+document.fonts?.load(`400 ${TIMER_PX * POP_RES}px "Share Tech Mono"`).then(() => { timerTxt = posTxt = ''; }).catch(() => {});   // redraw once the font lands
+layoutTimer(); layoutPos();
 
 function renderHudPass() {
-  updateTimer();
+  updateTimer(); updatePos();
   popMesh.visible = popMat.opacity > 0;
-  if (!popMesh.visible && !timerMesh.visible) return;
+  if (!popMesh.visible && !timerMesh.visible && !posMesh.visible) return;
   renderer.autoClear = false;
   renderer.render(hudScene, hudCam);
   renderer.autoClear = true;
@@ -3547,6 +3583,7 @@ const results = {
   air:   document.getElementById('r-air'),
   score: document.getElementById('r-score'),
   combo: document.getElementById('r-combo'),
+  place: document.getElementById('r-place'),
   cat:   document.querySelector('#rcat .lbl'),
   inits: document.querySelectorAll('#rentry .init'),
 };
@@ -3581,6 +3618,7 @@ rmenuItems.forEach((li, i) => {
 });
 const entry = { slots: ['A', 'A', 'A'], pos: 0 };
 
+const ordinal = n => { const sfx = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (sfx[(v - 20) % 10] || sfx[v] || sfx[0]); };
 function fmtTime(s) {
   const m = Math.floor(s / 60), sec = Math.floor(s % 60), ms = Math.floor((s * 1000) % 1000);
   return `${m}:${String(sec).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
@@ -3596,6 +3634,7 @@ function finishRun(reason) {
   results.air.textContent  = lastRun.airTime.toFixed(1) + 's';
   results.score.textContent = lastRun.score;
   results.combo.textContent = lastRun.combo || 0;
+  results.place.textContent = ordinal(lastRun.place || racePlace()) + '/' + (cpus.length + 1);
 
   results.el.classList.remove('hidden');
   gameState = 'STATS';                       // 1) stats alone, then continue →
@@ -4021,6 +4060,178 @@ function renderSelectPass() {
 }
 
 // ------------------------------------------------------------------
+// CPU racers — three AI riders start beside you and race to the finish. They ride the same model
+// you do (u along the course + lateral offset) with the same slope/drag/rolling physics, always
+// tucked, each with its own skill and a light rubber band so the pack stays close. They take the
+// inside line through bends, dodge whoever's ahead, launch off kickers (gap assist; a miss
+// respawns them like you), then coast into the finish pit. Visually they're roster riders on
+// longboards wearing YOUR current riding pose (same rig), leaning into their own carves.
+// ------------------------------------------------------------------
+const CPU_NAMES   = ['RAZ', 'KOJI', 'MEL'];
+const CPU_SKILL   = [0.96, 1.0, 1.04];      // multiplies the slope pull — the fastest is a real threat
+const CPU_GRID    = [{ lat: -5.5, back: 0 }, { lat: 5.5, back: 0 }, { lat: -2.2, back: 7 }];   // start positions
+const CPU_RUBBER  = 0.0012;                  // per unit of gap to you: speed up behind, ease off ahead
+const CPU_RUBBER_MAX = 0.14;
+const CPU_KICK_BELOW = 14;                 // they only kick-push when slower than this (off the line, after a bail)
+const CPU_LINE    = 0.5;                     // how far toward the inside of a bend they cut (× half width)
+const CPU_LAT_RATE = 3.2;                    // how fast they move across the road (u/s)
+const CPU_BUMP    = 1.5;                     // riders closer than this (sideways) bump apart
+const CPU_TAG_DIST = 70;                     // name tags show within this of the camera
+const cpus = CPU_NAMES.map((name, i) => ({
+  name, skill: CPU_SKILL[i], u: START_U, lat: 0, speed: 0, height: 0, vy: 0, airborne: false, heading: 0,
+  t: 0, finished: false, finishT: 0, stopped: false, kickCd: 0, model: null, riderIdx: -1,
+}));
+const cpuPose = { bones: null, root: new THREE.Vector3() };   // your riding pose, copied onto them
+function snapshotPose() {
+  if (!rig.ready) { cpuPose.bones = null; return; }
+  if (state.airborne || grind.on || state.crashT > 0 || brawl.on) return;   // keep the last clean riding pose
+  cpuPose.bones = rig.bones.map(([b]) => [b.position.clone(), b.quaternion.clone()]);
+  cpuPose.root.copy(rig.root.position);
+}
+function nameTag(text) {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+  const cx = cv.getContext('2d');
+  cx.font = '900 40px ui-monospace, Menlo, monospace'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.lineWidth = 8; cx.strokeStyle = 'rgba(0,0,0,.65)'; cx.strokeText(text, 128, 32);
+  cx.fillStyle = '#ffd23c'; cx.fillText(text, 128, 32);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.scale.set(2.4, 0.6, 1); sp.position.y = RIDER_HEIGHT + 0.9;
+  return sp;
+}
+function buildCpuModel(c, i) {                 // (re)dress a CPU as roster rider i
+  if (c.model) { scene.remove(c.model.node); c.model = null; }
+  c.riderIdx = i;
+  const node = new THREE.Group(), lean = new THREE.Group();
+  lean.rotation.order = 'ZYX';
+  node.add(lean); node.add(nameTag(c.name)); scene.add(node);
+  c.model = { node, lean, root: null, bones: null, mixer: null, tag: node.children[1] };
+  boardLoad ||= new GLTFLoader().loadAsync('assets/models/longboard.glb');
+  Promise.all([loadRider(i), boardLoad]).then(([g, bd]) => {
+    if (c.riderIdx !== i || !c.model) return;
+    const char = SkeletonUtils.clone(g.scene), bs = bd.scene.clone(true);
+    prepModel(char); prepModel(bs);
+    const { board } = makeBoard(bs);
+    char.updateMatrixWorld(true);
+    const cb = new THREE.Box3().setFromObject(char), csz = cb.getSize(new THREE.Vector3()), k = RIDER_HEIGHT / csz.y;
+    char.scale.setScalar(k);
+    char.position.set(-(cb.min.x + csz.x / 2) * k, -cb.min.y * k, -(cb.min.z + csz.z / 2) * k);
+    const root = new THREE.Group(); root.add(char); root.rotation.y = -Math.PI / 2;
+    lean.add(board, root);
+    const bones = []; char.traverse(o => { if (o.isBone) bones.push(o); });
+    const mixer = new THREE.AnimationMixer(char);
+    const idle = g.animations.find(a => a.name.endsWith('|Idle'));
+    if (idle) mixer.clipAction(idle).play();
+    Object.assign(c.model, { root, bones, mixer });
+  }).catch(e => console.warn('[assets] CPU rider unavailable:', e?.message || e));
+}
+function resetCpus() {
+  // dress them as three other riders from the roster (never your pick)
+  const pool = RIDERS.map((r, i) => i).filter(i => RIDERS[i].file && i !== riderIdx);
+  cpus.forEach((c, n) => {
+    const want = pool[(n * 2 + LEVEL_IDX) % pool.length];
+    if (c.riderIdx !== want || !c.model) buildCpuModel(c, want);
+    const g = CPU_GRID[n];
+    Object.assign(c, { u: Math.max(0.0002, START_U - g.back / TOTAL_LEN), lat: g.lat, speed: 0, height: 0, vy: 0,
+                       airborne: false, heading: 0, t: 0, finished: false, finishT: 0, stopped: false, kickCd: 0 });
+  });
+}
+const cpuTan = new THREE.Vector3();
+function updateCpu(c, i, dt) {
+  const racing = gameState === 'PLAYING' || finish.crossed;   // the green light has gone
+  if (!racing) return;
+  const f = frameAt(c.u), slope = Math.max(0, -f.tan.y);
+  if (c.t === 0 && !c.finished) c.speed = LAUNCH_SPEED;      // green light: roll off the line like you do
+  c.t += c.finished ? 0 : dt;
+  if (!c.finished) {
+    // speed: tucked the whole way, kick when slow, skill + rubber band on the slope pull
+    const behind = THREE.MathUtils.clamp((state.u - c.u) * TOTAL_LEN * CPU_RUBBER, -CPU_RUBBER_MAX, CPU_RUBBER_MAX);
+    let accel = G * slope * c.skill * (1 + behind) - DRAG_TUCK * c.speed * c.speed - ROLL - Math.abs(c.heading) * c.speed * (CARVE_SCRUB / 100);
+    c.speed = Math.max(0, c.speed + accel * dt);
+    c.kickCd -= dt;
+    if (!c.airborne && c.speed < CPU_KICK_BELOW && c.kickCd <= 0) { c.speed += KICK_IMPULSE; c.kickCd = KICK_CD * 1.6; }
+    // line: toward the inside of the bend ahead, around whoever's just in front
+    cpuTan.copy(frameAt(Math.min(1, c.u + 30 / TOTAL_LEN)).tan).sub(f.tan);
+    let target = THREE.MathUtils.clamp(cpuTan.dot(f.side) * 6, -1, 1) * CPU_LINE * ROAD_HALF_WIDTH;
+    for (const o of [{ u: state.u, lat: state.lateral }, ...cpus.filter(x => x !== c)]) {
+      const ahead = (o.u - c.u) * TOTAL_LEN;
+      if (ahead > 0 && ahead < 9 && Math.abs(o.lat - target) < 2.2) target = o.lat + (target > o.lat ? 2.6 : -2.6);
+    }
+    const lim = ROAD_HALF_WIDTH - 1.2;
+    target = THREE.MathUtils.clamp(target, -lim, lim);
+    const dLat = THREE.MathUtils.clamp(target - c.lat, -CPU_LAT_RATE * dt, CPU_LAT_RATE * dt);
+    c.heading += (Math.atan2(dLat / dt, Math.max(c.speed, 1)) - c.heading) * Math.min(1, dt * 6);   // same sign as yours: +heading drifts +lateral
+    c.lat += dLat;
+  } else {
+    // past the line: brake to a stop in the pit, spread out so nobody lands on you
+    const stopU = PIT_STOP_U - (6 + i * 5) / TOTAL_LEN;
+    const d = (stopU - c.u) * TOTAL_LEN;
+    if (d <= 0.3) c.speed = 0;
+    else c.speed = Math.max(Math.min(c.speed, 6), c.speed - (c.speed * c.speed) / (2 * Math.max(d, 0.5)) * dt);
+    c.heading *= Math.exp(-dt * 3);
+    if (c.speed === 0) c.stopped = true;
+  }
+  const uPrev = c.u;
+  c.u = Math.min(STOP_U, c.u + (c.speed * dt) / TOTAL_LEN);
+  // kickers (with the gap assist), flight, and gaps — same rules as yours
+  for (const ru of RAMPS) {
+    const s = (c.u - ru) * TOTAL_LEN, sPrev = (uPrev - ru) * TOTAL_LEN, half = KICKER_LEN / 2;
+    if (Math.abs(c.lat) > KICKER_HALF_W) continue;
+    if (!c.airborne && s >= -half && s < half) c.height = KICKER_H * (s + half) / KICKER_LEN;
+    if (!c.airborne && sPrev < half && s >= half) {
+      let vy = RAMP_BASE + c.speed * RAMP_FACTOR;
+      const g = GAPS.find(g => g.u0 > ru && g.u0 - ru < 0.02);
+      if (g) vy = Math.max(vy, Math.min(GAP_MAX_VY, (34 * ((g.u1 - ru) * TOTAL_LEN + GAP_MARGIN)) / (2 * Math.max(c.speed, 1))));
+      c.airborne = true; c.vy = vy;
+    }
+  }
+  if (c.airborne) {
+    c.vy -= 34 * dt; c.height += c.vy * dt;
+    if (c.height <= 0) { c.height = 0; c.airborne = false; c.vy = 0; }
+  } else if (!RAMPS.some(ru => Math.abs((c.u - ru) * TOTAL_LEN) < KICKER_LEN / 2 && Math.abs(c.lat) <= KICKER_HALF_W)) c.height = 0;
+  for (const g of GAPS) if (!c.airborne && c.u > g.u0 && c.u < g.u1) {
+    const ru = RAMPS.find(r => g.u0 > r && g.u0 - r < 0.02) ?? g.u0;
+    c.u = ru - GAP_RESPAWN_BACK / TOTAL_LEN; c.speed = GAP_RESPAWN_SPEED; c.height = 0;
+  }
+  if (!c.finished && c.u >= FINISH_U) { c.finished = true; c.finishT = c.t; }
+}
+function updateCpus(dt) {
+  if (gameState === 'SELECT' || gameState === 'TITLE') return;
+  snapshotPose();
+  cpus.forEach((c, i) => updateCpu(c, i, dt));
+  // shoulder bumps with you (racing only): both get pushed apart sideways
+  if (gameState === 'PLAYING' && !finish.crossed && !grind.on) for (const c of cpus) {
+    const du = (c.u - state.u) * TOTAL_LEN, dl = c.lat - state.lateral;
+    if (Math.abs(du) < 2.2 && Math.abs(dl) < CPU_BUMP && Math.abs(c.height - state.height) < 1) {
+      const push = (CPU_BUMP - Math.abs(dl)) / 2 * (Math.sign(dl) || 1);
+      c.lat += push; state.lateral -= push;
+    }
+  }
+  for (const c of cpus) placeCpu(c, dt);
+}
+function placeCpu(c, dt) {
+  const m = c.model;
+  if (!m) return;
+  const f = frameAt(c.u);
+  m.node.position.copy(f.p).addScaledVector(f.side, c.lat).addScaledVector(f.up, 0.05 + c.height);
+  const dir = f.tan.clone().multiplyScalar(Math.cos(c.heading)).addScaledVector(f.side, Math.sin(c.heading)).normalize();
+  m.node.quaternion.setFromRotationMatrix(new THREE.Matrix4().lookAt(new THREE.Vector3(), dir.negate(), f.up));
+  m.lean.rotation.z += (c.heading * 0.8 - m.lean.rotation.z) * Math.min(1, dt * 6);   // lean into the carve, like yours
+  m.tag.visible = m.node.position.distanceTo(camera.position) < CPU_TAG_DIST;
+  if (!m.root) return;
+  const pose = cpuPose.bones;
+  if (pose && pose.length === m.bones.length) {
+    for (let k = 0; k < pose.length; k++) { m.bones[k].position.copy(pose[k][0]); m.bones[k].quaternion.copy(pose[k][1]); }
+    m.root.position.copy(cpuPose.root);
+  } else { m.mixer.update(dt); m.root.position.set(0, 0, 0); }   // no pose to copy (you're the OG): stand
+}
+// your place right now (1-based): finishers ahead of you, then everyone further down the hill
+function racePlace() {
+  if (finish.crossed && lastRun?.place) return lastRun.place;
+  return 1 + cpus.filter(c => c.finished || c.u > state.u).length;
+}
+
+// ------------------------------------------------------------------
 // Loop
 // ------------------------------------------------------------------
 // Adaptive resolution — hold the frame rate by trading render resolution. Steps down when the
@@ -4084,6 +4295,7 @@ function frame(now) {
     pitCam(dt);   // PIT → STATS → ENTRY → RESULTS: keep circling the rider
   }
   updateCrowd(dt);
+  updateCpus(dt);
   updateDetailLOD(dt);
   updateChaos(dt);
   updateRadio();
@@ -4108,7 +4320,7 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
-  layoutPop(); layoutTimer(); layoutSelect();
+  layoutPop(); layoutTimer(); layoutPos(); layoutSelect();
 });
 </script>
 </body>

@@ -61,7 +61,11 @@ content. The carving rewrite is the big one: do it before building more switchba
 - [ ] **More tricks** — see the grind trick list below; also flip tricks, more grabs, manuals.
 - [x] **Combos** — tricks started within 2.5s of touching down chain; the chain pays a bonus
   (10% × points × extra tricks) and feeds the Biggest Combo ranking; a bail loses it.
-- [ ] **CPU racers** — AI riders to race against (next up).
+- [x] **CPU racers** — *done: three AI riders (RAZ, KOJI, MEL) on the start grid with you; same
+  physics, always tucked, per-rider skill + a light rubber band; inside line through bends,
+  dodge whoever's ahead, kickers with gap assist, shoulder bumps; POS x/4 under the timer and
+  your place on the results.* Ideas: difficulty setting, CPUs doing tricks / grabbing pickups,
+  CPUs that can crash, a race-results table with everyone's times.
 - [x] **End-of-race stats board** — before initials, ←/→ or Tab cycles the ranking: fastest
   time, high score, biggest combo, longest hangtime, speed demon (top speed), etc.
 
