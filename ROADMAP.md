@@ -111,7 +111,7 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
 
 ## 🎨 Presentation & chaos modes
 - [ ] **Pickups brighter**, stand out more (labels and beams are in; push the glow/size).
-- [ ] **Sound effects** — ollie pop, grind loop, landing, crash, crowd cheers (synth or CC0).
+- [x] **Sound effects** — *done: all synthesized (Web Audio, no files): ollie pop, landing thud + sketchy scrape, crash, rolling-wheels loop (grittier on grass), grind scrape loop, pickup chime, boost whoosh, punch/kick smack + swing, crowd roar by proximity with cheers, sea splashes; Effects Volume in Settings.* Was: — ollie pop, grind loop, landing, crash, crowd cheers (synth or CC0).
 - [ ] **Rave mode** — glowsticks on the crowd; more bass (low-shelf boost on the music via Web
   Audio; only works over http(s), like the analyser).
 - [ ] **Starry mode** — brighter stars, more cosmic activity: huge nearby planets with flowing

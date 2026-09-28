@@ -268,6 +268,7 @@
     <div class="menu-title">SETTINGS</div>
     <ul class="menu-list">
       <li data-setting="volume">Music Volume <span class="val">70</span></li>
+      <li data-setting="sfx">Effects Volume <span class="val">70</span></li>
       <li data-setting="sens">Look Sensitivity <span class="val">100</span></li>
       <li data-setting="fx">Cinematic FX <span class="val">ON</span></li>
       <li data-action="back">Back</li>
@@ -2653,13 +2654,14 @@ function land(h = 0) {
   if (off > LAND_SKETCHY) { crash(); return; }                // came down sideways
   settleSpin();
   const sketchy = off > LAND_CLEAN || grabbing;                // still holding the grab counts too
+  sfx?.land(sketchy);
   const scored = scoreTrick(sketchy ? 0.5 : 1);
   if (scored || sketchy) showLandCall(sketchy);                // CLEAN! / SKETCHY! over your head
   if (scored && !sketchy) state.speed += CLEAN_BOOST;          // a clean landing pays speed
   lastLandT = run.t;
   if (state.speed > 4) flash(sketchy ? 0.25 : 0.15);
 }
-function takeoff(vy) { if (state.airborne) return; state.airborne = true; state.vy = vy; armTrick(); }
+function takeoff(vy) { if (state.airborne) return; state.airborne = true; state.vy = vy; armTrick(); sfx?.pop(); }
 // A kicker that feeds a gap launches you far enough to clear it (with margin) as long as you're
 // rolling at GAP_MIN_SPEED or better — the road climbs into that kicker, so a speed-only launch
 // was nearly impossible. Too slow and you fall (and get told why).
@@ -2683,6 +2685,7 @@ const PIT_ORBIT_SECS = 4.5;   // camera circles you this long before the stats c
 const COAST_LAT      = ROAD_HALF_WIDTH - 1;   // how far off centre you can steer while coasting in
 const finish = { crossed: false, stopped: false, t: 0, orbitAng: 0 };
 function crossFinish() {
+  sfx?.cheer(1);
   finish.crossed = true;
   endCombo();
   lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, combo: run.bestCombo, reason: 'end', rank: -1,
@@ -2938,6 +2941,7 @@ function settleSpin() {
 function armTrick() { trick.spin = 0; trick.air = 0; trick.grabT = 0; trick.grab = false; trick.type = 'ollie'; }
 // a boost pad: +PAD_BOOST, and never less than what the stretch ahead needs
 function padBoost(pd) {
+  sfx?.whoosh(false);
   state.speed = THREE.MathUtils.clamp(state.speed + PAD_BOOST, pd.min, pd.max ?? PAD_MAX);
   flash(0.1);
 }
@@ -2988,6 +2992,7 @@ function endCombo(keep = true) {             // the chain ends: bank the bonus (
   combo.n = combo.pts = combo.t = 0;
 }
 function crash() {                             // bail: the rider goes down and slides to a stop
+  sfx?.crash();
   Object.assign(state, { crashT: CRASH_SECS, speed: state.speed * 0.4, heading: 0, airborne: false, height: 0, vy: 0 });
   trick.type = null; trick.grab = false; trickPivot.rotation.set(0, 0, 0);
   endCombo(false);
@@ -3012,6 +3017,7 @@ function scoreTrick(quality = 1) {
 }
 function collectItem(it) {
   it.taken = true; it.mesh.visible = false;
+  if (it.type === 'boost') sfx?.whoosh(true); else sfx?.pickup();
   if (it.type === 'boost')          { state.speed += ROCKET_BOOST; flash(0.25); showTrick('ROCKET BOOST!'); }
   else if (it.type === 'endurance') { enduranceT = ENDURANCE_SECS; showTrick('ENDURANCE +'); }
   else if (it.type === 'freedeath') { freeDeath = true; showTrick('FREE DEATH'); }
@@ -3619,6 +3625,85 @@ const audio = new Audio();
 // blocks the page for ~0.5s on macOS (it used to happen on the first countdown beep, freezing GO)
 let audioCtx = null;
 try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
+// ------------------------------------------------------------------
+// Sound effects — all synthesized (Web Audio on the shared audioCtx; no files): an ollie pop, landing
+// thud (+ a scrape when sketchy), crash, a rolling-wheels loop (grittier off-road), a grind scrape
+// loop, pickup chime, boost whoosh, punch/kick smack + swing, crowd roar near the crowds (a cheer
+// at the finish and on knockouts), and sea splashes. Effects Volume in Settings.
+// ------------------------------------------------------------------
+const SFX_DEFAULT = 70;        // effects volume (0–100)
+const sfx = (() => {
+  if (!audioCtx) return null;
+  const ctx = audioCtx, out = ctx.createGain(); out.gain.value = SFX_DEFAULT / 100; out.connect(ctx.destination);
+  const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  { const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  const live = () => { if (ctx.state === 'suspended') ctx.resume(); return ctx.currentTime; };
+  // a burst of filtered noise; `to` sweeps the filter
+  function noise({ dur = 0.2, type = 'bandpass', f = 1000, to, q = 1, gain = 0.5, attack = 0.005, delay = 0 }) {
+    const t0 = live() + delay, src = ctx.createBufferSource(), flt = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = noiseBuf; src.loop = true;
+    flt.type = type; flt.frequency.setValueAtTime(f, t0); flt.Q.value = q;
+    if (to) flt.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(gain, t0 + attack); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(flt).connect(g).connect(out); src.start(t0); src.stop(t0 + dur + 0.05);
+  }
+  // a pitched blip; `to` glides it
+  function tone({ dur = 0.15, type = 'sine', f = 200, to, gain = 0.5, delay = 0 }) {
+    const t0 = live() + delay, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0); if (to) o.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+    g.gain.setValueAtTime(gain, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(out); o.start(t0); o.stop(t0 + dur + 0.05);
+  }
+  // a looping noise bed whose level and colour we steer every frame
+  function loop(type, f, q) {
+    const src = ctx.createBufferSource(), flt = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = noiseBuf; src.loop = true; flt.type = type; flt.frequency.value = f; flt.Q.value = q; g.gain.value = 0;
+    src.connect(flt).connect(g).connect(out); src.start();
+    return { flt, g, set(level, freq) { const t = ctx.currentTime; g.gain.setTargetAtTime(level, t, 0.06); if (freq) flt.frequency.setTargetAtTime(freq, t, 0.08); } };
+  }
+  const roll = loop('lowpass', 380, 0.7), grindL = loop('bandpass', 2600, 7), grindH = loop('bandpass', 4300, 9), crowdL = loop('bandpass', 750, 0.6);
+  let cheer = 0, crowdT = 0, crowdNear = 1e9;
+  return {
+    setVolume(v) { out.gain.setTargetAtTime(v / 100, ctx.currentTime, 0.05); },
+    pop()   { tone({ f: 170, to: 55, dur: 0.13, gain: 0.8 }); noise({ type: 'highpass', f: 2500, dur: 0.05, gain: 0.35 }); },
+    land(sketchy) {
+      tone({ f: 120, to: 42, dur: 0.2, gain: 0.9 }); noise({ type: 'lowpass', f: 700, dur: 0.16, gain: 0.5 });
+      if (sketchy) noise({ type: 'bandpass', f: 1400, to: 700, q: 2, dur: 0.35, gain: 0.35, delay: 0.03 });
+    },
+    crash(k = 1) {
+      noise({ type: 'lowpass', f: 1200, to: 200, dur: 0.7, gain: 0.8 * k });
+      for (const [d, f] of [[0, 110], [0.12, 80], [0.27, 65]]) tone({ f, to: f * 0.5, dur: 0.18, gain: 0.7 * k, delay: d });
+    },
+    pickup() { tone({ f: 880, dur: 0.12, gain: 0.3, type: 'triangle' }); tone({ f: 1320, dur: 0.2, gain: 0.3, type: 'triangle', delay: 0.08 }); },
+    whoosh(big) {
+      noise({ type: 'bandpass', f: 350, to: big ? 4200 : 3000, q: 1.4, dur: big ? 0.7 : 0.45, gain: big ? 0.7 : 0.5, attack: 0.05 });
+      tone({ type: 'sawtooth', f: 180, to: big ? 900 : 600, dur: big ? 0.6 : 0.4, gain: 0.08 });
+    },
+    swing() { noise({ type: 'bandpass', f: 700, to: 2200, q: 1, dur: 0.16, gain: 0.25, attack: 0.02 }); },
+    hit()   { noise({ type: 'bandpass', f: 1600, q: 1.2, dur: 0.09, gain: 0.7 }); tone({ f: 95, to: 50, dur: 0.14, gain: 0.8 }); cheer = Math.max(cheer, 0.5); },
+    cheer(k = 1) { cheer = Math.max(cheer, k); },
+    splash(dist) {
+      const k = THREE.MathUtils.clamp(1 - dist / 2200, 0.05, 1);
+      noise({ type: 'lowpass', f: 1600, to: 300, dur: 1.6, gain: 0.9 * k, attack: 0.03 }); tone({ f: 70, to: 35, dur: 0.8, gain: 0.6 * k });
+    },
+    // every frame: the loops follow what you're doing
+    update(dt, riding) {
+      const onBoard = riding && !state.free && !state.airborne && state.crashT <= 0;
+      const off = IS_RIDGE && Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1;
+      const sp = Math.min(1, state.speed / 90);
+      roll.set(onBoard && !grind.on ? (0.05 + sp * 0.35) * (off ? 1.6 : 1) : 0, off ? 900 : 260 + sp * 420);
+      const g = riding && grind.on ? 0.12 + sp * 0.3 : 0;
+      grindL.set(g, 2400 + sp * 900); grindH.set(g * 0.6);
+      // crowd: louder the nearer you are to one (checked a few times a second), cheers on top
+      crowdT -= dt;
+      if (crowdT <= 0) { crowdT = 0.25; crowdNear = 1e9; for (const c of crowd) crowdNear = Math.min(crowdNear, c.obj.position.distanceToSquared(camera.position)); crowdNear = Math.sqrt(crowdNear); }
+      cheer = Math.max(0, cheer - dt * 0.35);
+      const near = THREE.MathUtils.clamp(1 - crowdNear / 140, 0, 1);
+      crowdL.set((near * 0.18 + cheer * 0.45) * (0.8 + 0.2 * Math.sin(ctx.currentTime * 3.1) * Math.sin(ctx.currentTime * 1.7)), 650 + cheer * 350);
+    },
+  };
+})();
+
 audio.preload = 'auto';
 audio.volume = 0.7;
 const npEl = document.getElementById('nowplaying');
@@ -3911,12 +3996,12 @@ function updateChaos(dt) {
 // ------------------------------------------------------------------
 let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE | BRAWL | SELECT | RACE | WORLD
 let menuIndex = 0;
-const settings = { volume: 70, sens: 100 };
+const settings = { volume: 70, sfx: SFX_DEFAULT, sens: 100 };
 audio.volume = settings.volume / 100;
 
 const menuEl = document.getElementById('menu');
 const titleEl = document.getElementById('title');
-const items = { main: ['resume', 'tracks', 'settings', 'controls', 'quit'], settings: ['volume', 'sens', 'fx', 'back'], controls: ['back'],
+const items = { main: ['resume', 'tracks', 'settings', 'controls', 'quit'], settings: ['volume', 'sfx', 'sens', 'fx', 'back'], controls: ['back'],
                 tracks: [...LEVELS.map((_, i) => 'level-' + (i + 1)), 'back'] };
 // Track Select: one row per course (the one loaded is marked); picking one reloads into it
 document.getElementById('track-list').insertAdjacentHTML('afterbegin', LEVELS.map((lv, i) =>
@@ -3935,6 +4020,7 @@ function renderMenu() {
 }
 function renderValues() {
   menuEl.querySelector('[data-setting="volume"] .val').textContent = settings.volume;
+  menuEl.querySelector('[data-setting="sfx"] .val').textContent = settings.sfx;
   menuEl.querySelector('[data-setting="sens"] .val').textContent = settings.sens;
   menuEl.querySelector('[data-setting="fx"] .val').textContent = fx.on ? 'ON' : 'OFF';
 }
@@ -3959,6 +4045,7 @@ function activate(item) {
 }
 function adjustSetting(item, dir) {
   if (item === 'volume') { settings.volume = THREE.MathUtils.clamp(settings.volume + dir * 5, 0, 100); audio.volume = settings.volume / 100; }
+  else if (item === 'sfx') { settings.sfx = THREE.MathUtils.clamp(settings.sfx + dir * 5, 0, 100); sfx?.setVolume(settings.sfx); }
   else if (item === 'sens') { settings.sens = THREE.MathUtils.clamp(settings.sens + dir * 5, 25, 300); lookSensMul = settings.sens / 100; }
   else if (item === 'fx') fx.on = !fx.on;
   renderValues();
@@ -4493,6 +4580,7 @@ function splash(at, size) {
   }
   sp.pts.geometry.attributes.position.needsUpdate = true;
   sp.pts.material.size = size * 0.18; sp.t = 0; sp.life = 3.2; sp.pts.visible = true;
+  sfx?.splash(at.distanceTo(camera.position));
 }
 // a leap from `a` to `b` (on the water) peaking `h` above it, taking `secs`
 function breach(pool, a, b, h, secs) {
@@ -4738,6 +4826,7 @@ function throwPunch(side, kick = false) {
   a.setEffectiveWeight(5).fadeIn(0.05).play();                    // dominates the walk underneath
   if (brawl.punch && brawl.punch !== a) brawl.punch.fadeOut(0.1);
   brawl.punch = a; brawl.punchT = 0; brawl.punchDur = a.getClip().duration / PUNCH_SPEED; brawl.hit = false; brawl.kick = kick;
+  sfx?.swing();
 }
 // knock a spectator down, falling away from `fwd` (the death clip falls forward: turn them first)
 function knockDown(c, fwd) {
@@ -4777,7 +4866,7 @@ function landBlow() {
     knockDown(c, fwd);
     brawl.kos++;
   }
-  if (hits.length) { showTrick((hits.length > 1 ? hits.length + 'x ' : '') + 'KO!  ' + brawl.kos); flash(0.12); }
+  if (hits.length) { sfx?.hit(); showTrick((hits.length > 1 ? hits.length + 'x ' : '') + 'KO!  ' + brawl.kos); flash(0.12); }
 }
 function reviveCrowd() {
   for (const c of crowd) if (c.down) {
@@ -5015,6 +5104,8 @@ function cpuCrash(c, why) {                      // bail: down on the road, slid
     const a = m.mixer.clipAction(m.clips.find(k => k.name.endsWith('|Death'))); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
   }
   if (why && m?.node.position.distanceTo(camera.position) < 80) showTrick(why);
+  const d = m ? m.node.position.distanceTo(camera.position) : 1e9;
+  if (d < 120) sfx?.crash(0.5 * (1 - d / 120));
 }
 function nameTag(text) {
   const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
@@ -5208,10 +5299,11 @@ function kickRacer() {
   if (!c) {                                                      // no racer — a spectator beside the road?
     const P = skater.position;
     const sp = crowd.find(p => !p.down && p.obj.visible && p.obj.position.distanceTo(P) < KICK_REACH_LAT + 0.6);
-    if (sp) { knockDown(sp, sp.obj.position.clone().sub(P).setY(0).normalize()); award('KICKED A FAN', KICK_PTS / 2); }
+    if (sp) { sfx?.hit(); knockDown(sp, sp.obj.position.clone().sub(P).setY(0).normalize()); award('KICKED A FAN', KICK_PTS / 2); }
     return;
   }
   c.lat += side * 1.2;
+  sfx?.hit();
   cpuCrash(c);
   award('KICKED ' + c.name, KICK_PTS);
 }
@@ -5296,6 +5388,7 @@ function frame(now) {
     pitCam(dt);   // PIT → STATS → ENTRY → RESULTS: keep circling the rider
   }
   updateCrowd(dt);
+  sfx?.update(dt, gameState === 'PLAYING');
   updateLandCall(dt);
   updateSea(dt);
   updateCpus(dt);
