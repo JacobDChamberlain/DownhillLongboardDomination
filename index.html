@@ -148,7 +148,7 @@
   #select .sel-count { margin-top: 8px; font-size: 13px; letter-spacing: 3px; opacity: .6; }
   body.selecting #hud, body.selecting #best, body.selecting #help, body.selecting #powerups, body.selecting #balance { display: none; }
   body.brawling #hud, body.brawling #powerups, body.brawling #balance { display: none; }   /* off the board: no ride HUD */
-  .rboard { width: min(640px, 94vw); }
+  .rboard { width: min(680px, 94vw); }
   .rtitle { font-size: 48px; font-weight: 900; letter-spacing: 6px; text-align: center;
     color: #ffd23c; text-shadow: 0 0 18px rgba(255,210,60,.6); margin-bottom: 14px; }
   .rstats { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; letter-spacing: 2px;
@@ -169,7 +169,7 @@
   }
   .inits .init.cur { color: #ffd23c; border-bottom-color: #ffd23c; text-shadow: 0 0 14px rgba(255,210,60,.7); }
   .rhead, .rlist li {
-    display: grid; grid-template-columns: 36px 1fr 104px 72px 72px 60px 70px; align-items: center; padding: 0 12px;
+    display: grid; grid-template-columns: 36px 1fr 104px 72px 84px 66px 92px; align-items: center; padding: 0 12px;
   }
   .rhead span:nth-child(n+3), .rlist li span:nth-child(n+3) { text-align: right; }
   .rlist li span:nth-child(n+3) { opacity: .55; }
@@ -184,7 +184,7 @@
     text-shadow: 0 0 18px rgba(255,210,60,.5); margin-bottom: 12px; }
   #results[data-stage="stats"] #rscope, #results[data-stage="entry"] #rscope { display: none; }
   #results[data-stage="race"] #rentry, #results[data-stage="race"] #rnext { display: none; }
-  .rhead { font-size: 11px; letter-spacing: 2px; opacity: .5; text-transform: uppercase; padding-bottom: 6px; }
+  .rhead { font-size: 11px; letter-spacing: 2px; opacity: .5; text-transform: uppercase; padding-bottom: 6px; line-height: 1.25; align-items: end; }
   .rlist { list-style: none; margin: 0; padding: 0; }
   .rlist li { font-size: 20px; font-weight: 700; padding-top: 6px; padding-bottom: 6px; border-radius: 6px; opacity: .85; }
   .rlist li .rk { color: #ffd23c; }
@@ -349,7 +349,7 @@
     </div>
     <div id="rscope" class="rscope">ALL TIME</div>
     <div id="rcat" class="rcat"><span class="arr">◀</span><span class="lbl">FASTEST TIME</span><span class="arr">▶</span></div>
-    <div class="rhead"><span>#</span><span>Name</span><span class="tm">Time</span><span class="sc">Score</span><span class="cb">Combo</span><span class="sp">Mph</span><span class="ht">Air</span></div>
+    <div class="rhead"><span>#</span><span>Name</span><span class="tm">Time</span><span class="sc">Score</span><span class="cb">Biggest<br>Combo</span><span class="sp">Top<br>Speed</span><span class="ht">Total<br>Hangtime</span></div>
     <ol id="rlist" class="rlist"></ol>
     <div id="rnext" class="rhint blink">Enter / A / click — continue</div>
     <div id="rcontinue" class="rhint blink">Enter / A / click — continue · ← → rankings</div>
@@ -3656,7 +3656,7 @@ const LB_CATS = [
   { key: 'time',  label: 'FASTEST TIME' },
   { key: 'score', label: 'HIGH SCORE' },
   { key: 'combo', label: 'BIGGEST COMBO' },
-  { key: 'air',   label: 'LONGEST HANGTIME' },
+  { key: 'air',   label: 'MOST HANGTIME' },
   { key: 'top',   label: 'SPEED DEMON' },
 ];
 let lbCat = 0, lbScores = [];
