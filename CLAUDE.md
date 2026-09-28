@@ -67,6 +67,18 @@ Anything new placed along the course should use frames too.
 
 **Levels:** `LEVELS` picks the course from `?level=N` (1-based) at load; `LV` / `IS_SWITCH` gate the per-level code. Level 1 (Ridge Run) is `buildRoadPoints`'s ridge; level 2 (Switchback Pass) returns `buildSwitchbackPoints()` (`SB` tunables, `sbLegs`, `sbMidU(leg, off)` to place features on a traverse). Each level has its own leaderboard key (`LV.lbKey`). Track Select (Esc menu) and "Next Race" on the END screen both call `gotoLevel(n)`, which reloads with the next `?level=` and carries the radio track/time through `sessionStorage 'downhill.radio'`.
 
+**Level 3 (Loop Heights, `IS_LOOP`):** `buildLoopPoints()` is a turtle (straight / loop / lip / gap / figure8) that records every feature's arc length in `LP`; `lpU(s)` turns that into `u`. Frames:
+- Loops carry `up` by parallel transport. A loop that steps sideways isn't planar, so the leftover roll is spread evenly round it.
+- Only the figure-8 banks, up to `MAX_BANK` 1.45 rad (about 83°).
+
+Physics only on this level:
+- Gravity is signed (climbs slow you). In the stunt sections (`inStunt`) you're forced into a tuck.
+- Stick-to-the-track: `N = v²·(CURV·up) + G·up.y`, and dropping off an inverted section happens when `N < 0`. On banks (`onBank`), the pull along `side` has to be held by `LOOP_MU·N`, or you slide.
+- The edges are open: going over one calls `enterFree(…, true)` with your real 3D velocity. Falls respawn you before the last entry pad.
+- No drag in the air, because the gap is a ~6 s flight. The gap's `minSpeed` sets the launch speed.
+
+`BOOST_PADS`: `computePadMins()` simulates each stretch (sitting up, the worst case) to get a speed window. `padBoost` clamps you into it; CPUs use the same pads. The camera rolls with the track (`camUp`). Every new level id also has to be added to `supabase/schema.sql`.
+
 **Terrain:** everything is generated from `frames[]`. The road runs on a ridge: the grass shoulders are two strips per side (never one sheet under the road, which pokes through where the banking twists), and rock cliff walls hang off each grass edge down to `CLIFF_FLOOR`. `BRIDGE` (a `u` range, tested with `onBridge(u)`) removes grass and cliffs, adds gorge walls, deck girder and piers, and physics clamps the rider inside the rails there. Water fills the valley at `LAKE_Y`. The huge surfaces (cliff chunks, lake) set a high `renderOrder` so near geometry draws first and the depth test skips hidden pixels. Level 2 skips the ridge cliffs, bridge and mountain walls and instead builds one heightfield mesh (`TERRAIN_STEP` grid, shelves carved for the road via `nearestRoad`, pits flattened, border falls off to `CLIFF_FLOOR`); place scenery on it with `groundize(p, dy)` / `terrainHeightAt(x, z)` and skip steep spots with `steepAt`. Every camera goes through `keepAboveGround()`: from inside the hill its faces are culled and the ground looks see-through.
 
 **Chaos mode (`X`):**

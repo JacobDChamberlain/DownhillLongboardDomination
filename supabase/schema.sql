@@ -12,15 +12,21 @@
 create table if not exists public.scores (
   id         bigint generated always as identity primary key,
   created_at timestamptz not null default now(),
-  level      text     not null check (level in ('ridge', 'switch')),
+  level      text     not null check (level in ('ridge', 'switch', 'loops')),
   name       text     not null check (name ~ '^[A-Z]{3}$'),
   time_s     real     not null check (time_s > 0 and time_s < 1200),
   score      integer  not null default 0 check (score >= 0),
   combo      integer  not null default 0 check (combo >= 0),
   air_time   real     not null default 0 check (air_time >= 0),
-  top_speed  real     not null default 0 check (top_speed >= 0 and top_speed < 250),
+  top_speed  real     not null default 0 check (top_speed >= 0 and top_speed < 500),
   rider      text              check (rider is null or length(rider) <= 24)
 );
+
+-- tables created by an earlier version keep their old checks, so swap them for the current ones
+alter table public.scores drop constraint if exists scores_level_check;
+alter table public.scores add  constraint scores_level_check check (level in ('ridge', 'switch', 'loops'));
+alter table public.scores drop constraint if exists scores_top_speed_check;
+alter table public.scores add  constraint scores_top_speed_check check (top_speed >= 0 and top_speed < 500);
 
 create index if not exists scores_level_time  on public.scores (level, time_s);
 create index if not exists scores_level_score on public.scores (level, score desc);
