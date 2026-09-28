@@ -95,8 +95,8 @@ content. The carving rewrite is the big one: do it before building more switchba
   pit brawl below.
 
 ## 👤 Characters & customization
-- [ ] **Character select** (stats later). One character is the OG plain-shapes guy with his own
-  board.
+- [ ] **Character select** — a carousel before the race: cycle through the riders and pick one
+  (no stats yet; stats later). One character is the OG plain-shapes guy with his own board.
 - [ ] **Keep the OG version playable** — the pre-visual-upgrade build is commit `c66d8dc`
   ("Gameplay batch"). Tag it (`og`) and optionally serve it at `/og/`.
 - [ ] Customizable board/player colors.
@@ -152,11 +152,12 @@ you hardest here and your Unity/Unreal endgame pays off, so don't sink effort in
   - [ ] Manuals (tip up/down on the road) to link combos between rails
   - [ ] Per-trick balance difficulty (slides harder to hold than 50-50s)
   - [ ] Grind sound + landing sound
-- [ ] **Pit brawl (future)** — after the finish, while the stats window is up, press **F + J** to
-  close it, step off the board and walk around the finish pit. Hit spectators to knock them down,
-  using whichever combat pickup you'd upgraded to when you crossed the line (fist → stick → water
-  bottle → rock), or a punch if you have none. Needs: walk/idle/punch animations on the rider
-  (the spectator model already has Punch/Death clips), a pit walk controller, crowd hit reactions.
+- [x] **Pit brawl** — *done: F + J after the finish (pit orbit, stats, board or end screen) steps
+  you off the board; walk the finish pit (WASD, Shift runs, C/H/X still work), F / J punch
+  left / right using the rider model's own clips; spectators in reach get knocked down (death clip)
+  and are back up next run. A STICK pickup swings (Sword_Slash) and sweeps everyone in front; other
+  weapons change reach. Esc goes back to the results.* Still open: weapons visible in hand,
+  thrown rock, crowd reactions (flee / fight back), a first-person option.
 - [x] **3. World & scenery** — *done: cliffs (road rides a ridge), bridge/viaduct over a
   fjord, crowds + arches at start/finish, enclosed pits at both ends (crowd all round), finish
   coast-to-a-stop + pit camera + staged results, start flyover + three-light countdown,

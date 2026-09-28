@@ -71,7 +71,7 @@
   .controls-grid small { display: block; opacity: .65; font-size: 12px; }   /* description on its own line */
   .controls-pad { margin-top: 18px; font-size: 13px; opacity: .7; }
   @media (max-width: 700px) { .controls-grid { grid-template-columns: 1fr; } }
-  body.clean #help, body.clean #best, body.clean #hud, body.clean #powerups,
+  body.clean #help, body.clean #best, body.clean #hud, body.clean #powerups, body.clean #brawlhint,
   body.clean #nowplaying, body.clean #transport { display: none; }
   kbd { background:#223; border:1px solid #456; border-bottom-width:2px; border-radius:5px; padding:1px 6px; font-size:12px; }
   /* edge flash: a fixed gradient on its own layer; only its opacity animates (animating a blurred
@@ -129,6 +129,12 @@
     font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
   }
   #results.hidden { display: none; }
+  .rhint.brawl { opacity: .55; margin-top: 6px; }
+  #results:not([data-stage="stats"]):not([data-stage="board"]):not([data-stage="end"]) .rhint.brawl { display: none; }
+  #brawlhint { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); color: #fff; font-size: 13px;
+    letter-spacing: 1px; opacity: .7; text-shadow: 0 2px 8px rgba(0,0,0,.7); pointer-events: none; user-select: none; white-space: nowrap; }
+  #brawlhint.hidden { display: none; }
+  body.brawling #hud, body.brawling #powerups, body.brawling #balance { display: none; }   /* off the board: no ride HUD */
   .rboard { width: min(520px, 92vw); }
   .rtitle { font-size: 48px; font-weight: 900; letter-spacing: 6px; text-align: center;
     color: #ffd23c; text-shadow: 0 0 18px rgba(255,210,60,.6); margin-bottom: 14px; }
@@ -191,6 +197,7 @@
 <div id="balance"><div id="balneedle"></div></div>
 <div id="lights"><span class="lt"></span><span class="lt"></span><span class="lt go"></span></div>
 <div id="flash"></div>
+<div id="brawlhint" class="hidden">WASD / arrows walk · Shift run · <b>F</b> / <b>J</b> punch · C camera · Esc back to results</div>
 <div id="nowplaying">
   <div class="np-eyebrow">♪ Now playing</div>
   <div class="np-title">—</div>
@@ -251,6 +258,12 @@
         <dt>Balance</dt><dd><kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd><small>keep the needle out of the red</small></dd>
         <dt>Hop off</dt><dd><kbd>Space</kbd><small>steer to pick a side</small></dd>
       </dl></section>
+      <section><h3>AFTER THE FINISH</h3><dl class="tricks">
+        <dt>Step off</dt><dd><kbd>F</kbd> + <kbd>J</kbd><small>in the pit, on the stats or the end screen</small></dd>
+        <dt>Walk</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows<small>hold <kbd>Shift</kbd> to run</small></dd>
+        <dt>Punch</dt><dd><kbd>F</kbd> left · <kbd>J</kbd> right<small>your weapon pickup changes the swing</small></dd>
+        <dt>Back</dt><dd><kbd>Esc</kbd></dd>
+      </dl></section>
       <section><h3>CAMERA &amp; LOOK</h3><dl>
         <dt><kbd>C</kbd></dt><dd>chase / drone / trackside camera</dd>
         <dt><kbd>H</kbd></dt><dd>hide HUD / letterbox</dd>
@@ -296,9 +309,10 @@
     <ol id="rlist" class="rlist"></ol>
     <div id="rnext" class="rhint blink">Enter / A / click — continue</div>
     <div id="rcontinue" class="rhint blink">Enter / A / click — continue</div>
+    <div class="rhint brawl">F + J — step off your board</div>
     <div id="rend">
       <ul class="menu-list rmenu"><li data-r="restart" class="sel">Restart</li><li data-r="next">Next Race</li><li data-r="quit">Quit</li></ul>
-      <div class="menu-hint">↑ ↓ to choose · Enter / A to select</div>
+      <div class="menu-hint">↑ ↓ to choose · Enter / A to select · F + J step off your board</div>
     </div>
   </div>
 </div>
@@ -1666,11 +1680,11 @@ const rig = { ready: false, crouch: 0.3, grab: 0 };
   const boxParts = [...lean.children];
   const gltf = new GLTFLoader();
   Promise.all([gltf.loadAsync('assets/models/skater.glb'), gltf.loadAsync('assets/models/longboard.glb')])
-    .then(([ch, bd]) => buildRig(ch.scene, bd.scene, boxParts))
+    .then(([ch, bd]) => buildRig(ch.scene, bd.scene, boxParts, ch.animations))
     .catch(e => console.warn('[assets] rider models unavailable, keeping box rider:', e?.message || e));
 }
 
-function buildRig(charScene, boardScene, boxParts) {
+function buildRig(charScene, boardScene, boxParts, clips = []) {
   const prep = o => o.traverse(m => {
     if (!m.isMesh) return;
     m.castShadow = true; m.frustumCulled = false;
@@ -1712,6 +1726,8 @@ function buildRig(charScene, boardScene, boxParts) {
   });
   rig.bones = [];
   charScene.traverse(o => { if (o.isBone) rig.bones.push([o, o.position.clone(), o.quaternion.clone()]); });
+  // the model's own clips (walk / run / punches…) only play off the board, in the pit brawl
+  rig.clips = clips; rig.mixer = new THREE.AnimationMixer(charScene);
 
   // rest measurements in lean space
   const inLean = o => lean.worldToLocal(o.getWorldPosition(new THREE.Vector3()));
@@ -2012,7 +2028,7 @@ const crowd = [];             // { mixer, obj }
     const box = new THREE.Box3().setFromObject(g.scene);
     const scale = (RIDER_HEIGHT * 0.95) / (box.max.y - box.min.y);
     const clip = n => g.animations.find(a => a.name.endsWith(n));
-    const clips = { clap: clip('Man_Clapping'), idle: clip('Man_Idle'), jump: clip('Man_Jump') };
+    const clips = { clap: clip('Man_Clapping'), idle: clip('Man_Idle'), jump: clip('Man_Jump'), death: clip('Man_Death') };
     const palette = {
       Shirt: [0xd8412f, 0x2f6fd8, 0xf2c14e, 0x3fa34d, 0xffffff, 0x222222, 0x8e44ad, 0xe67e22],
       Pants: [0x1d2a44, 0x2b2b2b, 0x5a4632, 0x3b4f6b, 0x6b6b6b],
@@ -2043,7 +2059,7 @@ const crowd = [];             // { mixer, obj }
       mixer.update(0);
       scene.add(person);
       const meshes = []; person.traverse(o => { if (o.isMesh) meshes.push(o); });
-      crowd.push({ mixer, obj: person, meshes, shadow: true });
+      crowd.push({ mixer, obj: person, meshes, shadow: true, action, death: clips.death, rotY: person.rotation.y, pos0: person.position.clone(), down: false });
     }
     // lining the road into the start and up to the finish line
     for (const z of CROWD_ZONES) for (const s of [1, -1]) for (let n = 0; n < CROWD_PER_SIDE; n++) {
@@ -3174,7 +3190,7 @@ function updateChaos(dt) {
 // ------------------------------------------------------------------
 // Pause menu + settings — keyboard & gamepad navigable
 // ------------------------------------------------------------------
-let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE
+let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE | BRAWL
 let menuIndex = 0;
 const settings = { volume: 70, sens: 100 };
 audio.volume = settings.volume / 100;
@@ -3240,6 +3256,17 @@ function menuNav(code) {
 // Global game/menu key handling
 addEventListener('keydown', e => {
   if (gameState === 'TITLE') { if (e.code === 'Enter' || e.code === 'Space') startFromTitle(); return; }
+  if (gameState === 'BRAWL') {
+    if (e.repeat) return;
+    if (e.code === 'Escape') exitBrawl();
+    else if (e.code === 'KeyF') throwPunch(-1);
+    else if (e.code === 'KeyJ') throwPunch(1);
+    else if (e.code === 'KeyC') cycleCam();
+    else if (e.code === 'KeyH') cycleHud();
+    else if (e.code === 'KeyX') cycleChaos();
+    return;
+  }
+  if ((e.code === 'KeyF' || e.code === 'KeyJ') && keys['KeyF'] && keys['KeyJ'] && canBrawl()) { enterBrawl(); return; }
   if (gameState === 'COUNTDOWN') { if (startSeq.phase === 'fly') skipFly(); return; }
   if (gameState === 'ENTRY') { e.preventDefault(); handleEntryKey(e.code); return; }
   if (gameState === 'STATS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') advanceStats(); return; }
@@ -3506,6 +3533,8 @@ function beep(freq, dur, vol) {               // tiny synth — no audio assets 
   } catch {}
 }
 function beginRun() {
+  if (brawl.on) exitBrawl();
+  reviveCrowd();
   resetRun();
   state.speed = 0;
   Object.assign(startSeq, { phase: 'fly', t: 0, lit: 0, wait: 0 });
@@ -3553,6 +3582,148 @@ function updateStart(dt) {
       setTimeout(() => lightsEl.classList.remove('show'), 1100);
     }
   }
+}
+
+// ------------------------------------------------------------------
+// Pit brawl — after the finish (pit orbit / stats / board / end screen), F + J steps you off the board to walk
+// the finish pit and knock spectators down: F / J throw left / right. The combat pickup you'd
+// upgraded to changes the swing and the reach (a stick sweeps everyone in front of you). The rider
+// model's own clips play here (walk / run / punches); its procedural board pose resumes on exit.
+// ------------------------------------------------------------------
+const BRAWL_WALK  = 3.4;      // walk speed (u/s)
+const BRAWL_RUN   = 7.5;      // with Shift
+const BRAWL_TURN  = 2.8;      // turn rate (rad/s)
+const BRAWL_ROOM  = 3;        // stay this far inside the finish pit's rim
+const BRAWL_BODY  = 0.7;      // you can't walk through standing spectators
+const BRAWL_HIT_AT = 0.38;    // the blow lands this far (0–1) into the swing
+const BRAWL_ARC   = 0.35;     // cos of the half-angle in front of you that a swing covers
+const WEAPON_REACH = { FIST: 1.9, STICK: 2.8, 'WATER BOTTLE': 2.2, ROCK: 2.4 };
+const brawl = { on: false, from: null, walker: new THREE.Group(), heading: 0, base: null, baseName: '', punch: null,
+                punchT: 0, punchDur: 0, hit: false, kos: 0, camOff: null, padA: false, padB: false };
+scene.add(brawl.walker);
+const brawlHintEl = document.getElementById('brawlhint');
+const canBrawl = () => rig.ready && rig.clips.length && !brawl.on && ['PIT', 'STATS', 'RESULTS', 'END'].includes(gameState);
+const brawlClip = n => rig.clips.find(c => c.name.endsWith('|' + n));
+function brawlBase(name) {                     // idle / walk / run, cross-faded
+  if (brawl.baseName === name) return;
+  const a = rig.mixer.clipAction(brawlClip(name));
+  a.reset().setEffectiveWeight(1).fadeIn(0.2).play();
+  if (brawl.base) brawl.base.fadeOut(0.2);
+  brawl.base = a; brawl.baseName = name;
+}
+function enterBrawl() {
+  brawl.on = true; brawl.from = gameState; gameState = 'BRAWL';
+  results.el.classList.add('hidden'); brawlHintEl.classList.remove('hidden'); document.body.classList.add('brawling');
+  // step off toward the way the rider faces (sideways off the deck)
+  const face = new THREE.Vector3(-1, 0, 0).applyQuaternion(lean.getWorldQuaternion(new THREE.Quaternion())).setY(0).normalize();
+  brawl.heading = Math.atan2(face.x, face.z);
+  brawl.walker.position.copy(skater.position).addScaledVector(face, 1.1);
+  brawl.walker.position.y = frameAt(state.u).p.y;
+  brawl.walker.rotation.set(0, brawl.heading, 0);
+  for (const [b, p, q] of rig.bones) { b.position.copy(p); b.quaternion.copy(q); }
+  brawl.walker.add(rig.root);                  // rider leaves the board; the board stays put
+  rig.root.position.set(0, 0, 0); rig.root.rotation.set(0, 0, 0);
+  brawl.base = null; brawl.baseName = ''; brawl.punch = null;
+  brawlBase('Idle');
+  brawl.camOff = camera.position.clone().sub(brawl.walker.position);
+  showTrick('BRAWL!');
+}
+function exitBrawl() {
+  rig.mixer.stopAllAction();
+  lean.add(rig.root); rig.root.rotation.set(0, -Math.PI / 2, 0);
+  brawl.on = false; brawlHintEl.classList.add('hidden'); document.body.classList.remove('brawling');
+  place(idleInfo);                              // back into the board pose
+  gameState = brawl.from;
+  if (gameState !== 'PIT') results.el.classList.remove('hidden');   // the pit orbit carries on to the stats
+}
+function throwPunch(side) {
+  if (brawl.punch && brawl.punchT < brawl.punchDur * 0.7) return;   // still mid-swing
+  const w = WEAPONS[weaponTier];
+  const a = rig.mixer.clipAction(brawlClip(w === 'STICK' ? 'Sword_Slash' : side < 0 ? 'Punch_Left' : 'Punch_Right'));
+  a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false;
+  a.setEffectiveWeight(5).fadeIn(0.05).play();                    // dominates the walk underneath
+  if (brawl.punch && brawl.punch !== a) brawl.punch.fadeOut(0.1);
+  brawl.punch = a; brawl.punchT = 0; brawl.punchDur = a.getClip().duration; brawl.hit = false;
+}
+function landBlow() {
+  const w = WEAPONS[weaponTier], reach = WEAPON_REACH[w] || 1.9, P = brawl.walker.position;
+  const fwd = new THREE.Vector3(Math.sin(brawl.heading), 0, Math.cos(brawl.heading));
+  const inReach = crowd.filter(c => {
+    if (c.down) return false;
+    const d = c.obj.position.clone().sub(P).setY(0), len = d.length();
+    return len < reach && d.dot(fwd) > BRAWL_ARC * len;
+  }).sort((a, b) => a.obj.position.distanceToSquared(P) - b.obj.position.distanceToSquared(P));
+  const hits = w === 'STICK' ? inReach : inReach.slice(0, 1);        // a stick sweeps; fists hit one
+  for (const c of hits) {
+    c.down = true;
+    c.obj.rotation.y = brawl.heading;                                 // the death clip falls forward: turn them
+    c.obj.position.addScaledVector(fwd, 0.35);                        //   away from the blow and shove them back
+    c.mixer.stopAllAction();
+    const a = c.mixer.clipAction(c.death); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+    brawl.kos++;
+  }
+  if (hits.length) { showTrick((hits.length > 1 ? hits.length + 'x ' : '') + 'KO!  ' + brawl.kos); flash(0.12); }
+}
+function reviveCrowd() {
+  for (const c of crowd) if (c.down) {
+    c.down = false; c.mixer.stopAllAction(); c.action.reset().play(); c.obj.rotation.y = c.rotY; c.obj.position.copy(c.pos0);
+  }
+  brawl.kos = 0;
+}
+function updateBrawl(dt) {
+  // walk: A/D turn, W/S forward/back (left stick on a pad), Shift runs
+  let turn = 0, move = 0;
+  if (keys['KeyA'] || keys['ArrowLeft']) turn += 1;
+  if (keys['KeyD'] || keys['ArrowRight']) turn -= 1;
+  if (keys['KeyW'] || keys['ArrowUp']) move += 1;
+  if (keys['KeyS'] || keys['ArrowDown']) move -= 1;
+  let sprint = keys['ShiftLeft'] || keys['ShiftRight'];
+  const pad = navigator.getGamepads ? [...navigator.getGamepads()].find(p => p) : null;
+  if (pad) {
+    if (Math.abs(pad.axes[0]) > 0.15) turn -= pad.axes[0];
+    if (Math.abs(pad.axes[1]) > 0.15) move -= pad.axes[1];
+    if (pad.buttons[7]?.value > 0.2) sprint = true;
+    const x = !!pad.buttons[2]?.pressed, b = !!pad.buttons[1]?.pressed;   // X / B = left / right
+    if (x && !brawl.padA) throwPunch(-1); if (b && !brawl.padB) throwPunch(1);
+    brawl.padA = x; brawl.padB = b;
+  }
+  brawl.heading += THREE.MathUtils.clamp(turn, -1, 1) * BRAWL_TURN * dt;
+  move = THREE.MathUtils.clamp(move, -1, 1);
+  const speed = move * (sprint && move > 0 ? BRAWL_RUN : BRAWL_WALK) * (move < 0 ? 0.6 : 1);
+  const fwd = new THREE.Vector3(Math.sin(brawl.heading), 0, Math.cos(brawl.heading));
+  const P = brawl.walker.position;
+  P.addScaledVector(fwd, speed * dt);
+  for (const c of crowd) {                     // shoulder past people instead of through them
+    if (c.down) continue;
+    const d = P.clone().sub(c.obj.position).setY(0), len = d.length();
+    if (len < BRAWL_BODY && len > 1e-4) P.addScaledVector(d, (BRAWL_BODY - len) / len);
+  }
+  const pc = frameAt(FINISH_PIT_U).p, off = P.clone().sub(pc).setY(0), lim = FINISH_PIT_R - BRAWL_ROOM;
+  if (off.length() > lim) P.copy(pc).add(off.setLength(lim)).setY(P.y);
+  brawl.walker.rotation.y = brawl.heading;
+  brawlBase(speed > BRAWL_WALK + 0.5 ? 'Run' : Math.abs(speed) > 0.1 ? 'Walk' : 'Idle');
+  if (brawl.base) brawl.base.timeScale = speed < 0 ? -1 : 1;
+
+  // the swing: land the blow partway through, then hand back to the legs
+  if (brawl.punch) {
+    brawl.punchT += dt;
+    if (!brawl.hit && brawl.punchT >= brawl.punchDur * BRAWL_HIT_AT) { brawl.hit = true; landBlow(); }
+    if (brawl.punchT >= brawl.punchDur - 0.12) { brawl.punch.fadeOut(0.12); brawl.punch = null; }
+  }
+  rig.mixer.update(dt);
+
+  // cameras: C still cycles — over the shoulder, high drone, or a fixed spot on the pit rim
+  const head = P.clone().add(new THREE.Vector3(0, 1.5, 0));
+  if (camMode === 'trackside') {
+    camPos.copy(pc).addScaledVector(off.lengthSq() > 1 ? off.clone().normalize().negate() : fwd, lim * 0.6).add(new THREE.Vector3(0, 6, 0));
+  } else {
+    const want = fwd.clone().multiplyScalar(camMode === 'drone' ? -11 : -5.5).add(new THREE.Vector3(0, camMode === 'drone' ? 8 : 2.6, 0));
+    brawl.camOff.lerp(want, Math.min(1, dt * 4));
+    camPos.copy(P).add(brawl.camOff);
+  }
+  camera.position.copy(keepAboveGround(camPos));
+  camera.lookAt(camMode === 'trackside' ? head : head.clone().addScaledVector(fwd, 2));
+  camera.fov += ((camMode === 'trackside' ? 40 : 58) - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
 }
 
 // ------------------------------------------------------------------
@@ -3611,6 +3782,8 @@ function frame(now) {
     drawHud(info);
   } else if (gameState === 'COUNTDOWN') {
     updateStart(dt);
+  } else if (gameState === 'BRAWL') {
+    updateBrawl(dt);
   } else if (finish.stopped) {
     pitCam(dt);   // PIT → STATS → ENTRY → RESULTS: keep circling the rider
   }
