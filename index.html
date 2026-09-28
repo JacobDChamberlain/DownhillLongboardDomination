@@ -148,6 +148,7 @@
   #select button:hover { background: rgba(60,166,255,.45); }
   #select .sel-count { margin-top: 8px; font-size: 13px; letter-spacing: 3px; opacity: .6; }
   body.selecting #hud, body.selecting #best, body.selecting #help, body.selecting #powerups, body.selecting #balance { display: none; }
+  body.touring #hud, body.touring #best, body.touring #help, body.touring #powerups, body.touring #balance { display: none; }   /* course tour */
   body.brawling #hud, body.brawling #powerups, body.brawling #balance { display: none; }   /* off the board: no ride HUD */
   .rboard { width: min(680px, 94vw); }
   .rtitle { font-size: 48px; font-weight: 900; letter-spacing: 6px; text-align: center;
@@ -3544,7 +3545,7 @@ layoutPos();                                   // (needs the map's box, declared
 const mapCpuDots = MAP_CPU_COLORS.map((col, i) => mapDot(MAP_DOT, col, 2 + i * 2));
 const mapMe = mapDot(MAP_DOT_ME, 0xffd23c, 10);                 // you, drawn on top
 function updateMap() {
-  mapGroup.visible = hudMode === 0 && ['COUNTDOWN', 'PLAYING', 'PIT'].includes(gameState);
+  mapGroup.visible = hudMode === 0 && ['COUNTDOWN', 'PLAYING', 'PIT'].includes(gameState) && startSeq.phase !== 'tour';
   if (!mapGroup.visible) return;
   const put = (dot, u) => { const p = mapProject(frameAt(Math.min(1, u)).p); dot.position.set(p[0], p[1], 0); };
   if (state.free) { const p = mapProject(free.pos); mapMe.position.set(p[0], p[1], 0); } else put(mapMe, state.u);
@@ -3996,7 +3997,7 @@ addEventListener('keydown', e => {
     return;
   }
   if ((e.code === 'KeyF' || e.code === 'KeyJ') && keys['KeyF'] && keys['KeyJ'] && canBrawl()) { enterBrawl(); return; }
-  if (gameState === 'COUNTDOWN') { if (startSeq.phase === 'fly') skipFly(); return; }
+  if (gameState === 'COUNTDOWN') { if (startSeq.phase === 'tour') endTour(); else if (startSeq.phase === 'fly') skipFly(); return; }
   if (gameState === 'ENTRY') { e.preventDefault(); handleEntryKey(e.code); return; }
   if (gameState === 'STATS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') advanceStats(); return; }
   if (gameState === 'RACE') {
@@ -4431,6 +4432,79 @@ function beginRun() {
   lightsEl.classList.remove('show');
   gameState = 'COUNTDOWN';
   showTrick(LV.name);
+  if (!tourShown) startTour();                 // the first run on a track opens with its highlights
+}
+// ------------------------------------------------------------------
+// Course tour — before the start flyover, the first run on a track shows off its highlights:
+// a few slow dolly shots with captions and letterbox bars (Space skips). Shots are placed from
+// the track itself (frames / LP / feature u's) so they follow the course if it changes.
+// ------------------------------------------------------------------
+const TOUR_SHOT_SECS = 2.6;
+let tourShown = false;          // once per page load; restarts go straight to the flyover
+function tourShots() {
+  const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+  // a shot framed from the track at u: camera `back` along the road, `side` across it, `up` above;
+  // it dollies `dolly` down the road; it looks `ahead` down the road and `lookUp` above it
+  const at = (u, label, o) => {
+    const f = frameAt(u), t = V(f.tan.x, 0, f.tan.z).normalize(), sd = V(-t.z, 0, t.x);
+    const from = f.p.clone().addScaledVector(t, o.back || 0).addScaledVector(sd, o.side || 0).add(V(0, o.up || 0, 0));
+    const look = f.p.clone().addScaledVector(t, o.ahead || 0).add(V(0, o.lookUp || 0, 0));
+    return { label, from, to: from.clone().addScaledVector(t, o.dolly || 0), look, lookTo: look.clone().addScaledVector(t, o.lookDolly || 0) };
+  };
+  if (IS_LOOP) {
+    const L = LP.loops, loopShot = (k, label, dist, lift) =>
+      at(lpU(L[k].s0), label, { side: L[k].R * dist, up: L[k].R * lift, back: -L[k].R * 0.3, dolly: L[k].R * 0.6, lookUp: L[k].R });
+    const c8 = lpU(LP.eight.s0);
+    return [
+      loopShot(0, 'THE FIRST LOOP', 3.4, 0.7),
+      at(lpU(L[2].s0), 'THREE IN A ROW', { side: 560, up: 140, back: -60, dolly: 120, lookUp: 70 }),
+      at(GAPS[0].u0, 'THE GAP', { back: -40, side: 30, up: 45, dolly: 90, ahead: 320, lookUp: -80 }),
+      at(c8, 'THE FIGURE 8', { back: -260, side: 240, up: 420, dolly: 220, ahead: 60 }),
+      loopShot(4, 'THE MONSTER', 3.8, 1.0),
+      at(FINISH_PIT_U, 'UPSIDE DOWN', { back: -170, side: 110, up: -90, dolly: 80 }),
+    ];
+  }
+  // a shot from fixed world points (level 2: out in front of the mountain face, never inside it)
+  const world = (label, from, to, look, lookTo = look) => ({ label, from: V(...from), to: V(...to), look: V(...look), lookTo: V(...lookTo) });
+  if (IS_SWITCH) {
+    const zTop = sbLegs[0].z, zBot = sbLegs[sbLegs.length - 1].z, zMid = (zTop + zBot) / 2, yMid = sbLegY(3, 0);
+    const pin = sbLegs[1], cx = pin.dir * SB.W + pin.dir * SB.DZ / 2, cz = pin.z - SB.DZ / 2, cy = sbLegY(1, pin.dir * SB.W);
+    return [
+      world('SWITCHBACK PASS', [-500, yMid + 420, zBot - 900], [500, yMid + 420, zBot - 900], [0, yMid + 60, zMid]),
+      world('HAIRPINS', [cx + pin.dir * 160, cy + 70, cz - 90], [cx + pin.dir * 140, cy + 60, cz - 40], [cx, cy - 10, cz]),
+      at(sbMidU(3, 0), 'THE KICKER', { back: -70, side: 26, up: 14, dolly: 50, ahead: 40 }),
+      world('THE FACE', [SB.W + 400, yMid + 150, zBot - 250], [SB.W + 200, yMid + 150, zBot - 350], [0, yMid, zMid]),
+      at(FINISH_U, 'THE FINISH', { back: -90, side: 30, up: 24, dolly: 60, ahead: 40 }),
+    ];
+  }
+  const wall = MOUNTAIN_WALLS[0];
+  return [
+    at(0.06, 'THE DROP', { back: -50, side: 30, up: 30, dolly: 60, ahead: 200, lookUp: -40 }),
+    at((wall.u0 + wall.u1) / 2, 'THE MOUNTAIN', { back: -80, side: -60, up: 30, dolly: 70, ahead: 40, lookUp: 20 }),
+    at(GAPS[0].u0, 'THE GAP', { back: -40, side: 34, up: 16, dolly: 40, ahead: 60, lookUp: -6 }),
+    at((BRIDGE.u0 + BRIDGE.u1) / 2, 'THE BRIDGE', { back: -260, side: 380, up: -40, dolly: 120, lookUp: -60 }),
+    at(FINISH_U, 'THE FINISH', { back: -90, side: 30, up: 24, dolly: 60, ahead: 40 }),
+  ];
+}
+let tour = null;
+function startTour() {
+  tour = tourShots(); tourShown = true;
+  startSeq.phase = 'tour'; startSeq.t = 0; startSeq.shot = -1;
+  fx.barsTarget = 1; document.body.classList.add('touring');
+}
+function endTour() {
+  startSeq.phase = 'fly'; startSeq.t = 0;
+  fx.barsTarget = hudMode === 2 ? 1 : 0; document.body.classList.remove('touring');
+}
+function updateTour(dt) {
+  startSeq.t += dt;
+  const k = Math.floor(startSeq.t / TOUR_SHOT_SECS);
+  if (k >= tour.length) { endTour(); return; }
+  const sh = tour[k], a = THREE.MathUtils.smoothstep(startSeq.t / TOUR_SHOT_SECS - k, 0, 1);
+  if (k !== startSeq.shot) { startSeq.shot = k; showTrick(sh.label); }
+  camera.position.copy(keepAboveGround(sh.from.clone().lerp(sh.to, a)));
+  camera.lookAt(sh.look.clone().lerp(sh.lookTo, a));
+  camera.fov = 55; camera.updateProjectionMatrix();
 }
 function skipFly() { startSeq.phase = 'count'; startSeq.t = 0; chaseOff.set = false; lightsEl.classList.add('show'); }
 const idleInfo = { tuck: false, offroad: false, carving: false, brake: false };
@@ -4438,6 +4512,7 @@ function updateStart(dt) {
   state.speed = 0;
   place(idleInfo);                           // pose the rider; the chase camera runs underneath
   drawHud(idleInfo);
+  if (startSeq.phase === 'tour') { if (!rig.loading) updateTour(dt); return; }
   if (startSeq.phase === 'fly') {
     // hold on the first frame until the rider model is in (a couple of seconds at most)
     if (rig.loading && (startSeq.wait += dt) < 4) { startSeq.t = 0; }
