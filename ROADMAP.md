@@ -27,13 +27,11 @@ we deliberately defer those.
 board, off-road riding, and level 3 with its loops.)* Quick wins first, then the bigger systems.
 1. **Quick wins:** rider renames (Bob, CIA), brawl tuning (walk ×2, faster punch + fall, mouse look,
    K kicks the crowd), HUD moves (landing call over your head, place under the map), speed boost
-   for clean landings.
-2. **Sound effects** (ollie, grind, landing, crash, crowd).
-3. **Pre-race course flyover:** the highlights of the track before the camera cuts to you.
-4. **Difficulty levels + cheat codes** (both just set knobs we already have).
-5. **New riders** (Hesher, Mime, Cthulhu), then **unlockables** (needs an unlock system and models).
-6. **Level 1 sea giants:** whales and dolphins breaching beside and over the bridge.
-7. Free carving, night tracks, weapons in hand (water bottle explosions), mobile, online.
+   for clean landings, and a **9** debug key that skips to just before the finish line.
+2. **Presentation:** pre-race course flyover, level 1 sea giants, sound effects.
+3. **New riders:** Hesher, Mime, Cthulhu (safe to use).
+4. Later: difficulty levels + cheat codes, unlockable riders, free carving, night tracks, weapons in
+   hand (water bottle explosions), mobile, online.
 
 ---
 
@@ -162,7 +160,8 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
   how often they crash) and maybe landing generosity.
 - [ ] **Cheat codes:** typed on the title screen or in the pause menu. Ideas: big head, moon
   gravity, infinite boost, always clean landings, all riders unlocked, chaos mode forced on.
-  Cheated runs should skip the world board.
+  Cheated runs go on their own **cheat leaderboard** (world + local) with a field listing every
+  cheat used that session, shown on the board as tags, rather than being left off the boards.
 
 ## 🚀 Platform & release
 - [ ] **Mobile friendly** — touch controls (steer by tilt or thumb zones, tap to jump), perf
