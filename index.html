@@ -148,7 +148,7 @@
   #select .sel-count { margin-top: 8px; font-size: 13px; letter-spacing: 3px; opacity: .6; }
   body.selecting #hud, body.selecting #best, body.selecting #help, body.selecting #powerups, body.selecting #balance { display: none; }
   body.brawling #hud, body.brawling #powerups, body.brawling #balance { display: none; }   /* off the board: no ride HUD */
-  .rboard { width: min(520px, 92vw); }
+  .rboard { width: min(640px, 94vw); }
   .rtitle { font-size: 48px; font-weight: 900; letter-spacing: 6px; text-align: center;
     color: #ffd23c; text-shadow: 0 0 18px rgba(255,210,60,.6); margin-bottom: 14px; }
   .rstats { display: flex; justify-content: center; gap: 26px; font-size: 13px; letter-spacing: 2px;
@@ -164,20 +164,25 @@
   }
   .inits .init.cur { color: #ffd23c; border-bottom-color: #ffd23c; text-shadow: 0 0 14px rgba(255,210,60,.7); }
   .rhead, .rlist li {
-    display: grid; grid-template-columns: 40px 1fr 108px 52px 56px; align-items: center; padding: 0 12px;
+    display: grid; grid-template-columns: 36px 1fr 104px 72px 72px 60px 70px; align-items: center; padding: 0 12px;
   }
+  .rhead span:nth-child(n+3), .rlist li span:nth-child(n+3) { text-align: right; }
+  .rlist li span:nth-child(n+3) { opacity: .55; }
+  /* the ranking being shown: its column lights up */
+  #results[data-cat="time"] .tm, #results[data-cat="score"] .sc, #results[data-cat="combo"] .cb,
+  #results[data-cat="top"] .sp, #results[data-cat="air"] .ht { opacity: 1 !important; color: #ffd23c; }
+  .rcat { display: flex; justify-content: center; align-items: center; gap: 18px; margin-bottom: 10px;
+    font-size: 15px; letter-spacing: 3px; font-weight: 800; }
+  .rcat .lbl { min-width: 220px; text-align: center; color: #3ca6ff; }
+  .rcat .arr { opacity: .5; font-size: 12px; }
   .rhead { font-size: 11px; letter-spacing: 2px; opacity: .5; text-transform: uppercase; padding-bottom: 6px; }
-  .rhead span:nth-child(3), .rhead span:nth-child(4), .rhead span:nth-child(5) { text-align: right; }
   .rlist { list-style: none; margin: 0; padding: 0; }
   .rlist li { font-size: 20px; font-weight: 700; padding-top: 6px; padding-bottom: 6px; border-radius: 6px; opacity: .85; }
   .rlist li .rk { color: #ffd23c; }
-  .rlist li .tm { text-align: right; color: #3ca6ff; }
-  .rlist li .sp { text-align: right; opacity: .8; }
-  .rlist li .ht { text-align: right; color: #ffd23c; opacity: .85; }
   .rlist li.me { background: rgba(255,210,60,.16); opacity: 1; }
   /* results come in stages: stats → initials → board */
   #results[data-stage="stats"] #rentry, #results[data-stage="stats"] .rhead, #results[data-stage="stats"] #rlist,
-  #results[data-stage="stats"] #rcontinue, #results[data-stage="entry"] .rhead, #results[data-stage="entry"] #rlist,
+  #results[data-stage="stats"] #rcontinue, #results[data-stage="stats"] #rcat, #results[data-stage="entry"] .rhead, #results[data-stage="entry"] #rlist,
   #results[data-stage="entry"] #rnext, #results[data-stage="board"] #rnext { display: none; }
   /* final screen: nothing but the choices (Restart / Quit — room for Next Race later) */
   #results:not([data-stage="end"]) #rend { display: none; }
@@ -268,8 +273,10 @@
       </dl></section>
       <section><h3>TRICKS — IN THE AIR</h3><dl class="tricks">
         <dt>Ollie</dt><dd><kbd>Space</kbd></dd>
-        <dt>Spin</dt><dd>hold <kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd> + <kbd>Space</kbd><small>each 180° landed scores</small></dd>
-        <dt>Grab</dt><dd>hold <kbd>Shift</kbd> + <kbd>Space</kbd><small>no steering, or it's a spin</small></dd>
+        <dt>Spin</dt><dd><kbd>Space</kbd>, then hold <kbd>A</kbd>/<kbd>D</kbd> in the air<small>each 180° landed scores; let go on a clean 180</small></dd>
+        <dt>Grab</dt><dd>hold <kbd>Shift</kbd> in the air<small>let go before you land, or it's sketchy</small></dd>
+        <dt>Landing</dt><dd>clean · sketchy (half points) · bail<small>come down too far off a 180 and you crash</small></dd>
+        <dt>Combo</dt><dd>land tricks back to back<small>start the next within 2.5s on the ground; bails lose it</small></dd>
         <dt>Big Air</dt><dd><kbd>Space</kbd> off a ramp<small>long hangtime scores</small></dd>
         <dt>Revert</dt><dd><kbd>Shift</kbd> + <kbd>R</kbd> on the ground<small>switches your stance; scores right after a landing</small></dd>
       </dl></section>
@@ -316,6 +323,7 @@
       <span>Dist<b id="r-dist">0</b></span>
       <span>Air<b id="r-air">0.0s</b></span>
       <span>Score<b id="r-score">0</b></span>
+      <span>Combo<b id="r-combo">0</b></span>
     </div>
     <div id="rentry" class="rentry hidden">
       <div class="rentry-label blink">NEW RECORD — ENTER INITIALS</div>
@@ -324,12 +332,13 @@
         <span class="init" data-i="1">A</span>
         <span class="init" data-i="2">A</span>
       </div>
-      <div class="rhint">↑ ↓ letter · ← → move · type A–Z · Enter / A to confirm</div>
+      <div class="rhint">↑ ↓ letter · ← → move · type A–Z · Enter / A to confirm · Tab rankings</div>
     </div>
-    <div class="rhead"><span>#</span><span>Name</span><span>Time</span><span>Mph</span><span>Air</span></div>
+    <div id="rcat" class="rcat"><span class="arr">◀</span><span class="lbl">FASTEST TIME</span><span class="arr">▶</span></div>
+    <div class="rhead"><span>#</span><span>Name</span><span class="tm">Time</span><span class="sc">Score</span><span class="cb">Combo</span><span class="sp">Mph</span><span class="ht">Air</span></div>
     <ol id="rlist" class="rlist"></ol>
     <div id="rnext" class="rhint blink">Enter / A / click — continue</div>
-    <div id="rcontinue" class="rhint blink">Enter / A / click — continue</div>
+    <div id="rcontinue" class="rhint blink">Enter / A / click — continue · ← → rankings</div>
     <div class="rhint brawl">F + J — step off your board</div>
     <div id="rend">
       <ul class="menu-list rmenu"><li data-r="restart" class="sel">Restart</li><li data-r="next">Next Race</li><li data-r="rider">Change Rider</li><li data-r="quit">Quit</li></ul>
@@ -1831,7 +1840,7 @@ function ik2(a, b, c, target, pole) {
 function poseRider(info, dt) {
   const k = Math.min(1, dt * 8);
   const fwd = Math.cos(stanceYaw) >= 0 ? 1 : -1;   // lean +Z is down the road in regular, up it in switch
-  const grab = state.airborne && trick.type === 'grab' ? 1 : 0;
+  const grab = state.airborne && trick.grab ? 1 : 0;
   const target = grind.on ? 0.55 : grab ? 0.85 : state.airborne ? 0.5 : info.tuck ? 0.8 : 0.3;
   rig.crouch += (target - rig.crouch) * k;
   rig.grab += (grab - rig.grab) * k;
@@ -2250,7 +2259,7 @@ const state = {
 let topSpeed = 0;                              // session best, shown in the HUD
 
 // Per-run stats that feed the results board (time / top speed / distance / hangtime / score).
-const run = { t: 0, topSpeed: 0, dist: 0, airTime: 0, score: 0 };
+const run = { t: 0, topSpeed: 0, dist: 0, airTime: 0, score: 0, bestCombo: 0 };
 
 const G = 26;              // gravity pull along slope
 const DRAG_TUCK = 0.00055; // aero drag tucked
@@ -2279,9 +2288,19 @@ const KICK_MAX_SPEED = 55;     // above this, kicking does nothing
 const push = { meter: 1, cd: 0 };
 let kickWasDown = false;
 
-// --- Tricks: jump + a held direction/tuck picks a trick; points scored on landing.
-const SPIN_RATE = 7.5;         // radians/sec while spinning in the air
-const trick = { type: null, spin: 0, dir: 1, air: 0 };
+// --- Tricks: Space jumps; in the air A/D spins (each 180° landed scores) and Shift grabs. A landing
+//     is judged by how far off a clean stance you come down: clean, SKETCHY! (half points) or a bail.
+//     Tricks landed within COMBO_WINDOW of each other chain into a combo that pays a bonus.
+const SPIN_RATE    = 7.5;      // radians/sec while A/D is held in the air
+const AIR_STEER    = 0.3;      // A/D still drifts you this much in the air (mostly they spin you)
+const GRAB_MIN     = 0.35;     // seconds of grab that count as a grab
+const LAND_CLEAN   = 30;       // degrees off a clean stance that still land clean…
+const LAND_SKETCHY = 75;       // …and sketchy; any further round and you bail
+const CRASH_SECS   = 1.8;      // a bail puts the rider down this long before he gets back up
+const COMBO_WINDOW = 2.5;      // seconds on the ground to start the next trick and keep the combo
+const COMBO_BONUS  = 0.1;      // combo bonus = this × chain points × (tricks − 1)
+const trick = { type: null, spin: 0, air: 0, grabT: 0, grab: false };
+const combo = { n: 0, pts: 0, t: 0 };
 
 // --- Rail grinds (THPS-style): jump onto either guardrail to lock on, keep the balance needle
 //     centered with steer, Space hops off. More grind tricks are a TODO (see ROADMAP).
@@ -2290,10 +2309,14 @@ const RAIL_H         = 1.07;   // rider height above the road with the board on 
 const GRIND_SNAP     = 1.8;    // lateral lock-on reach — a little snap assist, like THPS
 const GRIND_BUFFER   = 0.3;    // an I press this many seconds early still catches the rail
 const GRIND_FRICTION = 3.5;    // extra drag while grinding (u/s²)
-const GRIND_PTS      = 300;    // points per second of clean grind
+const GRIND_PTS      = 14;     // points per unit of rail covered — fast grinds pay more
+const GRIND_SLIDE_X  = 1.5;    // boardslides are worth this much more
+const GRIND_BOOST_ON  = 2.5;   // speed kick when you lock on…
+const GRIND_BOOST_OFF = 2.5;   // …and when you hop off
 const BAL_TIP        = 1.4;    // how fast the needle falls away from center (grows with grind time)
 const BAL_CONTROL    = 2.6;    // how hard steering pushes the needle
-const grind = { on: false, side: 1, t: 0, bal: 0, drift: 0, name: '', cd: 0, buffer: 0 };
+const grind = { on: false, side: 1, t: 0, dist: 0, bal: 0, drift: 0, name: '', cd: 0, buffer: 0 };
+const grindPts = () => Math.round(grind.dist * GRIND_PTS * (grind.name === 'BOARDSLIDE' ? GRIND_SLIDE_X : 1));
 let jumpWasDown = false, grindWasDown = false;
 const railAt = u => !GAPS.some(g => u > g.u0 && u < g.u1) && !inPit(u);   // breaks at the gaps; none in the pit
 
@@ -2317,9 +2340,11 @@ let curInput = { steer: 0, tuck: 0, jump: false, kick: false };
 function resetRun() {
   state.u = START_U; state.lateral = 0; state.speed = 8;
   state.heading = 0; state.height = 0; state.vy = 0; state.airborne = false;
-  run.t = 0; run.topSpeed = 0; run.dist = 0; run.airTime = 0; run.score = 0;
+  run.t = 0; run.topSpeed = 0; run.dist = 0; run.airTime = 0; run.score = 0; run.bestCombo = 0;
+  combo.n = combo.pts = combo.t = 0; state.crashT = 0;
   push.meter = 1; push.cd = 0; kickWasDown = false;
-  trick.type = null; trick.spin = 0; trick.air = 0;
+  trick.type = null; trick.spin = 0; trick.air = 0; trick.grab = false;
+  if (rig.mixer) rig.mixer.stopAllAction();
   enduranceT = 0; freeDeath = false; weaponTier = 0;
   grind.on = false; grind.cd = 0; grind.buffer = 0;
   stance = 1; lastLandT = -1e9;
@@ -2330,8 +2355,13 @@ function resetRun() {
 // Gameplay actions (declarations hoist, so update() can call these).
 function land(h = 0) {
   state.height = h; state.airborne = false; state.vy = 0;
-  settleSpin(); scoreTrick(); lastLandT = run.t;
-  if (state.speed > 4) flash(0.15);
+  const off = spinOff(), grabbing = trick.grab;
+  if (off > LAND_SKETCHY) { crash(); return; }                // came down sideways
+  settleSpin();
+  const sketchy = off > LAND_CLEAN || grabbing;                // still holding the grab counts too
+  if (!scoreTrick(sketchy ? 0.5 : 1) && sketchy) showTrick('SKETCHY!');
+  lastLandT = run.t;
+  if (state.speed > 4) flash(sketchy ? 0.25 : 0.15);
 }
 function takeoff(vy) { if (state.airborne) return; state.airborne = true; state.vy = vy; armTrick(); }
 // A kicker that feeds a gap launches you far enough to clear it (with margin) as long as you're
@@ -2357,7 +2387,8 @@ const COAST_LAT      = ROAD_HALF_WIDTH - 1;   // how far off centre you can stee
 const finish = { crossed: false, stopped: false, t: 0, orbitAng: 0 };
 function crossFinish() {
   finish.crossed = true;
-  lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, reason: 'end', rank: -1 };
+  endCombo();
+  lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, combo: run.bestCombo, reason: 'end', rank: -1 };
   if (grind.on) endGrind();
   showTrick('FINISH!'); flash(0.3);
 }
@@ -2407,29 +2438,27 @@ let lastLandT = -1e9, revertCd = 0;
 function revert() {
   if (state.airborne || grind.on || revertCd > 0) return;
   stance = -stance; revertCd = 0.45;
-  if (run.t - lastLandT < REVERT_WINDOW) { run.score += REVERT_PTS; showTrick('REVERT  +' + REVERT_PTS); }
+  if (run.t - lastLandT < REVERT_WINDOW) award('REVERT', REVERT_PTS);
   else showTrick(stance === 1 ? 'REGULAR' : 'SWITCH');
 }
 function startGrind(side, inp) {
   settleSpin(); scoreTrick();                               // the air trick that got you up there still counts
-  Object.assign(grind, { on: true, side, t: 0, bal: (Math.random() - 0.5) * 0.2, drift: 0,
+  Object.assign(grind, { on: true, side, t: 0, dist: 0, bal: (Math.random() - 0.5) * 0.2, drift: 0,
                          name: inp.tuck ? 'BOARDSLIDE' : '50-50 GRIND' });
+  state.speed += GRIND_BOOST_ON;
   Object.assign(state, { airborne: false, vy: 0, height: RAIL_H, lateral: side * RAIL_LAT });
 }
 function endGrind() {                         // clean exit — hop off or ride off the end
-  const pts = Math.round(grind.t * GRIND_PTS);
-  if (grind.t > 0.2) { run.score += pts; showTrick(grind.name + '  +' + pts); }
+  if (grind.t > 0.2) award(grind.name, grindPts());
   grind.on = false; grind.cd = 0.4;
 }
 function bailGrind() {                        // lost the balance — slam onto the road
   grind.on = false; grind.cd = 0.8;
-  Object.assign(state, { airborne: false, vy: 0, height: 0, heading: 0,
-                         lateral: grind.side * (ROAD_HALF_WIDTH - 1.2), speed: state.speed * 0.5 });
-  trick.type = null;
-  flash(0.45); showTrick('BAILED!');
+  Object.assign(state, { lateral: grind.side * (ROAD_HALF_WIDTH - 1.2) });
+  crash();
 }
 function updateGrind(dt, inp, f, slope, jumpPressed) {
-  grind.t += dt;
+  grind.t += dt; grind.dist += state.speed * dt;
   // the rail follows the road, so the slope still pulls you along it — with extra friction
   const drag = inp.tuck ? DRAG_TUCK : DRAG_UP;
   state.speed = Math.max(0, state.speed + (G * slope - drag * state.speed * state.speed - ROLL - GRIND_FRICTION) * dt);
@@ -2451,6 +2480,7 @@ function updateGrind(dt, inp, f, slope, jumpPressed) {
   if (jumpPressed) {
     // hop off toward the steer direction (or back toward the road)
     endGrind();
+    state.speed += GRIND_BOOST_OFF;
     state.heading = inp.steer ? -inp.steer * 0.45 : -grind.side * 0.3;
     takeoff(Math.min(13, 8 + state.speed * 0.03));
   } else if (!railAt(state.u + 3 / TOTAL_LEN)) {
@@ -2458,7 +2488,7 @@ function updateGrind(dt, inp, f, slope, jumpPressed) {
     Object.assign(state, { airborne: true, vy: 1.5 });
     armTrick();
   } else {
-    showTrick(grind.name + '  ' + Math.round(grind.t * GRIND_PTS));
+    showTrick(grind.name + '  ' + grindPts());
   }
   if (!finish.crossed && state.u >= FINISH_U) crossFinish();
   return info;
@@ -2471,25 +2501,48 @@ function settleSpin() {
   if (halves % 2) { stance = -stance; stanceYaw = stance === 1 ? 0 : Math.PI; }
   trickPivot.rotation.y = trick.spin - Math.sign(trick.spin) * halves * Math.PI;
 }
-function armTrick() {
-  trick.spin = 0; trick.air = 0;
-  if (Math.abs(state.steerSmooth) > 0.35) { trick.type = 'spin'; trick.dir = Math.sign(state.steerSmooth); }
-  else if (curInput.tuck) trick.type = 'grab';
-  else trick.type = 'ollie';
+function armTrick() { trick.spin = 0; trick.air = 0; trick.grabT = 0; trick.grab = false; trick.type = 'ollie'; }
+// how far (degrees) a spin is from the nearest clean stance
+function spinOff() {
+  if (trick.type !== 'spin') return 0;
+  const halves = Math.round(Math.abs(trick.spin) / Math.PI);
+  return Math.abs(Math.abs(trick.spin) - halves * Math.PI) * 180 / Math.PI;
 }
-function scoreTrick() {
-  if (!trick.type) return;
-  let pts = 0, label = '';
-  if (trick.type === 'spin') {
-    const halves = Math.round(Math.abs(trick.spin) / Math.PI);   // count 180s landed
-    if (halves >= 1) { pts = halves * 150; label = (halves * 180) + '° SPIN'; }
-  } else if (trick.type === 'grab' && trick.air > 0.35) {
-    pts = Math.round(trick.air * 400); label = 'GRAB';
-  } else if (trick.air > 0.45) {
-    pts = Math.round(trick.air * 120); label = 'BIG AIR';
+// points for the air trick just landed; quality 1 = clean, 0.5 = sketchy
+function award(label, pts) {
+  run.score += pts; combo.n++; combo.pts += pts; combo.t = COMBO_WINDOW;
+  showTrick(`${label}  +${pts}` + (combo.n > 1 ? `  x${combo.n}` : ''));
+}
+function endCombo(keep = true) {             // the chain ends: bank the bonus (a bail loses it)
+  if (keep && combo.n >= 2) {
+    const bonus = Math.round(combo.pts * COMBO_BONUS * (combo.n - 1));
+    run.score += bonus; run.bestCombo = Math.max(run.bestCombo, combo.pts + bonus);
+    showTrick(`COMBO x${combo.n}  +${bonus}`);
   }
-  trick.type = null;
-  if (pts > 0) { run.score += pts; showTrick(label + '  +' + pts); }
+  combo.n = combo.pts = combo.t = 0;
+}
+function crash() {                             // bail: the rider goes down and slides to a stop
+  Object.assign(state, { crashT: CRASH_SECS, speed: state.speed * 0.4, heading: 0, airborne: false, height: 0, vy: 0 });
+  trick.type = null; trick.grab = false; trickPivot.rotation.set(0, 0, 0);
+  endCombo(false);
+  flash(0.45); showTrick('BAILED!');
+  const clip = rig.ready && rig.clips?.find(c => c.name.endsWith('|Death'));
+  if (clip) {
+    rig.mixer.stopAllAction();
+    const a = rig.mixer.clipAction(clip); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+  }
+}
+function scoreTrick(quality = 1) {
+  if (!trick.type) return false;
+  const parts = []; let pts = 0;
+  const halves = trick.type === 'spin' ? Math.round(Math.abs(trick.spin) / Math.PI) : 0;   // 180s landed
+  if (halves >= 1) { pts += halves * 150; parts.push(halves * 180 + '° SPIN'); }
+  if (trick.grabT > GRAB_MIN) { pts += Math.round(trick.grabT * 400); parts.push('GRAB'); }
+  if (!parts.length && trick.air > 0.45) { pts += Math.round(trick.air * 120); parts.push('BIG AIR'); }
+  trick.type = null; trick.grab = false;
+  if (pts <= 0) return false;
+  award((quality < 1 ? 'SKETCHY ' : '') + parts.join(' + '), Math.round(pts * quality));
+  return true;
 }
 function collectItem(it) {
   it.taken = true; it.mesh.visible = false;
@@ -2513,6 +2566,11 @@ function fallInGap(g) {
 
 function update(dt) {
   const inp = readInput();
+  if (state.crashT > 0) {                      // down after a bail: no control, slide to a stop, get up
+    state.crashT -= dt;
+    Object.assign(inp, { steer: 0, tuck: 0, jump: false, kick: false, grind: false, brake: false });
+    if (state.crashT <= 0 && rig.mixer) rig.mixer.stopAllAction();
+  }
   curInput = inp;
   state.steerSmooth += (inp.steer - state.steerSmooth) * Math.min(1, dt * 12);
   const jumpPressed = inp.jump && !jumpWasDown; jumpWasDown = inp.jump;
@@ -2525,7 +2583,7 @@ function update(dt) {
 
   // steering -> heading (less authority at very high speed, like real carving)
   const authority = THREE.MathUtils.clamp(1.3 - state.speed / 120, 0.35, 1.1);
-  const targetHeading = -state.steerSmooth * MAX_HEADING * authority;
+  const targetHeading = -state.steerSmooth * MAX_HEADING * authority * (state.airborne ? AIR_STEER : 1);
   state.heading += (targetHeading - state.heading) * Math.min(1, dt * TURN_RATE * 3);
 
   // speed integration
@@ -2538,7 +2596,7 @@ function update(dt) {
   const offroad = Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1.0;
   if (offroad && !state.airborne) accel -= OFFROAD_DRAG;
   // brakes (B / LT): a foot-drag stop — strong enough to hold you still on the steepest pitch
-  if (inp.brake && !state.airborne) accel -= BRAKE_DECEL + state.speed * 0.3;
+  if ((inp.brake || state.crashT > 0) && !state.airborne) accel -= BRAKE_DECEL + state.speed * 0.3;
 
   state.speed = Math.max(0, state.speed + accel * dt);
 
@@ -2559,11 +2617,20 @@ function update(dt) {
   if (state.airborne) {
     run.airTime += dt;   // hangtime — wheels off the ground
     trick.air += dt;
-    if (trick.type === 'spin') trick.spin += SPIN_RATE * trick.dir * dt;
+    if (trick.type) {
+      // A/D spins while held (let go to stop on a clean 180); Shift grabs when you're not spinning
+      trick.spin += SPIN_RATE * inp.steer * dt;
+      if (Math.abs(trick.spin) > 0.35) trick.type = 'spin';
+      trick.grab = !!inp.tuck && trick.type !== 'spin';
+      if (trick.grab) trick.grabT += dt;
+    }
     state.vy -= 34 * dt;
     state.height += state.vy * dt;
     if (state.height <= 0) land();
   }
+
+  // combo: the next trick has to start within COMBO_WINDOW of touching down
+  if (combo.n && !state.airborne) { combo.t -= dt; if (combo.t <= 0) endCombo(); }
 
   // rail lock-on (I): airborne, at rail height, within reach of a beam — rising into it while
   // drifting toward it, or coming down onto it
@@ -2671,12 +2738,12 @@ function place(info) {
   slideYawAnim += (slideYaw - slideYawAnim) * Math.min(1, dt * 14);
   lean.rotation.y = stanceYaw + slideYawAnim;
   lean.rotation.z = grind.on ? -grind.bal * 0.45 * (grind.name === 'BOARDSLIDE' ? -1 : 1) : -state.steerSmooth * 0.5;   // board across the rail: needle side flips
-  lean.rotation.x = !rig.ready && info.tuck ? 0.18 : 0;   // the rigged rider tucks with its body instead
+  lean.rotation.x = !rig.ready ? (state.crashT > 0 ? 1.35 : info.tuck ? 0.18 : 0) : 0;   // the rigged rider tucks (and falls) with its body instead
 
   // trick pose in the air (spin about up, grab = tuck-and-hold); settle back on the ground
   if (state.airborne) {
     trickPivot.rotation.y = trick.spin;
-    trickPivot.rotation.x = trick.type === 'grab' && !rig.ready ? 0.5 : 0;
+    trickPivot.rotation.x = trick.grab && !rig.ready ? 0.5 : 0;
   } else {
     trickPivot.rotation.y *= 0.7;
     trickPivot.rotation.x *= 0.7;
@@ -2778,7 +2845,10 @@ function place(info) {
   setSpeedFx(pos, dir, speedT, blurMul);
 
   // wind streaks stream past, aligned with travel
-  if (rig.ready) poseRider(info, dt);
+  if (rig.ready) {
+    if (state.crashT > 0 && rig.clips?.length) { rig.root.position.set(0, 0, 0); rig.mixer.update(dt); }   // down on the road
+    else poseRider(info, dt);
+  }
   updateSparks(dt, pos);
 
   wind(pos, skater.quaternion, state.speed, speedT, dt);
@@ -3337,7 +3407,12 @@ addEventListener('keydown', e => {
   if (gameState === 'COUNTDOWN') { if (startSeq.phase === 'fly') skipFly(); return; }
   if (gameState === 'ENTRY') { e.preventDefault(); handleEntryKey(e.code); return; }
   if (gameState === 'STATS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') advanceStats(); return; }
-  if (gameState === 'RESULTS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') showEnd(); return; }
+  if (gameState === 'RESULTS') {
+    if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') showEnd();
+    else if (e.code === 'ArrowLeft') lbCycle(-1);
+    else if (e.code === 'ArrowRight' || e.code === 'Tab') { e.preventDefault(); lbCycle(1); }
+    return;
+  }
   if (gameState === 'END') {
     if (e.code === 'ArrowUp' || e.code === 'ArrowLeft') rmenuMove(-1);
     else if (e.code === 'ArrowDown' || e.code === 'ArrowRight') rmenuMove(1);
@@ -3380,7 +3455,7 @@ function pollMenuGamepad(dt) {
   if (gameState === 'TITLE') { if (a) startFromTitle(); return; }
   if (gameState === 'SELECT') { if (lf) selMove(-1); if (rt) selMove(1); if (a) confirmSelect(); return; }
   if (gameState === 'STATS') { if (a || b) advanceStats(); return; }
-  if (gameState === 'RESULTS') { if (a || b) showEnd(); return; }
+  if (gameState === 'RESULTS') { if (lf) lbCycle(-1); if (rt) lbCycle(1); if (a || b) showEnd(); return; }
   if (gameState === 'END') {
     if (up || lf) rmenuMove(-1); if (dn || rt) rmenuMove(1);
     if (a) rmenuPick();
@@ -3427,14 +3502,33 @@ const NAME_KEY = 'downhill.initials';  // last initials the player entered
 const LB_MAX = 8;                      // rows kept on the board
 const ENTRY_LEN = 3;                   // arcade initials
 
-// Sort seams — only `time` is wired up today; the rest are ready for a rank toggle.
+// Rankings — the board cycles through these (← → / Tab). A run earns initials if it would make
+// the top LB_MAX of ANY of them; stored runs are pruned to those still on some board.
 const compareBy = {
   time:  (a, b) => a.timeS - b.timeS,      // fastest first
-  score: (a, b) => b.score - a.score,
-  top:   (a, b) => b.topSpeed - a.topSpeed,
-  dist:  (a, b) => b.dist - a.dist,
+  score: (a, b) => (b.score || 0) - (a.score || 0),
+  combo: (a, b) => (b.combo || 0) - (a.combo || 0),
   air:   (a, b) => (b.airTime || 0) - (a.airTime || 0),
+  top:   (a, b) => b.topSpeed - a.topSpeed,
 };
+const LB_CATS = [
+  { key: 'time',  label: 'FASTEST TIME' },
+  { key: 'score', label: 'HIGH SCORE' },
+  { key: 'combo', label: 'BIGGEST COMBO' },
+  { key: 'air',   label: 'LONGEST HANGTIME' },
+  { key: 'top',   label: 'SPEED DEMON' },
+];
+let lbCat = 0, lbScores = [];
+const topOf = (scores, key) => [...scores].sort(compareBy[key]).slice(0, LB_MAX);
+const placesAnywhere = (scores, rec) => LB_CATS.some(c => scores.filter(s => compareBy[c.key](s, rec) < 0).length < LB_MAX);
+function pruneScores(scores) {                 // keep only runs that are still on some board
+  const keep = new Set(LB_CATS.flatMap(c => topOf(scores, c.key)));
+  return scores.filter(s => keep.has(s));
+}
+function lbCycle(d) {
+  lbCat = (lbCat + d + LB_CATS.length) % LB_CATS.length;
+  renderBoard(lbScores);
+}
 
 function loadScores() { try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; } catch { return []; } }
 function saveScores(s) { try { localStorage.setItem(LB_KEY, JSON.stringify(s)); } catch {} }
@@ -3452,6 +3546,8 @@ const results = {
   dist:  document.getElementById('r-dist'),
   air:   document.getElementById('r-air'),
   score: document.getElementById('r-score'),
+  combo: document.getElementById('r-combo'),
+  cat:   document.querySelector('#rcat .lbl'),
   inits: document.querySelectorAll('#rentry .init'),
 };
 
@@ -3492,32 +3588,36 @@ function fmtTime(s) {
 
 // One entry point for "the run is over" — reached the end today; a crash could call this later.
 function finishRun(reason) {
-  if (!lastRun || !finish.crossed) lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, reason, rank: -1 };
+  if (!lastRun || !finish.crossed) lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, combo: run.bestCombo, reason, rank: -1 };
   document.exitPointerLock?.();
   results.time.textContent = fmtTime(lastRun.timeS);
   results.top.textContent  = Math.round(lastRun.topSpeed * MPH);
   results.dist.textContent = Math.round(lastRun.dist);
   results.air.textContent  = lastRun.airTime.toFixed(1) + 's';
   results.score.textContent = lastRun.score;
+  results.combo.textContent = lastRun.combo || 0;
 
   results.el.classList.remove('hidden');
   gameState = 'STATS';                       // 1) stats alone, then continue →
   results.el.dataset.stage = 'stats';
 }
-function advanceStats() {                     // 2) initials if the run placed, 3) the board
-  const scores = loadScores().sort(compareBy.time);
-  const qualifies = scores.length < LB_MAX || lastRun.timeS < scores[scores.length - 1].timeS;
-  if (qualifies) startEntry(scores); else showBoard(scores);
+function advanceStats() {                     // 2) initials if the run placed on any ranking, 3) the board
+  const scores = loadScores(), probe = { ...lastRun, score: lastRun.score, combo: lastRun.combo || 0 };
+  if (placesAnywhere(scores, probe)) startEntry(scores); else showBoard(scores);
 }
 
 function renderBoard(scores) {
+  lbScores = scores;
+  const cat = LB_CATS[lbCat];
+  results.el.dataset.cat = cat.key;
+  results.cat.textContent = cat.label;
   results.list.innerHTML = '';
-  scores.forEach((s, i) => {
+  topOf(scores, cat.key).forEach((s, i) => {
     const li = document.createElement('li');
-    if (lastRun && i === lastRun.rank) li.classList.add('me');
+    if (lastRun && s === lastRun.rec) li.classList.add('me');
     li.innerHTML = `<span class="rk">${i + 1}</span><span class="nm">${s.name}</span>`
-      + `<span class="tm">${fmtTime(s.timeS)}</span><span class="sp">${Math.round(s.topSpeed * MPH)}</span>`
-      + `<span class="ht">${(s.airTime || 0).toFixed(1)}s</span>`;
+      + `<span class="tm">${fmtTime(s.timeS)}</span><span class="sc">${s.score || 0}</span><span class="cb">${s.combo || 0}</span>`
+      + `<span class="sp">${Math.round(s.topSpeed * MPH)}</span><span class="ht">${(s.airTime || 0).toFixed(1)}s</span>`;
     results.list.appendChild(li);
   });
 }
@@ -3555,13 +3655,11 @@ function submitInitials() {
   const name = entry.slots.join('');
   lastInitials = name;
   try { localStorage.setItem(NAME_KEY, name); } catch {}
-  const rec = { name, timeS: lastRun.timeS, topSpeed: lastRun.topSpeed, dist: lastRun.dist, airTime: lastRun.airTime, score: lastRun.score };
-  const scores = loadScores();
-  scores.push(rec);
-  scores.sort(compareBy.time);
-  if (scores.length > LB_MAX) scores.length = LB_MAX;
+  const rec = { name, timeS: lastRun.timeS, topSpeed: lastRun.topSpeed, dist: lastRun.dist, airTime: lastRun.airTime,
+                score: lastRun.score, combo: lastRun.combo || 0 };
+  const scores = pruneScores([...loadScores(), rec]);
   saveScores(scores);
-  lastRun.rank = scores.indexOf(rec);   // highlight the player's row
+  lastRun.rec = rec;                    // highlight the player's row
   showBoard(scores);
 }
 
@@ -3573,6 +3671,7 @@ function handleEntryKey(code) {
   else if (code === 'ArrowLeft') entryMove(-1);
   else if (code === 'ArrowRight')entryMove(1);
   else if (code === 'Backspace') { entry.slots[entry.pos] = 'A'; entryMove(-1); }
+  else if (code === 'Tab') lbCycle(1);
   else if (code === 'Enter' || code === 'Space') submitInitials();
 }
 

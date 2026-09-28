@@ -49,17 +49,20 @@ content. The carving rewrite is the big one: do it before building more switchba
   rider's view), not along it.
 
 ## 🛹 Tricks & scoring
-- [ ] **Air spin controls** — spin with A/D *after* leaving the ground; holding a direction
+- [x] **Air spin controls** — spin with A/D *after* leaving the ground; holding a direction
   before Space is awkward and scrubs speed.
-- [ ] **Landing judgement** — generous landing window with three results: clean (right on
+- [x] **Landing judgement** — generous landing window with three results: clean (right on
   either stance), SKETCHY! (rough but no crash, fewer points), bail → crash scene.
-- [ ] **Grind momentum** — small, brief speed boost on lock-on and on hop-off; you can still
+- [x] **Grind momentum** — small, brief speed boost on lock-on and on hop-off; you can still
   slow to a stop on the rail as now.
-- [ ] **Grind scoring by distance**, not seconds, so fast grinds pay more (THPS scores by time
+- [x] **Grind scoring by distance**, not seconds, so fast grinds pay more (THPS scores by time
   on the rail, as far as I know, but distance suits a downhill game) — combine with the
   per-trick values in the grind TODO list below.
 - [ ] **More tricks** — see the grind trick list below; also flip tricks, more grabs, manuals.
-- [ ] **End-of-race stats board** — before initials, ←/→ or Tab cycles the ranking: fastest
+- [x] **Combos** — tricks started within 2.5s of touching down chain; the chain pays a bonus
+  (10% × points × extra tricks) and feeds the Biggest Combo ranking; a bail loses it.
+- [ ] **CPU racers** — AI riders to race against (next up).
+- [x] **End-of-race stats board** — before initials, ←/→ or Tab cycles the ranking: fastest
   time, high score, biggest combo, longest hangtime, speed demon (top speed), etc.
 
 ## 🗺️ Tracks & levels
