@@ -5,7 +5,9 @@ Written Sep 29, 2026. Live, editable copy: https://claude.ai/code/artifact/522ca
 
 ## Summary
 
-Downhill has a strong, distinctive core but only about 25% of the content of a sellable game. Recommendation: ship a **premium $14.99 game on Steam (Windows, Mac, Steam Deck) on Thursday, May 13, 2027**. Before that, put up a **free web demo** (itch.io, CrazyGames) and show a demo at **Steam Next Fest in February 2027**.
+Downhill has a strong, distinctive core but only about 25% of the content of a sellable game. Recommendation: ship a **premium $14.99 game on Steam (Windows and Steam Deck; Mac later) on Thursday, May 13, 2027**. Before that, put up a **free web demo** (itch.io, CrazyGames) and show a demo at **Steam Next Fest in February 2027**.
+
+**Budget: $100 total**, the Steam fee, which Steam refunds after $1,000 in sales. Everything else uses free tools and assets (see Zero-budget path).
 
 The gap is not graphics. It is **content** (3 tracks → 12), **structure** (1 mode → 5, plus a career that ties them together), **retention** (ghosts, dailies, achievements, a real save) and **release hygiene**:
 
@@ -117,14 +119,15 @@ Recommended order: ghosts → split-screen → (after launch) online private lob
 
 ## Platforms
 
-**Launch on Steam (Windows + macOS + Steam Deck). Use the web as the demo and marketing funnel. Mobile and consoles come after launch.**
+**Launch on Steam (Windows + Steam Deck). Use the web as the demo and marketing funnel. Mac, mobile and consoles come after launch.**
 
 | Platform | When | What it takes |
 | --- | --- | --- |
-| Steam: Windows, macOS | 1.0 | Wrap in Electron (or Tauri) with `steamworks.js` for achievements, cloud saves and overlay. Ship the audio and assets locally. Sign and notarize the Mac build. $100 app fee |
-| Steam Deck | 1.0 | Aim for "Verified": full controller UI, readable text at 1280×800, no keyboard-only prompts, a 30/60 fps preset. This is where many racing players are |
-| Web demo | Feb 2027 | Courses 1–2 only, with a "Wishlist on Steam" button. itch.io + CrazyGames/Poki (portals pay ad revenue share and drive traffic). The current build is nearly this already |
-| Mobile (iOS/Android) | Post-launch, 2028 at earliest | A different product: touch controls (thumb zones or tilt), 30 fps on mid-range phones, short sessions, likely $4.99 premium like Alto's. WebGL in a WebView works but the port needs a perf pass. Don't let it shape 1.0 |
+| Steam: Windows | 1.0 | Wrap in Electron with `steamworks.js` (both free) for achievements, cloud saves and overlay. Ship the audio and assets locally. $100 app fee |
+| Steam Deck | 1.0 | Runs the Windows build through Proton. Valve's compatibility review is free. Aim for "Verified": full controller UI, readable text at 1280×800, no keyboard-only prompts, a 30/60 fps preset. This is where many racing players are |
+| Web demo | Feb 2027 | Courses 1–2 only, with a "Wishlist on Steam" button. itch.io + CrazyGames/Poki (free; portals pay ad revenue share and drive traffic). The current build is nearly this already |
+| Steam: macOS | After launch, if sales justify it | $99/yr Apple developer fee to sign and notarize. Mac is a few percent of Steam players |
+| Mobile (iOS/Android) | Post-launch, 2028 at earliest | A different product: touch controls (thumb zones or tilt), 30 fps on mid-range phones, short sessions, likely $4.99 premium like Alto's. Store fees: $99/yr Apple, $25 once Google. Don't let it shape 1.0 |
 | Consoles (Switch 2, PlayStation, Xbox) | Post-launch, if 1.0 sells | Realistically needs a Unity port or a porting partner, plus dev kits and certification. That's when the "mechanics transfer 1:1 to Unity" plan pays off |
 
 ## Graphics, audio and feel
@@ -136,20 +139,20 @@ Recommended order: ghosts → split-screen → (after launch) online private lob
 - **Character animation:** procedural posing is fine for riding. Missing: a ragdoll or authored crash tumble, get-on/off-board, a podium and celebration, and idle fidgets on the grid.
 - **UI and menus:** a proper UI art pass with one font family, iconography, controller button glyphs (Xbox/PS/Deck), transitions and menu sounds. The menus are what reviewers see first.
 - **Game feel:** hit-stop on kicks and knockouts, camera shake on landings, controller rumble, and a speed-lines and wind audio layer. These are cheap and give a big lift.
-- **Audio (a release blocker):** replace all ~18 synthesized placeholder sounds with recorded ones (the list already exists in `ROADMAP.md`). Add wind, board clack and crowd reactions. Budget: CC0 or a sound library at $0–$300, or a freelance sound designer at ~$1,500–$3,000.
-- **Music (a release blocker):** replace all of it with 15–20 cleared tracks. Options: commission 1–2 artists, license from indie labels, or use a buyout library. Offer an in-game radio "streamer-safe" toggle.
+- **Audio (a release blocker):** replace all ~18 synthesized placeholder sounds with recorded ones (the list already exists in `ROADMAP.md`). Add wind, board clack and crowd reactions. Free sources: Sonniss's GDC bundle, Kenney's CC0 packs, CC0-filtered Freesound, and phone recordings of real boards.
+- **Music (a release blocker):** replace all of it with 15–20 cleared tracks. Free route: written permission from the smaller artists already on the playlist in exchange for credit, plus CC0/CC-BY tracks (FreePD, Incompetech, OpenGameArt). Offer an in-game radio "streamer-safe" toggle.
 
 ## Technical, legal and QA
 
 ### Legal (fix these first; each one can get the game pulled)
 
 - **Music:** the playlist includes "Move That Dope" (Future), "No Heart" (21 Savage & Metro Boomin) and "Incredible" (M.Beat feat. General Levy). These are commercially released tracks. Even a free public web build can draw DMCA takedowns. Remove them from the public build now, and clear every other track in writing.
-- **Name:** "Downhill" can't be found in a store search. The repo name echoes *Downhill Domination* (Sony/Incognito, 2003), which is a trademark risk. Pick a distinctive title and run a USPTO/EUIPO search before the Steam page goes up.
+- **Name:** "Downhill" can't be found in a store search. The repo name echoes *Downhill Domination* (Sony/Incognito, 2003), which is a trademark risk. Pick a distinctive title and run a free USPTO search before the Steam page goes up.
 - **Characters:** the unlockable-rider wishlist (Godzilla, Pennywise, LeBron, and others) must become original designs, as the roadmap already notes.
 - **Assets:** the CC0 models and textures are fine. Keep `CREDITS.md` complete and add the font licences.
-- **Privacy:** the world board stores initials and Supabase sees IP addresses. You need a privacy policy, plus a EULA or terms page.
+- **Privacy:** the world board stores initials and Supabase sees IP addresses. Write a short privacy policy from a free template. Steam's standard subscriber agreement covers the EULA.
 - **Age rating:** Steam uses a content survey. The pit brawl, knockouts and gore ideas (exploding spectators) push the rating up. Decide the tone before marketing.
-- **Business:** form an LLC before taking revenue, and fill in the Steam tax and bank forms (they take weeks to process).
+- **Business:** sell as a sole proprietor for now (form an LLC later if the game earns real money), and fill in the Steam tax and bank forms (they take weeks to process).
 
 ### Technical
 
@@ -158,7 +161,7 @@ Recommended order: ghosts → split-screen → (after launch) online private lob
 - **Input:** full key and pad rebinding, menu navigation by controller everywhere, button glyphs that switch with the device, rumble.
 - **Settings:** graphics presets (Low/Medium/High/Deck), resolution scale, fps cap, FOV, motion blur, camera shake, and a toggle for the chromatic aberration, bloom and grain effects. Separate music, SFX and crowd volumes.
 - **Accessibility:** colorblind-safe UI, text size, hold-vs-toggle for tuck and brake, reduced flashing (chaos modes and strobes need a photosensitivity warning and a toggle).
-- **Localization:** English + French, Italian, German, Spanish (EFIGS) + Simplified Chinese + Brazilian Portuguese at launch. Chinese-speaking players are a large share of Steam. Pull all UI strings into one table now.
+- **Localization:** English only at launch. Pull all UI strings into one table now, so volunteer translators can add languages after launch (Simplified Chinese and Brazilian Portuguese first: large shares of Steam).
 - **Leaderboard integrity:** move from "sanity trigger" to ghost-validated submissions for the top 100.
 - **Telemetry (opt-in):** where people quit, which courses they restart, crash reports. Also needed to tune difficulty.
 - **Performance:** a Deck and integrated-GPU budget, a load-time budget (90 MB of audio today; stream it), no hitches on a fresh install.
@@ -170,7 +173,7 @@ There are no automated tests today. Before launch:
 - Headless physics regression tests: seeded runs that must finish within a time tolerance.
 - A save-migration test.
 - A closed playtest of 30–50 people in December–January (Steam Playtest is free).
-- A full platform pass on Windows (NVIDIA, AMD, Intel), macOS and Deck.
+- A platform pass on a borrowed Windows PC, plus Valve's free Deck compatibility review.
 
 ## Release method and pricing
 
@@ -184,6 +187,27 @@ There are no automated tests today. Before launch:
 - **Events:** Steam Next Fest (February 2027) with the demo. Apply to 2–3 digital showcases (e.g. indie-focused ones) and Steam sports and racing themed sales.
 - **Publisher?** Optional. Publishers like No More Robots (Descenders) sign this genre. A deal would trade 30–50% of revenue for marketing and porting. Pitch after the demo has numbers.
 
+## Zero-budget path
+
+**The plan costs $100: the Steam app fee, which Steam refunds after $1,000 in sales.** Every other line has a free route. A paid item gets discussed only when we reach it, and only if it's honestly worth the money.
+
+| Need | Free route | Worth paying for later? |
+| --- | --- | --- |
+| Steam listing | $100 app fee, the only cost | Required |
+| Music | Written permission from the smaller artists already on the playlist, in exchange for credit (an email reply is enough). Fill gaps with CC0/CC-BY tracks (FreePD, Incompetech, OpenGameArt) | No |
+| Sound effects | Sonniss GDC bundle (free, royalty-free), Kenney CC0 audio, CC0-filtered Freesound, phone recordings of real boards | No |
+| Capsule art, screenshots, trailer | In-game shots, Photopea, OBS, DaVinci Resolve | **Maybe:** $200–$500 for capsule art is the best-value spend in the plan |
+| Business | Sole proprietor, using your own tax ID in Steamworks | An LLC ($50–$500+ by state) once the game earns real money |
+| Platforms | Windows + Steam Deck (the Windows build runs through Proton; Valve tests Deck compatibility for free) | $99/yr Apple fee to add Mac, if sales justify it |
+| Desktop wrapper | Electron + `steamworks.js` | No |
+| Hosting and backend | itch.io, CrazyGames, Render free tier, Supabase free tier (pauses after a week idle) | Supabase Pro only if the free limits bite |
+| Localization | English only at launch; volunteer translators afterwards | No |
+| Legal | Steam's standard subscriber agreement, a free privacy-policy template, a free USPTO search | No |
+| Playtesting | Steam Playtest, Discord | No |
+| Marketing | TikTok, Shorts, Reddit, Next Fest, Steam Curator Connect, emailing streamers | No |
+
+Two needs that aren't cash: a borrowed Windows PC for testing, and your time.
+
 ## Revenue: first 12 months
 
 **Central estimate: $10k–$30k net in year one. Plan around $5k.** These are industry rules of thumb, not researched data. Around half of Steam games earn under a few thousand dollars in their lifetime.
@@ -192,7 +216,7 @@ There are no automated tests today. Before launch:
 
 | Outcome | Wishlists at launch | Copies in year 1 | Net to you |
 | --- | --- | --- | --- |
-| Worst case: no marketing at all | 0–300 | 10–150 | $65–$1,000, so a net loss after costs |
+| Worst case: no marketing at all | 0–300 | 10–150 | $65–$1,000 (the $100 fee is the only cost) |
 | Flop | under 2,000 | 200–800 | $1k–$5k |
 | **Likely:** a first solo game with steady marketing | 2,000–7,000 | 1,000–4,000 | **$6k–$26k** |
 | Good: Popular Upcoming, a few viral clips | 7,000–20,000 | 5,000–15,000 | $30k–$100k |
@@ -200,7 +224,7 @@ There are no automated tests today. Before launch:
 
 - **Rule of thumb:** year-one copies ≈ 0.3–0.7 × wishlists at launch. Wishlists are the number to watch from the day the Steam page goes up.
 - **Unmarketed, Steam won't find you.** Around 40 games launch on Steam every day. With no wishlists, you get a day or two on the new-releases list and then disappear. Most of the copies in that row would be friends and family.
-- **Costs:** about $3k–$8k in total, covering the Steam fee ($100, refunded after $1,000 in sales), cleared music plus sound effects, capsule art and an LLC. The worst case loses roughly that amount. The upside: 11 weeks of work already exists, and there's no debt.
+- **Costs:** $100 on the zero-budget path: the Steam fee, refunded after $1,000 in sales. Even the worst case costs almost nothing but time.
 - **Web demo ads** on CrazyGames or Poki add a few hundred to a couple of thousand dollars.
 
 ## Timeline: target Thursday, May 13, 2027
@@ -225,7 +249,7 @@ The must-haves for 1.0 on May 13, 2027, in rough build order. Anything not liste
 
 **Now (October 2026)**
 
-- [ ] Pull the commercial tracks from the public build
+- [ ] Pull the commercial tracks from the public build; email the playlist's smaller artists for written permission
 - [ ] Choose a final title and run a trademark search
 - [ ] Commit to an art direction and write a one-page style guide
 - [ ] Split `index.html` into modules; courses as data
@@ -235,7 +259,7 @@ The must-haves for 1.0 on May 13, 2027, in rough build order. Anything not liste
 
 - [ ] Versioned save system + settings file
 - [ ] Full controller UI, rebinding, button glyphs
-- [ ] Electron + Steamworks shell running on Windows, Mac and Deck
+- [ ] Electron + Steamworks shell running on Windows and Deck
 - [ ] Steam page live with capsule art, 5 screenshots and a teaser (by Nov 30)
 
 **Content and modes (Nov–Mar)**
@@ -251,12 +275,12 @@ The must-haves for 1.0 on May 13, 2027, in rough build order. Anything not liste
 
 **Polish and release (Mar–May)**
 
-- [ ] All sound effects recorded; 15–20 cleared music tracks
+- [ ] All sound effects from free CC0 sources; 15–20 cleared music tracks (written permission or CC0/CC-BY)
 - [ ] UI art pass, crash animation, game-feel pass
 - [ ] 40 achievements, Steam Cloud, lifetime stats
 - [ ] Settings, accessibility, photosensitivity warning
-- [ ] Localization (7 languages)
+- [ ] UI strings in one table (English only at launch)
 - [ ] Ghost-validated leaderboards; opt-in telemetry
-- [ ] Privacy policy, EULA, age-rating survey, LLC, Steam tax forms
+- [ ] Privacy policy (free template), age-rating survey, Steam tax forms (sole proprietor)
 - [ ] Trailer, press kit, key outreach
 - [ ] Release candidate on Deck "Verified" review
