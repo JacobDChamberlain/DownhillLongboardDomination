@@ -87,38 +87,40 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
   a loop, three shrinking loops in a row, a lip into a ~540-unit gap, a figure-8 banked nearly sideways
   at its ends, a mountain-sized loop (R 230), the finish. Real loop physics (fall off if too slow over
   the top, slide off banks without enough grip), open edges, boost pads that guarantee the stretch ahead
-  for everyone (CPUs too).* Ideas: a crash-cam replay of falls, loop-specific trick points.
+  for everyone (CPUs too). A last half-twist hangs the run-out and finish pit upside down (crowd
+  and all; the track holds you there).* Ideas: a crash-cam replay of falls, loop-specific trick
+  points, a pit brawl on the ceiling (off in level 3's upside-down pit for now).
 - [ ] Fleshed-out track select — previews, best times, on the title screen *(basic Track Select
   in the Esc menu + Next Race are done)*.
 - [ ] Keep the rider out of the mountain on level 1 (parked — "reminds me of the old days").
 
 ## ✨ Quick wins (from the second wishlist)
-- [ ] **Rename riders:** HARD HAT → **BOB**, THE SUIT → **CIA** (just labels in `RIDERS`).
-- [ ] **Brawl tuning:**
+- [x] **Rename riders:** HARD HAT → **BOB**, THE SUIT → **CIA** (just labels in `RIDERS`).
+- [x] **Brawl tuning:**
   - walk and sprint **twice as fast** (currently 5.2 / 9.5 u/s)
   - a **quicker punch**, and spectators **fall down faster** (speed up those two animation clips)
   - **mouse moves the camera** while you walk, the same as on the board
   - **K kicks** spectators too, not just racers
-- [ ] **HUD moves:**
+- [x] **HUD moves:**
   - the landing call (**clean / SKETCHY!**) pops just above the rider's head
   - the race **place** (POS x/4) moves from under the timer to under the minimap
-- [ ] **Clean landings pay speed:** land any trick clean and get a small speed boost (sketchy ones
+- [x] **Clean landings pay speed:** land any trick clean and get a small speed boost (sketchy ones
   don't).
 - [x] **FINISH page stats in two columns** (names left, numbers right, before initials). *Already
   done in the finish-flow update.*
 
 ## 🎨 Presentation & chaos modes
 - [ ] **Pickups brighter**, stand out more (labels and beams are in; push the glow/size).
-- [ ] **Sound effects** — ollie pop, grind loop, landing, crash, crowd cheers (synth or CC0).
+- [x] **Sound effects** — *done: all synthesized (Web Audio, no files): ollie pop, landing thud + sketchy scrape, crash, rolling-wheels loop (grittier on grass), grind scrape loop, pickup chime, boost whoosh, punch/kick smack + swing, crowd roar by proximity with cheers, sea splashes; Effects Volume in Settings.* Was: — ollie pop, grind loop, landing, crash, crowd cheers (synth or CC0).
 - [ ] **Rave mode** — glowsticks on the crowd; more bass (low-shelf boost on the music via Web
   Audio; only works over http(s), like the analyser).
 - [ ] **Starry mode** — brighter stars, more cosmic activity: huge nearby planets with flowing
   storms, and once in a blue moon a UFO zips by.
 - [ ] Meme/image skies (need image assets).
-- [ ] **Pre-race course flyover:** before the start cam cuts to you, a short tour of the track's
+- [x] **Pre-race course flyover:** before the start cam cuts to you, a short tour of the track's
   highlights (the gap, the loops, the bridge). Hand-picked camera points per level, skippable like
   the current flyover.
-- [ ] **Level 1 sea giants:** mountain-sized whales and dolphins breaching out of the lake beside
+- [x] **Level 1 sea giants:** mountain-sized whales and dolphins breaching out of the lake beside
   the course and arcing *over the bridge*. Needs a CC0 whale/dolphin model (or a stylized
   procedural one), a breach path + splash, and one timed to cross as you ride the viaduct.
 
@@ -141,9 +143,10 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
 - [ ] **Keep the OG version playable** — the pre-visual-upgrade build is commit `c66d8dc`
   ("Gameplay batch"). Tag it (`og`) and optionally serve it at `/og/`.
 - [ ] Customizable board/player colors.
-- [ ] **New riders:** **Hesher**, **Mime**, **Cthulhu** (the original story is public domain now).
-  Built as custom models on the shared rig so they can ride and brawl, or from CC0 base characters
-  re-dressed.
+- [x] **New riders:** **Hesher**, **Mime**, **Cthulhu** — *done as looks on the existing models
+  (`LOOKS`): recolors by material name, shader stripes (the mime's shirt), glowing eyes, and
+  procedural bits pinned to bones (long hair + mustache; beret + scarf; face tentacles + bat
+  wings). They ride, crash and brawl like everyone else, and show up as CPU rivals too.*
 - [ ] **Unlockable riders** — needs an unlock system first (what earns each: beat a track, a
   score, a secret) plus a locked slot on the carousel. Wishlist: Godzilla, Otto (The Simpsons),
   Pennywise, Freddy Krueger, Jackie Chan, LeBron James, Jak & Daxter, Ratchet & Clank, Courage
@@ -154,6 +157,33 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
     look-alike originals instead (a giant lizard, a creepy clown, a horror-slasher, a kung-fu
     star…). The Grim Reaper and Wyatt (with his OK) are free to use.
   - None have CC0 models; each needs a custom model rigged to the shared skeleton to ride.
+
+## 🔊 Sounds to replace
+Every sound effect is currently a **synthesized placeholder** (Web Audio, no files), and they're all
+likely to be replaced with real recordings. Each one is a method on `sfx` (search for its name in
+`index.html`). The swap: load the file into an `AudioBuffer` once at startup, then play it from
+that method (keep the shared `audioCtx`; don't create a context mid-run).
+
+| Sound | Method | Plays when |
+|---|---|---|
+| [ ] Ollie pop | `sfx.pop()` | any jump: Space, kicker launch, grind hop-off |
+| [ ] Landing thud | `sfx.land(false)` | landing from the air |
+| [ ] Sketchy landing scrape | `sfx.land(true)` | a sketchy landing (added on top of the thud) |
+| [ ] Crash | `sfx.crash()` | you bail: a bad landing or losing a grind |
+| [ ] CPU crash (quieter, by distance) | `sfx.crash(k)` | a CPU racer wipes out near the camera |
+| [ ] Rolling wheels (loop) | `sfx.update` → `roll` | always while riding; louder with speed, grittier on grass |
+| [ ] Grind scrape (loop) | `sfx.update` → `grindL` / `grindH` | while grinding a rail |
+| [ ] Crowd (loop) + cheers | `sfx.update` → `crowdL`, `sfx.cheer()` | near any crowd; swells at the finish and on knockouts |
+| [ ] Pickup chime | `sfx.pickup()` | endurance / free death / weapon pickups |
+| [ ] Rocket boost whoosh | `sfx.whoosh(true)` | the rocket boost pickup |
+| [ ] Boost pad whoosh | `sfx.whoosh(false)` | level 3 boost pads |
+| [ ] Punch / kick swing | `sfx.swing()` | throwing a punch or kick in the pit brawl |
+| [ ] Hit smack | `sfx.hit()` | a punch/kick landing; kicking a racer or a fan |
+| [ ] Splash | `sfx.splash(dist)` | a whale or dolphin leaving or entering the lake (level 1) |
+| [ ] Countdown beeps | `beep()` | the three start lights (not in `sfx`; uses the music volume) |
+
+Nice-to-haves once real audio is in: wind rush at speed, board clack on kicks, a crowd "ohhh" on
+crashes, whale song, a separate volume for the crowd.
 
 ## 🎮 Game options
 - [ ] **Difficulty levels** (Easy / Normal / Hard): scales the CPU racers (`CPU_SKILL`, rubber band,

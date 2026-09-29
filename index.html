@@ -130,6 +130,7 @@
   }
   #results.hidden { display: none; }
   .rhint.brawl { opacity: .55; margin-top: 6px; }
+  body.no-brawl .rhint.brawl { display: none; }
   #results:not([data-stage="stats"]):not([data-stage="race"]):not([data-stage="board"]):not([data-stage="world"]):not([data-stage="end"]) .rhint.brawl { display: none; }
   #brawlhint { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); color: #fff; font-size: 13px;
     letter-spacing: 1px; opacity: .7; text-shadow: 0 2px 8px rgba(0,0,0,.7); pointer-events: none; user-select: none; white-space: nowrap; }
@@ -147,6 +148,7 @@
   #select button:hover { background: rgba(60,166,255,.45); }
   #select .sel-count { margin-top: 8px; font-size: 13px; letter-spacing: 3px; opacity: .6; }
   body.selecting #hud, body.selecting #best, body.selecting #help, body.selecting #powerups, body.selecting #balance { display: none; }
+  body.touring #hud, body.touring #best, body.touring #help, body.touring #powerups, body.touring #balance { display: none; }   /* course tour */
   body.brawling #hud, body.brawling #powerups, body.brawling #balance { display: none; }   /* off the board: no ride HUD */
   .rboard { width: min(680px, 94vw); }
   .rtitle { font-size: 48px; font-weight: 900; letter-spacing: 6px; text-align: center;
@@ -234,7 +236,7 @@
     <div class="menu-hint">← → choose · Enter / A to ride</div>
   </div>
 </div>
-<div id="brawlhint" class="hidden">WASD / arrows walk · double-tap W or Shift to sprint · <b>F</b> / <b>J</b> punch · C camera · Esc back to results</div>
+<div id="brawlhint" class="hidden">WASD / arrows walk · double-tap W or Shift to sprint · <b>F</b> / <b>J</b> punch · <b>K</b> kick · mouse looks · C camera · Esc back to results</div>
 <div id="nowplaying">
   <div class="np-eyebrow">♪ Now playing</div>
   <div class="np-title">—</div>
@@ -266,6 +268,7 @@
     <div class="menu-title">SETTINGS</div>
     <ul class="menu-list">
       <li data-setting="volume">Music Volume <span class="val">70</span></li>
+      <li data-setting="sfx">Effects Volume <span class="val">70</span></li>
       <li data-setting="sens">Look Sensitivity <span class="val">100</span></li>
       <li data-setting="fx">Cinematic FX <span class="val">ON</span></li>
       <li data-action="back">Back</li>
@@ -280,7 +283,8 @@
         <dt><kbd>Shift</kbd> hold</dt><dd>tuck — go faster</dd>
         <dt><kbd>W</kbd> / <kbd>↑</kbd></dt><dd>kick-push</dd>
         <dt><kbd>B</kbd> hold</dt><dd>brake to a stop</dd>
-        <dt><kbd>K</kbd></dt><dd>kick a racer riding beside you</dd>
+        <dt><kbd>K</kbd></dt><dd>kick a racer (or a fan) riding beside you</dd>
+        <dt><kbd>9</kbd></dt><dd>skip to just before the finish (testing)</dd>
         <dt><kbd>0</kbd></dt><dd>reset run</dd>
       </dl></section>
       <section><h3>TRICKS — IN THE AIR</h3><dl class="tricks">
@@ -302,6 +306,7 @@
         <dt>Step off</dt><dd><kbd>F</kbd> + <kbd>J</kbd><small>in the pit, on the stats or the end screen</small></dd>
         <dt>Walk</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows<small>double-tap <kbd>W</kbd> or hold <kbd>Shift</kbd> to sprint</small></dd>
         <dt>Punch</dt><dd><kbd>F</kbd> left · <kbd>J</kbd> right<small>your weapon pickup changes the swing</small></dd>
+        <dt>Kick</dt><dd><kbd>K</kbd></dd>
         <dt>Back</dt><dd><kbd>Esc</kbd></dd>
       </dl></section>
       <section><h3>CAMERA &amp; LOOK</h3><dl>
@@ -659,7 +664,7 @@ function sbLegY(i, x) {
 // the gap and the 8 (a 1:2 Lissajous, dropping as it goes so its crossings pass over each other).
 // LP records where each feature lands (arc length s) for the gap, pads and banking.
 // ------------------------------------------------------------------
-const LP = { Y0: 700, STEP: 5, loops: [], pads: [], gap: null, eight: null, marks: {}, len: 0 };
+const LP = { Y0: 700, STEP: 5, loops: [], pads: [], gap: null, eight: null, twist: null, marks: {}, len: 0 };
 function buildLoopPoints() {
   const pts = [], P = new THREE.Vector3(0, LP.Y0, 0), H = new THREE.Vector3(1, 0, 0);
   let s = 0;
@@ -729,7 +734,10 @@ function buildLoopPoints() {
   straight(200, -50); LP.marks.weapon = s - 120;
   loop(230, 30, [30, 70, 110, 150, 190, 230]);    // the monster
   straight(170, -60);
-  straight(300);                                  // run-out into the finish pit
+  LP.twist = { s0: s };
+  straight(160);                                  // one last half-twist…
+  LP.twist.s1 = s;
+  straight(300);                                  // …so the run-out and the finish pit hang upside down
   LP.len = s;
   return pts;
 }
@@ -827,6 +835,17 @@ if (IS_LOOP) for (const L of LP.loops) {
     f.side.crossVectors(f.up, f.tan).normalize();
     f.up.crossVectors(f.tan, f.side).normalize();
   });
+}
+// Level 3's last half-twist: the road rolls over (eased) and everything after it is upside down.
+// From the twist on the track holds you ("magnetic"), so hanging from it doesn't drop you off.
+const FLIP_U = IS_LOOP ? lpU(LP.twist.s0) : 2;
+if (IS_LOOP) {
+  const i0 = Math.floor(lpU(LP.twist.s0) * SAMPLES), i1 = Math.ceil(lpU(LP.twist.s1) * SAMPLES);
+  for (let i = i0; i <= SAMPLES; i++) {
+    const t = Math.min(1, (i - i0) / (i1 - i0)), a = Math.PI * (0.5 - 0.5 * Math.cos(Math.PI * t));
+    const f = frames[i];
+    f.side.applyAxisAngle(f.tan, a).normalize(); f.up.applyAxisAngle(f.tan, a).normalize();
+  }
 }
 // curvature vector (turning rate × direction) at each sample — level 3's stick-to-the-track physics
 const CURV = frames.map((f, i) => {
@@ -1306,6 +1325,12 @@ if (IS_SWITCH) {
 // ------------------------------------------------------------------
 const ARENAS = [];   // { c: centre (floor level), R, openAng, openHalf } — crowd placement reads this
 const PIT_FLOORS = [];   // the arenas' floor meshes (the pit brawl stands on these)
+// level 3: turn an object over with the finish pit — a half-roll about the road's direction at the pit
+function flipPit(o) {
+  const fp = frameAt(FINISH_PIT_U), axis = new THREE.Vector3(fp.tan.x, 0, fp.tan.z).normalize();
+  o.position.sub(fp.p).applyAxisAngle(axis, Math.PI).add(fp.p);
+  o.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, Math.PI));
+}
 {
   const FLOOR_DY = -0.55;   // a hair under the grass ribbon so the two never z-fight
   function ring(profile, c, openAng, openHalf, mat, uvFor) {
@@ -1344,13 +1369,17 @@ const PIT_FLOORS = [];   // the arenas' floor meshes (the pit brawl stands on th
     scene.add(floor); PIT_FLOORS.push(floor);
     // grass berm rim, then rock walls outside down to the valley floor
     ring([[R, FLOOR_DY], [R + 3, 0.6], [R + 7, 3.8], [R + 11, 5.2], [R + 17, 5.4]], c, openAng, openHalf, groundMeshes[0].material, planarUV);
-    if (!IS_SWITCH)   // level 1's pits stand on the ridge; level 2's sit on the mountain terrain
+    if (IS_LOOP && roadThrough)   // level 3's finish pit is flipped: a short rock rim, so it floats as an island
+      ring([[R + 17, 5.4], [R + 21, 1.5], [R + 32, -30], [R + 50, -62], [R + 60, -80]], c, openAng, openHalf, cliffMat, rockUV);
+    else if (!IS_SWITCH)   // level 1's pits stand on the ridge; level 2's sit on the mountain terrain
       ring([[R + 17, 5.4], [R + 21, 1.5], [R + 32, -45], [R + 60, -150], [R + 95, CLIFF_FLOOR - c.y]], c, openAng, openHalf, cliffMat, rockUV);
     ARENAS.push({ c: c.clone(), R, openAng, openHalf, roadThrough });
   }
   // finish: centred on the level end of the road; opening faces back up the road
   const fe = frameAt(FINISH_PIT_U);
+  const before = scene.children.length;
   arena(fe.p, FINISH_PIT_R, flat(fe.tan).negate(), true);
+  if (IS_LOOP) for (const o of scene.children.slice(before)) flipPit(o);   // level 3's pit hangs upside down
   // start: behind the start line; opening faces down the road
   const f0 = frames[0];
   arena(f0.p.clone().addScaledVector(flat(f0.tan), -START_PIT_BACK), START_PIT_R, flat(f0.tan), false);
@@ -1366,7 +1395,7 @@ const hazeMats = [];
   const posts = new THREE.InstancedMesh(postGeo, postMat, Math.floor(SAMPLES / 6) * 2);
   const dummy = new THREE.Object3D(); let pc = 0;
   for (let i = 0; i < SAMPLES; i += 6) {
-    if (inPit(i / SAMPLES)) continue;
+    if (inPit(i / SAMPLES) || IS_LOOP) continue;          // level 3 is open-edged
     const f = frames[i];
     for (const s of [1, -1]) {
       dummy.position.copy(f.p).addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 0.8)).addScaledVector(f.up, 0.7);
@@ -1872,6 +1901,87 @@ const BOARD_LEN    = 1.8;   // longboard length (world units)
 const STANCE       = 0.4;   // half the distance between the feet along the board
 const rig = { ready: false, loading: false, crouch: 0.3, grab: 0 };
 
+// Looks — new riders built on the existing models: recolor materials by name, optional shader
+// stripes, glowing eyes, and procedural accessories pinned to bones (placed in the model's own rest-pose
+// space: +Y up, +Z forward, head top ≈ 1.82, face ≈ z 0.21), so they ride along with every pose.
+const LOOKS = {
+  hesher: {
+    colors: { LightBrown: '#1a1a1a', LightBlue: '#3b5a86', Red_Dark: '#e6e6e6', Hair: '#2b1a0e' },   // black tee, faded jeans, hi-tops
+    extras: [
+      { bone: 'Head', geo: () => new THREE.BoxGeometry(0.21, 0.42, 0.06), color: '#2b1a0e', pos: [0, 1.55, -0.1] },           // long hair, down the back
+      { bone: 'Head', geo: () => new THREE.BoxGeometry(0.035, 0.32, 0.15), color: '#2b1a0e', pos: [0.108, 1.56, -0.01] },     // side locks
+      { bone: 'Head', geo: () => new THREE.BoxGeometry(0.035, 0.32, 0.15), color: '#2b1a0e', pos: [-0.108, 1.56, -0.01] },
+      { bone: 'Head', geo: () => new THREE.BoxGeometry(0.095, 0.02, 0.025), color: '#2b1a0e', pos: [0, 1.588, 0.212] },       // mustache
+    ],
+  },
+  mime: {
+    colors: { Skin: '#f4f1ea', Skin_Darker: '#dcd8cf', LightBrown: '#f2f2f2', LightBlue: '#141414', Red_Dark: '#141414', Hair: '#141414' },
+    stripes: 'LightBrown',                                                                                                     // the shirt
+    extras: [
+      { bone: 'Head', geo: () => new THREE.SphereGeometry(0.145, 20, 10).scale(1, 0.42, 1), color: '#141414', pos: [0.025, 1.79, 0.02], rot: [0.05, 0, -0.3] },   // beret
+      { bone: 'Head', geo: () => new THREE.SphereGeometry(0.016, 8, 6), color: '#141414', pos: [0.012, 1.852, 0.02] },
+      { bone: 'Neck', geo: () => new THREE.TorusGeometry(0.085, 0.024, 8, 20), color: '#c8202a', pos: [0, 1.465, 0.07], rot: [Math.PI / 2, 0, 0] },    // scarf
+    ],
+  },
+  cthulhu: {
+    colors: { Skin: '#4a7a45', Suit: '#15302a', Black: '#0e1a16', White: '#2f5a3a', Tie: '#3a1f4a', Hair: '#1e3a22', Eyebrows: '#1e3a22' },
+    glow: { Eye: '#ffe23c' },                                                                                                   // eyes from the deep
+    extras: [
+      ...[-0.065, -0.043, -0.021, 0, 0.021, 0.043, 0.065].map((x, k) => ({                                                     // face tentacles
+        bone: 'Head', geo: () => new THREE.ConeGeometry(0.019, 0.22 - Math.abs(x) * 0.8, 6), color: '#3c6a3a',
+        pos: [x, 1.49 - (k % 2) * 0.02, 0.19], rot: [Math.PI + 0.25, 0, x * 3] })),
+      ...[1, -1].map(sd => ({                                                                                                  // little bat wings
+        bone: 'Chest', geo: () => { const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(0.42, 0.22); sh.lineTo(0.36, 0.02); sh.lineTo(0.28, 0.08); sh.lineTo(0.2, -0.06); sh.lineTo(0.1, 0.02); sh.lineTo(0, -0.12);
+          return new THREE.ShapeGeometry(sh); }, color: '#1f3d2a', pos: [sd * 0.07, 1.36, -0.12], rot: [0.2, sd > 0 ? -0.5 : Math.PI + 0.5, 0], double: true })),
+    ],
+  },
+};
+function dressRider(char, look) {
+  if (!look) return;
+  char.updateMatrixWorld(true);
+  const cloned = new Map();
+  const mat = src => {                                     // a per-rider copy of each material we touch
+    if (cloned.has(src)) return cloned.get(src);
+    const m = src.clone(), n = src.name;
+    if (look.colors?.[n]) m.color.set(look.colors[n]);
+    if (look.glow?.[n]) { m.color.set(look.glow[n]); m.emissive = new THREE.Color(look.glow[n]); m.emissiveIntensity = 1.6; }
+    cloned.set(src, m); return m;
+  };
+  char.traverse(o => {
+    if (!o.isMesh) return;
+    const n = o.material.name;
+    if (!(look.colors?.[n] || look.glow?.[n] || look.stripes === n)) return;
+    o.material = mat(o.material);
+    if (look.stripes === n) {                              // horizontal stripes across the shirt
+      // the mesh's own axes aren't the world's (the armature is rotated), so stripe along whichever
+      // local direction points up at rest, measured over the shirt's vertices
+      const upL = new THREE.Vector3(0, 1, 0).applyQuaternion(o.getWorldQuaternion(new THREE.Quaternion()).invert()).normalize();
+      const pa = o.geometry.attributes.position, v = new THREE.Vector3();
+      let lo = Infinity, hi = -Infinity;
+      for (let k = 0; k < pa.count; k++) { const d = v.fromBufferAttribute(pa, k).dot(upL); lo = Math.min(lo, d); hi = Math.max(hi, d); }
+      const step = (hi - lo) / 22;
+      o.material.onBeforeCompile = sh => {
+        sh.uniforms.uStripe = { value: new THREE.Vector2(lo, step) };
+        sh.uniforms.uUpL = { value: upL };
+        sh.vertexShader = 'uniform vec3 uUpL;\nvarying float vStripeY;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vStripeY = dot(position, uUpL);');
+        sh.fragmentShader = 'uniform vec2 uStripe;\nvarying float vStripeY;\n' + sh.fragmentShader.replace('#include <color_fragment>',
+          '#include <color_fragment>\n  if (mod(floor((vStripeY - uStripe.x) / uStripe.y), 2.0) < 1.0) diffuseColor.rgb = vec3(0.015);');
+      };
+      o.material.customProgramCacheKey = () => 'stripes';
+    }
+  });
+  const q = char.getWorldQuaternion(new THREE.Quaternion()), k = char.getWorldScale(new THREE.Vector3()).x;
+  for (const x of look.extras || []) {
+    const bone = char.getObjectByName(x.bone);
+    if (!bone) continue;
+    const m = new THREE.Mesh(x.geo(), new THREE.MeshStandardMaterial({ color: x.color, roughness: 0.8, side: x.double ? THREE.DoubleSide : THREE.FrontSide }));
+    m.position.copy(char.localToWorld(new THREE.Vector3(...x.pos)));
+    m.quaternion.copy(q); if (x.rot) m.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...x.rot)));
+    m.scale.setScalar(k); m.castShadow = true; m.frustumCulled = false;
+    m.updateMatrixWorld(true);
+    bone.attach(m);                                        // keeps its world placement, now rides the bone
+  }
+}
 // The roster (character select). All but the OG are Quaternius characters on the same rig (same
 // bones + clips), so the board pose and the pit brawl work on any of them. The OG is the original
 // plain-shapes rider on his own box board — the fallback that's always there (file:// too).
@@ -1882,8 +1992,11 @@ const RIDERS = [
   { name: 'ROCKER',     file: 'assets/models/riders/rocker.glb' },
   { name: 'BEACH BUM',  file: 'assets/models/riders/beach.glb' },
   { name: 'ADVENTURER', file: 'assets/models/riders/adventurer.glb' },
-  { name: 'THE SUIT',   file: 'assets/models/riders/suit.glb' },
-  { name: 'HARD HAT',   file: 'assets/models/riders/hardhat.glb' },
+  { name: 'CIA',        file: 'assets/models/riders/suit.glb' },
+  { name: 'BOB',        file: 'assets/models/riders/hardhat.glb' },
+  { name: 'HESHER',     file: 'assets/models/skater.glb',       look: LOOKS.hesher },
+  { name: 'MIME',       file: 'assets/models/skater.glb',       look: LOOKS.mime },
+  { name: 'CTHULHU',    file: 'assets/models/riders/suit.glb',  look: LOOKS.cthulhu },
   { name: 'THE OG',     file: null },
 ];
 const RIDER_KEY = 'downhill.rider';            // last pick (localStorage)
@@ -1902,7 +2015,7 @@ function setRider(i) {
   Promise.all([loadRider(i), boardLoad]).then(([ch, bd]) => {
     if (riderIdx !== i) return;                // picked someone else in the meantime
     dropRig();
-    buildRig(SkeletonUtils.clone(ch.scene), bd.scene.clone(true), boxParts, ch.animations);
+    buildRig(SkeletonUtils.clone(ch.scene), bd.scene.clone(true), boxParts, ch.animations, RIDERS[i].look);
   }).catch(e => console.warn('[assets] rider model unavailable, keeping box rider:', e?.message || e))
     .finally(() => { if (riderIdx === i) rig.loading = false; });
 }
@@ -1928,7 +2041,7 @@ function makeBoard(boardScene) {
   board.add(boardScene); board.rotation.y = Math.PI / 2;
   return { board, deckTop: bsz.y * bs * 0.92 };
 }
-function buildRig(charScene, boardScene, boxParts, clips = []) {
+function buildRig(charScene, boardScene, boxParts, clips = [], look = null) {
   prepModel(charScene); prepModel(boardScene);
   const { board, deckTop } = makeBoard(boardScene);
   rig.deckTop = deckTop;
@@ -1946,6 +2059,7 @@ function buildRig(charScene, boardScene, boxParts, clips = []) {
   for (const p of boxParts) p.visible = false;
   lean.add(board, root);
   skater.updateMatrixWorld(true);
+  dressRider(charScene, look);                             // (at rest pose, before anything moves the bones)
 
   // three strips '.' from node names ("UpperArm.L" → "UpperArmL")
   const B = n => charScene.getObjectByName(n.replace('.', ''));
@@ -2219,6 +2333,7 @@ function computePadMins() {
     let v2 = v0 * v0;
     for (let i = i0; i < i1; i++) {
       if (gapAt(i)) return true;                                   // the lip's own launch takes over
+      if (i / SAMPLES >= FLIP_U) return true;                       // the twist + inverted run-out hold you on
       const f = frames[i], cv = CURV[i];
       const N = v2 * cv.dot(f.up) + G * f.up.y;
       if (N < 3 && f.up.y < 0.5) return false;
@@ -2323,6 +2438,7 @@ const crowd = [];             // { mixer, obj }
     const f = frameAt(z.arch), yaw = Math.atan2(f.tan.x, f.tan.z);
     const arch = new THREE.Group();
     arch.position.copy(f.p); arch.rotation.y = yaw;
+    if (IS_LOOP) arch.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(f.side, f.up, f.tan));   // upside down past the twist
     const half = ROAD_HALF_WIDTH + 1.6, H = 9;
     for (const s of [1, -1]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.7, H, 0.7), postMat);
@@ -2374,6 +2490,7 @@ const crowd = [];             // { mixer, obj }
       person.scale.setScalar(scale * (0.9 + rnd() * 0.2));
       person.position.copy(p);
       person.rotation.y = Math.atan2(face.x, face.z) + (rnd() - 0.5) * 0.5;
+      if (IS_LOOP && p.distanceTo(frameAt(FINISH_PIT_U).p) < FINISH_PIT_R + 60) flipPit(person);   // level 3's upside-down pit
       const mixer = new THREE.AnimationMixer(person);
       const r = rnd();
       const action = mixer.clipAction(r < 0.65 ? clips.clap : r < 0.85 ? clips.jump : clips.idle);
@@ -2456,6 +2573,7 @@ addEventListener('keydown', e => {
   if (gameState !== 'PLAYING' || e.repeat) return;
   if (e.code === 'KeyR' && e.shiftKey) revert();
   else if (e.code === 'KeyK') kickRacer();
+  else if (e.code === 'Digit9' || e.code === 'Numpad9') skipToFinish();   // debug
   else if (e.code === 'Digit0' || e.code === 'Numpad0') beginRun();
   else if (e.code === 'KeyC') cycleCam();
   else if (e.code === 'KeyX') cycleChaos();
@@ -2602,6 +2720,7 @@ function resetRun() {
   state.heading = 0; state.height = 0; state.vy = 0; state.airborne = false;
   run.t = 0; run.topSpeed = 0; run.dist = 0; run.airTime = 0; run.score = 0; run.bestCombo = 0;
   combo.n = combo.pts = combo.t = 0; state.crashT = 0; state.free = false; state.atEdge = false; state.slideV = 0;
+  sea.bridgeDone = false; sea.showsDone = [];
   push.meter = 1; push.cd = 0; kickWasDown = false;
   trick.type = null; trick.spin = 0; trick.air = 0; trick.grab = false;
   if (rig.mixer) rig.mixer.stopAllAction();
@@ -2620,11 +2739,14 @@ function land(h = 0) {
   if (off > LAND_SKETCHY) { crash(); return; }                // came down sideways
   settleSpin();
   const sketchy = off > LAND_CLEAN || grabbing;                // still holding the grab counts too
-  if (!scoreTrick(sketchy ? 0.5 : 1) && sketchy) showTrick('SKETCHY!');
+  sfx?.land(sketchy);
+  const scored = scoreTrick(sketchy ? 0.5 : 1);
+  if (scored || sketchy) showLandCall(sketchy);                // CLEAN! / SKETCHY! over your head
+  if (scored && !sketchy) state.speed += CLEAN_BOOST;          // a clean landing pays speed
   lastLandT = run.t;
   if (state.speed > 4) flash(sketchy ? 0.25 : 0.15);
 }
-function takeoff(vy) { if (state.airborne) return; state.airborne = true; state.vy = vy; armTrick(); }
+function takeoff(vy) { if (state.airborne) return; state.airborne = true; state.vy = vy; armTrick(); sfx?.pop(); }
 // A kicker that feeds a gap launches you far enough to clear it (with margin) as long as you're
 // rolling at GAP_MIN_SPEED or better — the road climbs into that kicker, so a speed-only launch
 // was nearly impossible. Too slow and you fall (and get told why).
@@ -2648,6 +2770,7 @@ const PIT_ORBIT_SECS = 4.5;   // camera circles you this long before the stats c
 const COAST_LAT      = ROAD_HALF_WIDTH - 1;   // how far off centre you can steer while coasting in
 const finish = { crossed: false, stopped: false, t: 0, orbitAng: 0 };
 function crossFinish() {
+  sfx?.cheer(1);
   finish.crossed = true;
   endCombo();
   lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, combo: run.bestCombo, reason: 'end', rank: -1,
@@ -2683,11 +2806,12 @@ function updateCoast(dt, inp, f, slope) {
 function pitCam(dt) {                                  // slow orbit around the stopped rider
   finish.t += dt;
   finish.orbitAng += dt * 0.32;
-  const p = skater.position;
-  const want = new THREE.Vector3(p.x + Math.cos(finish.orbitAng) * 13, p.y + 4 + Math.sin(finish.t * 0.4) * 0.8, p.z + Math.sin(finish.orbitAng) * 13);
+  const p = skater.position, up = IS_LOOP ? frameAt(state.u).up : UP;   // level 3's pit is upside down
+  const want = new THREE.Vector3(p.x + Math.cos(finish.orbitAng) * 13, p.y, p.z + Math.sin(finish.orbitAng) * 13)
+    .addScaledVector(up, 4 + Math.sin(finish.t * 0.4) * 0.8);
   camPos.lerp(want, Math.min(1, dt * 1.5));
   camera.position.copy(keepAboveGround(camPos));
-  camera.lookAt(p.x, p.y + 1.3, p.z);
+  camera.up.copy(up); camera.lookAt(p.clone().addScaledVector(up, 1.3)); camera.up.set(0, 1, 0);
   camera.fov += (50 - camera.fov) * Math.min(1, dt * 2); camera.updateProjectionMatrix();
   if (gameState === 'PIT' && finish.t >= PIT_ORBIT_SECS) finishRun('end');
 }
@@ -2902,8 +3026,36 @@ function settleSpin() {
 function armTrick() { trick.spin = 0; trick.air = 0; trick.grabT = 0; trick.grab = false; trick.type = 'ollie'; }
 // a boost pad: +PAD_BOOST, and never less than what the stretch ahead needs
 function padBoost(pd) {
+  sfx?.whoosh(false);
   state.speed = THREE.MathUtils.clamp(state.speed + PAD_BOOST, pd.min, pd.max ?? PAD_MAX);
   flash(0.1);
+}
+// Landing call — CLEAN! / SKETCHY! pops just above the rider's head for a moment after a trick
+const CLEAN_BOOST = 5;         // u/s for landing a trick clean
+const LAND_CALL_SECS = 1.1;
+const landCall = (() => {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
+  sp.scale.set(3.4, 0.85, 1); sp.renderOrder = 999; sp.visible = false; scene.add(sp);
+  return { cv, cx: cv.getContext('2d'), tex, sp, t: 0 };
+})();
+function showLandCall(sketchy) {
+  const { cv, cx, tex } = landCall, txt = sketchy ? 'SKETCHY!' : 'CLEAN!';
+  cx.clearRect(0, 0, cv.width, cv.height);
+  cx.font = '900 84px ui-monospace, Menlo, monospace'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.lineWidth = 14; cx.strokeStyle = 'rgba(0,0,0,.6)'; cx.strokeText(txt, 256, 64);
+  cx.fillStyle = sketchy ? '#ff9b3c' : '#7dff3c'; cx.fillText(txt, 256, 64);
+  tex.needsUpdate = true; landCall.t = LAND_CALL_SECS;
+}
+function updateLandCall(dt) {
+  const L = landCall;
+  L.t = Math.max(0, L.t - dt);
+  L.sp.visible = L.t > 0 && hudMode === 0;
+  if (!L.sp.visible) return;
+  const k = 1 - L.t / LAND_CALL_SECS;
+  L.sp.position.copy(skater.position).add(new THREE.Vector3(0, RIDER_HEIGHT + 0.9 + k * 0.6, 0));   // drifts up as it fades
+  L.sp.material.opacity = Math.min(1, L.t * 3);
 }
 // how far (degrees) a spin is from the nearest clean stance
 function spinOff() {
@@ -2925,6 +3077,7 @@ function endCombo(keep = true) {             // the chain ends: bank the bonus (
   combo.n = combo.pts = combo.t = 0;
 }
 function crash() {                             // bail: the rider goes down and slides to a stop
+  sfx?.crash();
   Object.assign(state, { crashT: CRASH_SECS, speed: state.speed * 0.4, heading: 0, airborne: false, height: 0, vy: 0 });
   trick.type = null; trick.grab = false; trickPivot.rotation.set(0, 0, 0);
   endCombo(false);
@@ -2944,11 +3097,12 @@ function scoreTrick(quality = 1) {
   if (!parts.length && trick.air > 0.45) { pts += Math.round(trick.air * 120); parts.push('BIG AIR'); }
   trick.type = null; trick.grab = false;
   if (pts <= 0) return false;
-  award((quality < 1 ? 'SKETCHY ' : '') + parts.join(' + '), Math.round(pts * quality));
+  award(parts.join(' + '), Math.round(pts * quality));
   return true;
 }
 function collectItem(it) {
   it.taken = true; it.mesh.visible = false;
+  if (it.type === 'boost') sfx?.whoosh(true); else sfx?.pickup();
   if (it.type === 'boost')          { state.speed += ROCKET_BOOST; flash(0.25); showTrick('ROCKET BOOST!'); }
   else if (it.type === 'endurance') { enduranceT = ENDURANCE_SECS; showTrick('ENDURANCE +'); }
   else if (it.type === 'freedeath') { freeDeath = true; showTrick('FREE DEATH'); }
@@ -3080,7 +3234,7 @@ function update(dt) {
   for (const pd of BOOST_PADS) if (uPrev < pd.u && state.u >= pd.u) padBoost(pd);
   // level 3: stay on the track. Upside down you need speed to press you into it; on a steep bank
   // the pull down the slope has to be held by grip (more speed → more grip) or you slide off.
-  if (IS_LOOP && !state.airborne && !grind.on && !inPit(state.u)) {
+  if (IS_LOOP && !state.airborne && !grind.on && !inPit(state.u) && state.u < FLIP_U) {
     const fn = frameAt(state.u), cv = CURV[Math.round(state.u * SAMPLES)], v2 = state.speed * state.speed;
     const N = v2 * cv.dot(fn.up) + G * fn.up.y;                 // how hard the track pushes on you
     if (N < 0 && fn.up.y < 0.5) return enterFree(inp, fn, true);   // too slow over the top: you drop off
@@ -3411,10 +3565,10 @@ hudScene.add(posMesh);
 let posTxt = '';
 function layoutPos() {
   posMesh.scale.set(posCv.width / POP_RES, posCv.height / POP_RES, 1);
-  posMesh.position.set(innerWidth / 2, -POS_Y, 0);
+  posMesh.position.set(MAP_X + MAP_W / 2, -(MAP_Y + MAP_H + 16), 0);   // under the minimap
 }
 function updatePos() {
-  posMesh.visible = timerMesh.visible && cpus.length > 0;
+  posMesh.visible = timerMesh.visible && cpus.length > 0 && ['COUNTDOWN', 'PLAYING', 'PIT'].includes(gameState);   // with the minimap
   if (!posMesh.visible) return;
   const txt = `POS ${racePlace()}/${cpus.length + 1}`;
   if (txt === posTxt) return;
@@ -3430,7 +3584,7 @@ function updatePos() {
   posTex.needsUpdate = true;
 }
 document.fonts?.load(`400 ${TIMER_PX * POP_RES}px "Share Tech Mono"`).then(() => { timerTxt = posTxt = ''; }).catch(() => {});   // redraw once the font lands
-layoutTimer(); layoutPos();
+layoutTimer();
 
 // Minimap — top left, under the Esc pill: the course drawn to shape (turned so downhill runs down
 // the screen) and a dot per racer. Built from geometry in the HUD pass, so nothing redraws a texture.
@@ -3479,10 +3633,11 @@ const mapDot = (r, color, order) => {
   const grp = new THREE.Group(); o.renderOrder = order; d.renderOrder = order + 1; grp.add(o, d); mapGroup.add(grp);
   return grp;
 };
+layoutPos();                                   // (needs the map's box, declared just above)
 const mapCpuDots = MAP_CPU_COLORS.map((col, i) => mapDot(MAP_DOT, col, 2 + i * 2));
 const mapMe = mapDot(MAP_DOT_ME, 0xffd23c, 10);                 // you, drawn on top
 function updateMap() {
-  mapGroup.visible = hudMode === 0 && ['COUNTDOWN', 'PLAYING', 'PIT'].includes(gameState);
+  mapGroup.visible = hudMode === 0 && ['COUNTDOWN', 'PLAYING', 'PIT'].includes(gameState) && startSeq.phase !== 'tour';
   if (!mapGroup.visible) return;
   const put = (dot, u) => { const p = mapProject(frameAt(Math.min(1, u)).p); dot.position.set(p[0], p[1], 0); };
   if (state.free) { const p = mapProject(free.pos); mapMe.position.set(p[0], p[1], 0); } else put(mapMe, state.u);
@@ -3555,6 +3710,85 @@ const audio = new Audio();
 // blocks the page for ~0.5s on macOS (it used to happen on the first countdown beep, freezing GO)
 let audioCtx = null;
 try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
+// ------------------------------------------------------------------
+// Sound effects — all synthesized (Web Audio on the shared audioCtx; no files): an ollie pop, landing
+// thud (+ a scrape when sketchy), crash, a rolling-wheels loop (grittier off-road), a grind scrape
+// loop, pickup chime, boost whoosh, punch/kick smack + swing, crowd roar near the crowds (a cheer
+// at the finish and on knockouts), and sea splashes. Effects Volume in Settings.
+// ------------------------------------------------------------------
+const SFX_DEFAULT = 70;        // effects volume (0–100)
+const sfx = (() => {
+  if (!audioCtx) return null;
+  const ctx = audioCtx, out = ctx.createGain(); out.gain.value = SFX_DEFAULT / 100; out.connect(ctx.destination);
+  const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  { const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  const live = () => { if (ctx.state === 'suspended') ctx.resume(); return ctx.currentTime; };
+  // a burst of filtered noise; `to` sweeps the filter
+  function noise({ dur = 0.2, type = 'bandpass', f = 1000, to, q = 1, gain = 0.5, attack = 0.005, delay = 0 }) {
+    const t0 = live() + delay, src = ctx.createBufferSource(), flt = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = noiseBuf; src.loop = true;
+    flt.type = type; flt.frequency.setValueAtTime(f, t0); flt.Q.value = q;
+    if (to) flt.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(gain, t0 + attack); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(flt).connect(g).connect(out); src.start(t0); src.stop(t0 + dur + 0.05);
+  }
+  // a pitched blip; `to` glides it
+  function tone({ dur = 0.15, type = 'sine', f = 200, to, gain = 0.5, delay = 0 }) {
+    const t0 = live() + delay, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0); if (to) o.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+    g.gain.setValueAtTime(gain, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(out); o.start(t0); o.stop(t0 + dur + 0.05);
+  }
+  // a looping noise bed whose level and colour we steer every frame
+  function loop(type, f, q) {
+    const src = ctx.createBufferSource(), flt = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = noiseBuf; src.loop = true; flt.type = type; flt.frequency.value = f; flt.Q.value = q; g.gain.value = 0;
+    src.connect(flt).connect(g).connect(out); src.start();
+    return { flt, g, set(level, freq) { const t = ctx.currentTime; g.gain.setTargetAtTime(level, t, 0.06); if (freq) flt.frequency.setTargetAtTime(freq, t, 0.08); } };
+  }
+  const roll = loop('lowpass', 380, 0.7), grindL = loop('bandpass', 2600, 7), grindH = loop('bandpass', 4300, 9), crowdL = loop('bandpass', 750, 0.6);
+  let cheer = 0, crowdT = 0, crowdNear = 1e9;
+  return {
+    setVolume(v) { out.gain.setTargetAtTime(v / 100, ctx.currentTime, 0.05); },
+    pop()   { tone({ f: 170, to: 55, dur: 0.13, gain: 0.8 }); noise({ type: 'highpass', f: 2500, dur: 0.05, gain: 0.35 }); },
+    land(sketchy) {
+      tone({ f: 120, to: 42, dur: 0.2, gain: 0.9 }); noise({ type: 'lowpass', f: 700, dur: 0.16, gain: 0.5 });
+      if (sketchy) noise({ type: 'bandpass', f: 1400, to: 700, q: 2, dur: 0.35, gain: 0.35, delay: 0.03 });
+    },
+    crash(k = 1) {
+      noise({ type: 'lowpass', f: 1200, to: 200, dur: 0.7, gain: 0.8 * k });
+      for (const [d, f] of [[0, 110], [0.12, 80], [0.27, 65]]) tone({ f, to: f * 0.5, dur: 0.18, gain: 0.7 * k, delay: d });
+    },
+    pickup() { tone({ f: 880, dur: 0.12, gain: 0.3, type: 'triangle' }); tone({ f: 1320, dur: 0.2, gain: 0.3, type: 'triangle', delay: 0.08 }); },
+    whoosh(big) {
+      noise({ type: 'bandpass', f: 350, to: big ? 4200 : 3000, q: 1.4, dur: big ? 0.7 : 0.45, gain: big ? 0.7 : 0.5, attack: 0.05 });
+      tone({ type: 'sawtooth', f: 180, to: big ? 900 : 600, dur: big ? 0.6 : 0.4, gain: 0.08 });
+    },
+    swing() { noise({ type: 'bandpass', f: 700, to: 2200, q: 1, dur: 0.16, gain: 0.25, attack: 0.02 }); },
+    hit()   { noise({ type: 'bandpass', f: 1600, q: 1.2, dur: 0.09, gain: 0.7 }); tone({ f: 95, to: 50, dur: 0.14, gain: 0.8 }); cheer = Math.max(cheer, 0.5); },
+    cheer(k = 1) { cheer = Math.max(cheer, k); },
+    splash(dist) {
+      const k = THREE.MathUtils.clamp(1 - dist / 2200, 0.05, 1);
+      noise({ type: 'lowpass', f: 1600, to: 300, dur: 1.6, gain: 0.9 * k, attack: 0.03 }); tone({ f: 70, to: 35, dur: 0.8, gain: 0.6 * k });
+    },
+    // every frame: the loops follow what you're doing
+    update(dt, riding) {
+      const onBoard = riding && !state.free && !state.airborne && state.crashT <= 0;
+      const off = IS_RIDGE && Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1;
+      const sp = Math.min(1, state.speed / 90);
+      roll.set(onBoard && !grind.on ? (0.05 + sp * 0.35) * (off ? 1.6 : 1) : 0, off ? 900 : 260 + sp * 420);
+      const g = riding && grind.on ? 0.12 + sp * 0.3 : 0;
+      grindL.set(g, 2400 + sp * 900); grindH.set(g * 0.6);
+      // crowd: louder the nearer you are to one (checked a few times a second), cheers on top
+      crowdT -= dt;
+      if (crowdT <= 0) { crowdT = 0.25; crowdNear = 1e9; for (const c of crowd) crowdNear = Math.min(crowdNear, c.obj.position.distanceToSquared(camera.position)); crowdNear = Math.sqrt(crowdNear); }
+      cheer = Math.max(0, cheer - dt * 0.35);
+      const near = THREE.MathUtils.clamp(1 - crowdNear / 140, 0, 1);
+      crowdL.set((near * 0.18 + cheer * 0.45) * (0.8 + 0.2 * Math.sin(ctx.currentTime * 3.1) * Math.sin(ctx.currentTime * 1.7)), 650 + cheer * 350);
+    },
+  };
+})();
+
 audio.preload = 'auto';
 audio.volume = 0.7;
 const npEl = document.getElementById('nowplaying');
@@ -3847,12 +4081,12 @@ function updateChaos(dt) {
 // ------------------------------------------------------------------
 let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE | BRAWL | SELECT | RACE | WORLD
 let menuIndex = 0;
-const settings = { volume: 70, sens: 100 };
+const settings = { volume: 70, sfx: SFX_DEFAULT, sens: 100 };
 audio.volume = settings.volume / 100;
 
 const menuEl = document.getElementById('menu');
 const titleEl = document.getElementById('title');
-const items = { main: ['resume', 'tracks', 'settings', 'controls', 'quit'], settings: ['volume', 'sens', 'fx', 'back'], controls: ['back'],
+const items = { main: ['resume', 'tracks', 'settings', 'controls', 'quit'], settings: ['volume', 'sfx', 'sens', 'fx', 'back'], controls: ['back'],
                 tracks: [...LEVELS.map((_, i) => 'level-' + (i + 1)), 'back'] };
 // Track Select: one row per course (the one loaded is marked); picking one reloads into it
 document.getElementById('track-list').insertAdjacentHTML('afterbegin', LEVELS.map((lv, i) =>
@@ -3871,6 +4105,7 @@ function renderMenu() {
 }
 function renderValues() {
   menuEl.querySelector('[data-setting="volume"] .val').textContent = settings.volume;
+  menuEl.querySelector('[data-setting="sfx"] .val').textContent = settings.sfx;
   menuEl.querySelector('[data-setting="sens"] .val').textContent = settings.sens;
   menuEl.querySelector('[data-setting="fx"] .val').textContent = fx.on ? 'ON' : 'OFF';
 }
@@ -3895,6 +4130,7 @@ function activate(item) {
 }
 function adjustSetting(item, dir) {
   if (item === 'volume') { settings.volume = THREE.MathUtils.clamp(settings.volume + dir * 5, 0, 100); audio.volume = settings.volume / 100; }
+  else if (item === 'sfx') { settings.sfx = THREE.MathUtils.clamp(settings.sfx + dir * 5, 0, 100); sfx?.setVolume(settings.sfx); }
   else if (item === 'sens') { settings.sens = THREE.MathUtils.clamp(settings.sens + dir * 5, 25, 300); lookSensMul = settings.sens / 100; }
   else if (item === 'fx') fx.on = !fx.on;
   renderValues();
@@ -3927,13 +4163,14 @@ addEventListener('keydown', e => {
     }
     else if (e.code === 'KeyF') throwPunch(-1);
     else if (e.code === 'KeyJ') throwPunch(1);
+    else if (e.code === 'KeyK') throwPunch(1, true);
     else if (e.code === 'KeyC') cycleCam();
     else if (e.code === 'KeyH') cycleHud();
     else if (e.code === 'KeyX') cycleChaos();
     return;
   }
   if ((e.code === 'KeyF' || e.code === 'KeyJ') && keys['KeyF'] && keys['KeyJ'] && canBrawl()) { enterBrawl(); return; }
-  if (gameState === 'COUNTDOWN') { if (startSeq.phase === 'fly') skipFly(); return; }
+  if (gameState === 'COUNTDOWN') { if (startSeq.phase === 'tour') endTour(); else if (startSeq.phase === 'fly') skipFly(); return; }
   if (gameState === 'ENTRY') { e.preventDefault(); handleEntryKey(e.code); return; }
   if (gameState === 'STATS') { if (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape') advanceStats(); return; }
   if (gameState === 'RACE') {
@@ -4368,6 +4605,243 @@ function beginRun() {
   lightsEl.classList.remove('show');
   gameState = 'COUNTDOWN';
   showTrick(LV.name);
+  if (!tourShown) startTour();                 // the first run on a track opens with its highlights
+}
+// ------------------------------------------------------------------
+// Sea giants (level 1) — mountain-sized whales and pods of dolphins breach out of the lake off the
+// ridge, arcing high and crashing back in with a burst of spray. As you near the viaduct one whale is
+// timed so its leap carries it right OVER the bridge while you're on it. Quaternius Whale / Dolphin
+// (CC0), swim clips playing; the breach itself is a scripted arc, pitched along its flight.
+// ------------------------------------------------------------------
+const SEA = {
+  WHALE_LEN: 480, DOLPHIN_LEN: 180,      // body length (world units) — mountain-sized
+  GIANT_LEN: 1400,                        // the colossi in the scripted far leaps
+  EVERY: [2.5, 5],                        // seconds between random breaches
+  AHEAD: [0.02, 0.08],                    // …this far down the course from you (u)
+  OUT: [520, 950],                        // …this far out from the road, over the water
+  FAR: [1300, 2600],                      // …or way out on the horizon
+  FAR_CHANCE: 0.4,
+  WHALE_CHANCE: 0.35,
+  BRIDGE_ARC_SECS: 5,                     // the over-the-bridge leap
+  BRIDGE_CLEAR: 170,                      // how high it passes over the deck
+};
+const sea = { ready: false, whales: [], dolphins: [], giants: [], live: [], next: 3, bridgeDone: false, showsDone: [], splashes: [] };
+if (IS_RIDGE) {
+  const load = (file, n, len, pool) => new GLTFLoader().loadAsync(file).then(g => {
+    g.scene.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(g.scene), sz = b.getSize(new THREE.Vector3());
+    const k = len / Math.max(sz.x, sz.y, sz.z), swim = g.animations.find(a => a.name.endsWith('Swim'));
+    for (let i = 0; i < n; i++) {
+      const m = SkeletonUtils.clone(g.scene);
+      m.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; } });
+      m.scale.setScalar(k); m.visible = false;
+      const holder = new THREE.Group(); holder.add(m); scene.add(holder);
+      const mixer = new THREE.AnimationMixer(m);
+      if (swim) { const a = mixer.clipAction(swim); a.play(); a.timeScale = len > 200 ? 0.6 : 1.2; }
+      pool.push({ holder, m, mixer, len, busy: false });
+    }
+  });
+  Promise.all([load('assets/models/sea/whale.glb', 6, SEA.WHALE_LEN, sea.whales), load('assets/models/sea/dolphin.glb', 12, SEA.DOLPHIN_LEN, sea.dolphins),
+               load('assets/models/sea/whale.glb', 2, SEA.GIANT_LEN, sea.giants)])
+    .then(() => { sea.ready = true; })
+    .catch(e => console.warn('[assets] sea creatures unavailable:', e?.message || e));
+  // spray: a pool of particle bursts
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const cx = cv.getContext('2d'), gr = cx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  cx.fillStyle = gr; cx.fillRect(0, 0, 64, 64);
+  const sprayTex = new THREE.CanvasTexture(cv);
+  for (let k = 0; k < 16; k++) {
+    const N = 90, g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+    const pts = new THREE.Points(g, new THREE.PointsMaterial({ map: sprayTex, size: 26, transparent: true, depthWrite: false, opacity: 0, color: 0xeef6ff }));
+    pts.frustumCulled = false; pts.visible = false; scene.add(pts);
+    sea.splashes.push({ pts, vel: new Float32Array(N * 3), t: 0, life: 0 });
+  }
+}
+function splash(at, size) {
+  const sp = sea.splashes.find(x => x.t >= x.life) || sea.splashes[0];
+  const pos = sp.pts.geometry.attributes.position.array;
+  for (let i = 0; i < pos.length / 3; i++) {
+    const a = Math.random() * Math.PI * 2, r = Math.random() * size * 0.25, up = size * (0.35 + Math.random() * 0.7);
+    pos[i * 3] = at.x + Math.cos(a) * r; pos[i * 3 + 1] = LAKE_Y; pos[i * 3 + 2] = at.z + Math.sin(a) * r;
+    sp.vel[i * 3] = Math.cos(a) * size * 0.25 * Math.random(); sp.vel[i * 3 + 1] = up; sp.vel[i * 3 + 2] = Math.sin(a) * size * 0.25 * Math.random();
+  }
+  sp.pts.geometry.attributes.position.needsUpdate = true;
+  sp.pts.material.size = size * 0.18; sp.t = 0; sp.life = 3.2; sp.pts.visible = true;
+  sfx?.splash(at.distanceTo(camera.position));
+}
+// a leap from `a` to `b` (on the water) peaking `h` above it, taking `secs`
+function breach(pool, a, b, h, secs) {
+  const c = pool.find(x => !x.busy);
+  if (!c) return;
+  Object.assign(c, { busy: true, a: a.clone(), b: b.clone(), h, secs, t: 0, splashed: false });
+  c.m.visible = true;
+  splash(a, c.len);
+}
+function randomBreach() {
+  const whale = Math.random() < SEA.WHALE_CHANCE, pool = whale ? sea.whales : sea.dolphins;
+  const u = Math.min(0.97, state.u + SEA.AHEAD[0] + Math.random() * (SEA.AHEAD[1] - SEA.AHEAD[0]));
+  const f = frameAt(u), t = new THREE.Vector3(f.tan.x, 0, f.tan.z).normalize(), sd = new THREE.Vector3(-t.z, 0, t.x);
+  const side = Math.random() < 0.5 ? 1 : -1, far = Math.random() < SEA.FAR_CHANCE, R = far ? SEA.FAR : SEA.OUT;
+  const out = R[0] + Math.random() * (R[1] - R[0]);
+  const n = whale ? 1 : 1 + Math.floor(Math.random() * 3);             // dolphins come in pods
+  for (let k = 0; k < n; k++) {
+    const len = whale ? SEA.WHALE_LEN : SEA.DOLPHIN_LEN, run = len * (whale ? 2.2 : 3);
+    const dir = t.clone().multiplyScalar(Math.random() < 0.5 ? 1 : -1).addScaledVector(sd, (Math.random() - 0.5) * 0.8).normalize();
+    const a = f.p.clone().addScaledVector(sd, side * (out + k * 70)).addScaledVector(t, k * 60); a.y = LAKE_Y;
+    const b = a.clone().addScaledVector(dir, run);
+    setTimeout(() => breach(pool, a, b, len * (whale ? 1.3 : 1.6), whale ? 4.5 : 3), k * 450);
+  }
+}
+// a leap right over the road at u (e.g. a pod of dolphins, or a whale while you fly the gap),
+// crossing it square and peaking `clear` above the deck
+function overBreach(u, pool, clear, secs, n = 1) {
+  const f = frameAt(u), t = new THREE.Vector3(f.tan.x, 0, f.tan.z).normalize(), sd = new THREE.Vector3(-t.z, 0, t.x);
+  for (let k = 0; k < n; k++) {
+    const a = f.p.clone().addScaledVector(sd, -520).addScaledVector(t, 40 + k * 55); a.y = LAKE_Y;
+    const b = f.p.clone().addScaledVector(sd, 520).addScaledVector(t, -40 + k * 55); b.y = LAKE_Y;
+    setTimeout(() => breach(pool, a, b, f.p.y + clear - LAKE_Y, secs), k * 250);
+  }
+}
+// a colossus way out to the side, arcing high over the far hills
+function farBreach(u, side) {
+  const f = frameAt(Math.min(0.97, u)), t = new THREE.Vector3(f.tan.x, 0, f.tan.z).normalize(), sd = new THREE.Vector3(-t.z, 0, t.x);
+  const a = f.p.clone().addScaledVector(sd, side * 1500).addScaledVector(t, 1100); a.y = LAKE_Y;   // out ahead of you,
+  const b = f.p.clone().addScaledVector(sd, side * 1150).addScaledVector(t, 3500); b.y = LAKE_Y;   //   inside the view
+  breach(sea.giants, a, b, 1900, 8);
+}
+const SEA_LEAD = 90;           // 'over' leaps peak this far ahead of you
+// Scripted leaps (besides the bridge whale), each once per run. 'over' ones are timed so the peak
+// lands as you reach their spot; 'far' ones fire a little before, so they're out ahead of you.
+const SEA_SHOWS = IS_RIDGE ? [
+  { u: 0.2,  kind: 'far',  side: 1 },                                           // a colossus over the far hills
+  { u: 0.36, kind: 'over', pool: 'dolphins', clear: 90, secs: 3.4, n: 3 },       // a pod right over your head
+  { u: (GAPS[0].u0 + GAPS[0].u1) / 2, kind: 'over', pool: 'whales', clear: 150, secs: 5 },   // a whale while you fly the gap
+  { u: 0.88, kind: 'far',  side: -1 },                                          // another on the way home
+] : [];
+// the showpiece: a whale over the viaduct, peaking above the deck as you cross the middle
+function bridgeBreach() {
+  const mid = (BRIDGE.u0 + BRIDGE.u1) / 2, f = frameAt(mid);
+  const t = new THREE.Vector3(f.tan.x, 0, f.tan.z).normalize(), sd = new THREE.Vector3(-t.z, 0, t.x);
+  const a = f.p.clone().addScaledVector(sd, -380).addScaledVector(t, 40); a.y = LAKE_Y;
+  const b = f.p.clone().addScaledVector(sd, 380).addScaledVector(t, -40); b.y = LAKE_Y;
+  breach(sea.whales, a, b, f.p.y + SEA.BRIDGE_CLEAR - LAKE_Y, SEA.BRIDGE_ARC_SECS);
+}
+function updateSea(dt) {
+  if (!IS_RIDGE) return;
+  for (const sp of sea.splashes) {                       // spray: fly, fall, fade
+    if (sp.t >= sp.life) { sp.pts.visible = false; continue; }
+    sp.t += dt;
+    const pos = sp.pts.geometry.attributes.position.array;
+    for (let i = 0; i < pos.length; i += 3) {
+      sp.vel[i + 1] -= 60 * dt;
+      pos[i] += sp.vel[i] * dt; pos[i + 1] = Math.max(LAKE_Y, pos[i + 1] + sp.vel[i + 1] * dt); pos[i + 2] += sp.vel[i + 2] * dt;
+    }
+    sp.pts.geometry.attributes.position.needsUpdate = true;
+    sp.pts.material.opacity = 0.85 * (1 - sp.t / sp.life);
+  }
+  if (!sea.ready) return;
+  for (const c of [...sea.whales, ...sea.dolphins, ...sea.giants]) {     // leaps in flight
+    if (!c.busy) continue;
+    c.t += dt;
+    const k = Math.min(1, c.t / c.secs);
+    const pos = c.a.clone().lerp(c.b, k); pos.y = LAKE_Y + 4 * c.h * k * (1 - k) - c.len * 0.15;
+    const vel = c.b.clone().sub(c.a).divideScalar(c.secs); vel.y = 4 * c.h * (1 - 2 * k) / c.secs;
+    c.holder.position.copy(pos);
+    c.holder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), vel.normalize());   // nose along the flight
+    c.mixer.update(dt);
+    if (k > 0.92 && !c.splashed) { c.splashed = true; splash(c.b, c.len * 1.2); }
+    if (k >= 1) { c.busy = false; c.m.visible = false; }
+  }
+  if (gameState !== 'PLAYING') return;
+  sea.next -= dt;
+  if (sea.next <= 0) { sea.next = SEA.EVERY[0] + Math.random() * (SEA.EVERY[1] - SEA.EVERY[0]); randomBreach(); }
+  // time the bridge whale so its peak lands as you reach the middle of the deck
+  const mid = (BRIDGE.u0 + BRIDGE.u1) / 2, toMid = (mid - state.u) * TOTAL_LEN;
+  if (!sea.bridgeDone && toMid > 0 && toMid / Math.max(state.speed, 8) <= SEA.BRIDGE_ARC_SECS / 2) { sea.bridgeDone = true; bridgeBreach(); }
+  SEA_SHOWS.forEach((sh, k) => {
+    if (sea.showsDone[k]) return;
+    const to = (sh.u - state.u) * TOTAL_LEN;
+    // (the 'over' ones peak a little in front of you, where the camera can see them)
+    if (sh.kind === 'far' ? to < 900 : to > 0 && (to - SEA_LEAD) / Math.max(state.speed, 8) <= sh.secs / 2) {
+      sea.showsDone[k] = true;
+      if (sh.kind === 'far') farBreach(sh.u + 0.04, sh.side); else overBreach(sh.u, sea[sh.pool], sh.clear, sh.secs, sh.n);
+    }
+  });
+}
+
+// ------------------------------------------------------------------
+// Course tour — before the start flyover, the first run on a track shows off its highlights:
+// a few slow dolly shots with captions and letterbox bars (Space skips). Shots are placed from
+// the track itself (frames / LP / feature u's) so they follow the course if it changes.
+// ------------------------------------------------------------------
+const TOUR_SHOT_SECS = 2.6;
+let tourShown = false;          // once per page load; restarts go straight to the flyover
+function tourShots() {
+  const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+  // a shot framed from the track at u: camera `back` along the road, `side` across it, `up` above;
+  // it dollies `dolly` down the road; it looks `ahead` down the road and `lookUp` above it
+  const at = (u, label, o) => {
+    const f = frameAt(u), t = V(f.tan.x, 0, f.tan.z).normalize(), sd = V(-t.z, 0, t.x);
+    const from = f.p.clone().addScaledVector(t, o.back || 0).addScaledVector(sd, o.side || 0).add(V(0, o.up || 0, 0));
+    const look = f.p.clone().addScaledVector(t, o.ahead || 0).add(V(0, o.lookUp || 0, 0));
+    return { label, from, to: from.clone().addScaledVector(t, o.dolly || 0), look, lookTo: look.clone().addScaledVector(t, o.lookDolly || 0) };
+  };
+  if (IS_LOOP) {
+    const L = LP.loops, loopShot = (k, label, dist, lift) =>
+      at(lpU(L[k].s0), label, { side: L[k].R * dist, up: L[k].R * lift, back: -L[k].R * 0.3, dolly: L[k].R * 0.6, lookUp: L[k].R });
+    const c8 = lpU(LP.eight.s0);
+    return [
+      loopShot(0, 'THE FIRST LOOP', 3.4, 0.7),
+      at(lpU(L[2].s0), 'THREE IN A ROW', { side: 560, up: 140, back: -60, dolly: 120, lookUp: 70 }),
+      at(GAPS[0].u0, 'THE GAP', { back: -40, side: 30, up: 45, dolly: 90, ahead: 320, lookUp: -80 }),
+      at(c8, 'THE FIGURE 8', { back: -260, side: 240, up: 420, dolly: 220, ahead: 60 }),
+      loopShot(4, 'THE MONSTER', 3.8, 1.0),
+      at(FINISH_PIT_U, 'UPSIDE DOWN', { back: -170, side: 110, up: -90, dolly: 80 }),
+    ];
+  }
+  // a shot from fixed world points (level 2: out in front of the mountain face, never inside it)
+  const world = (label, from, to, look, lookTo = look) => ({ label, from: V(...from), to: V(...to), look: V(...look), lookTo: V(...lookTo) });
+  if (IS_SWITCH) {
+    const zTop = sbLegs[0].z, zBot = sbLegs[sbLegs.length - 1].z, zMid = (zTop + zBot) / 2, yMid = sbLegY(3, 0);
+    const pin = sbLegs[1], cx = pin.dir * SB.W + pin.dir * SB.DZ / 2, cz = pin.z - SB.DZ / 2, cy = sbLegY(1, pin.dir * SB.W);
+    return [
+      world('SWITCHBACK PASS', [-500, yMid + 420, zBot - 900], [500, yMid + 420, zBot - 900], [0, yMid + 60, zMid]),
+      world('HAIRPINS', [cx + pin.dir * 160, cy + 70, cz - 90], [cx + pin.dir * 140, cy + 60, cz - 40], [cx, cy - 10, cz]),
+      at(sbMidU(3, 0), 'THE KICKER', { back: -70, side: 26, up: 14, dolly: 50, ahead: 40 }),
+      world('THE FACE', [SB.W + 400, yMid + 150, zBot - 250], [SB.W + 200, yMid + 150, zBot - 350], [0, yMid, zMid]),
+      at(FINISH_U, 'THE FINISH', { back: -90, side: 30, up: 24, dolly: 60, ahead: 40 }),
+    ];
+  }
+  const wall = MOUNTAIN_WALLS[0];
+  return [
+    at(0.06, 'THE DROP', { back: -50, side: 30, up: 30, dolly: 60, ahead: 200, lookUp: -40 }),
+    at((wall.u0 + wall.u1) / 2, 'THE MOUNTAIN', { back: -80, side: -60, up: 30, dolly: 70, ahead: 40, lookUp: 20 }),
+    at(GAPS[0].u0, 'THE GAP', { back: -40, side: 34, up: 16, dolly: 40, ahead: 60, lookUp: -6 }),
+    at((BRIDGE.u0 + BRIDGE.u1) / 2, 'THE BRIDGE', { back: -260, side: 380, up: -40, dolly: 120, lookUp: -60 }),
+    at(FINISH_U, 'THE FINISH', { back: -90, side: 30, up: 24, dolly: 60, ahead: 40 }),
+  ];
+}
+let tour = null;
+function startTour() {
+  tour = tourShots(); tourShown = true;
+  startSeq.phase = 'tour'; startSeq.t = 0; startSeq.shot = -1;
+  fx.barsTarget = 1; document.body.classList.add('touring');
+}
+function endTour() {
+  startSeq.phase = 'fly'; startSeq.t = 0;
+  fx.barsTarget = hudMode === 2 ? 1 : 0; document.body.classList.remove('touring');
+}
+function updateTour(dt) {
+  startSeq.t += dt;
+  const k = Math.floor(startSeq.t / TOUR_SHOT_SECS);
+  if (k >= tour.length) { endTour(); return; }
+  const sh = tour[k], a = THREE.MathUtils.smoothstep(startSeq.t / TOUR_SHOT_SECS - k, 0, 1);
+  if (k !== startSeq.shot) { startSeq.shot = k; showTrick(sh.label); if (sh.label === 'THE BRIDGE' && sea.ready) bridgeBreach(); }
+  camera.position.copy(keepAboveGround(sh.from.clone().lerp(sh.to, a)));
+  camera.lookAt(sh.look.clone().lerp(sh.lookTo, a));
+  camera.fov = 55; camera.updateProjectionMatrix();
 }
 function skipFly() { startSeq.phase = 'count'; startSeq.t = 0; chaseOff.set = false; lightsEl.classList.add('show'); }
 const idleInfo = { tuck: false, offroad: false, carving: false, brake: false };
@@ -4375,6 +4849,7 @@ function updateStart(dt) {
   state.speed = 0;
   place(idleInfo);                           // pose the rider; the chase camera runs underneath
   drawHud(idleInfo);
+  if (startSeq.phase === 'tour') { if (!rig.loading) updateTour(dt); return; }
   if (startSeq.phase === 'fly') {
     // hold on the first frame until the rider model is in (a couple of seconds at most)
     if (rig.loading && (startSeq.wait += dt) < 4) { startSeq.t = 0; }
@@ -4416,8 +4891,10 @@ function updateStart(dt) {
 // upgraded to changes the swing and the reach (a stick sweeps everyone in front of you). The rider
 // model's own clips play here (walk / run / punches); its procedural board pose resumes on exit.
 // ------------------------------------------------------------------
-const BRAWL_WALK  = 5.2;      // walk speed (u/s)
-const BRAWL_RUN   = 9.5;      // sprint: hold Shift, or double-tap W / ↑
+const BRAWL_WALK  = 10.4;     // walk speed (u/s)
+const BRAWL_RUN   = 19;       // sprint: hold Shift, or double-tap W / ↑
+const PUNCH_SPEED = 1.7;      // punches (and kicks) play this much faster than the clips
+const FALL_SPEED  = 1.8;      // knocked-down people hit the floor this much faster
 const BRAWL_DTAP  = 0.3;      // seconds between taps that count as a double tap
 const BRAWL_TURN  = 2.8;      // turn rate (rad/s)
 const BRAWL_ROOM  = 3;        // stay this far inside the finish pit's rim
@@ -4430,7 +4907,8 @@ const brawl = { on: false, from: null, walker: new THREE.Group(), heading: 0, ba
 const brawlRay = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0);
 scene.add(brawl.walker);
 const brawlHintEl = document.getElementById('brawlhint');
-const canBrawl = () => rig.ready && rig.clips.length && !brawl.on && ['PIT', 'STATS', 'RACE', 'RESULTS', 'WORLD', 'END'].includes(gameState);
+const canBrawl = () => !IS_LOOP && rig.ready && rig.clips.length && !brawl.on &&   // (not in level 3's upside-down pit, yet)
+                       ['PIT', 'STATS', 'RACE', 'RESULTS', 'WORLD', 'END'].includes(gameState);
 const brawlClip = n => rig.clips.find(c => c.name.endsWith('|' + n));
 function brawlBase(name) {                     // idle / walk / run, cross-faded
   if (brawl.baseName === name) return;
@@ -4464,17 +4942,27 @@ function exitBrawl() {
   gameState = brawl.from;
   if (gameState !== 'PIT') results.el.classList.remove('hidden');   // the pit orbit carries on to the stats
 }
-function throwPunch(side) {
+function throwPunch(side, kick = false) {
   if (brawl.punch && brawl.punchT < brawl.punchDur * 0.7) return;   // still mid-swing
   const w = WEAPONS[weaponTier];
-  const a = rig.mixer.clipAction(brawlClip(w === 'STICK' ? 'Sword_Slash' : side < 0 ? 'Punch_Left' : 'Punch_Right'));
-  a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false;
+  const name = kick ? 'Kick_Right' : w === 'STICK' ? 'Sword_Slash' : side < 0 ? 'Punch_Left' : 'Punch_Right';
+  const a = rig.mixer.clipAction(brawlClip(name));
+  a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false; a.timeScale = PUNCH_SPEED;
   a.setEffectiveWeight(5).fadeIn(0.05).play();                    // dominates the walk underneath
   if (brawl.punch && brawl.punch !== a) brawl.punch.fadeOut(0.1);
-  brawl.punch = a; brawl.punchT = 0; brawl.punchDur = a.getClip().duration; brawl.hit = false;
+  brawl.punch = a; brawl.punchT = 0; brawl.punchDur = a.getClip().duration / PUNCH_SPEED; brawl.hit = false; brawl.kick = kick;
+  sfx?.swing();
+}
+// knock a spectator down, falling away from `fwd` (the death clip falls forward: turn them first)
+function knockDown(c, fwd) {
+  c.down = true;
+  c.obj.rotation.y = Math.atan2(fwd.x, fwd.z);
+  c.obj.position.addScaledVector(fwd, 0.35);
+  c.mixer.stopAllAction();
+  const a = c.mixer.clipAction(c.death); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.timeScale = FALL_SPEED; a.play();
 }
 function landBlow() {
-  const w = WEAPONS[weaponTier], reach = WEAPON_REACH[w] || 1.9, P = brawl.walker.position;
+  const w = WEAPONS[weaponTier], reach = brawl.kick ? 2.4 : WEAPON_REACH[w] || 1.9, P = brawl.walker.position;
   const fwd = new THREE.Vector3(Math.sin(brawl.heading), 0, Math.cos(brawl.heading));
   const inReach = crowd.filter(c => {
     if (c.down) return false;
@@ -4496,18 +4984,14 @@ function landBlow() {
       m.lean.rotation.set(0, 0, 0); m.root.rotation.y = 0; m.root.position.set(0, 0, 0); m.tag.visible = false;
       m.mixer.stopAllAction();
       const a = cp.model.mixer.clipAction(cp.model.clips.find(k => k.name.endsWith('|Death')));
-      a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+      a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.timeScale = FALL_SPEED; a.play();
       brawl.kos++;
       continue;
     }
-    c.down = true;
-    c.obj.rotation.y = brawl.heading;                                 // the death clip falls forward: turn them
-    c.obj.position.addScaledVector(fwd, 0.35);                        //   away from the blow and shove them back
-    c.mixer.stopAllAction();
-    const a = c.mixer.clipAction(c.death); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
+    knockDown(c, fwd);
     brawl.kos++;
   }
-  if (hits.length) { showTrick((hits.length > 1 ? hits.length + 'x ' : '') + 'KO!  ' + brawl.kos); flash(0.12); }
+  if (hits.length) { sfx?.hit(); showTrick((hits.length > 1 ? hits.length + 'x ' : '') + 'KO!  ' + brawl.kos); flash(0.12); }
 }
 function reviveCrowd() {
   for (const c of crowd) if (c.down) {
@@ -4567,8 +5051,13 @@ function updateBrawl(dt) {
   if (camMode === 'trackside') {
     camPos.copy(pc).addScaledVector(off.lengthSq() > 1 ? off.clone().normalize().negate() : fwd, lim * 0.6).add(new THREE.Vector3(0, 6, 0));
   } else {
-    const want = fwd.clone().multiplyScalar(camMode === 'drone' ? -11 : -5.5).add(new THREE.Vector3(0, camMode === 'drone' ? 8 : 2.6, 0));
-    brawl.camOff.lerp(want, Math.min(1, dt * 4));
+    let want = fwd.clone().multiplyScalar(camMode === 'drone' ? -11 : -5.5).add(new THREE.Vector3(0, camMode === 'drone' ? 8 : 2.6, 0));
+    // mouse orbits the camera round you, like on the board (eases back when you let go)
+    if (performance.now() - look.last > 160) { look.yaw *= Math.exp(-dt * 3); look.pitch *= Math.exp(-dt * 3); }
+    const right = new THREE.Vector3().crossVectors(fwd, UP).normalize();
+    want = want.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(UP, look.yaw)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(right, look.pitch)));
+    brawl.camOff.lerp(want, Math.min(1, dt * 8));
     camPos.copy(P).add(brawl.camOff);
   }
   camera.position.copy(keepAboveGround(camPos));
@@ -4636,6 +5125,7 @@ function fillSlot(i) {
     m.scale.setScalar(k);
     m.position.set(-(b.min.x + sz.x / 2) * k, -b.min.y * k, -(b.min.z + sz.z / 2) * k);
     s.g.add(m);
+    selScene.updateMatrixWorld(true); dressRider(m, RIDERS[i].look);
     s.mixer = new THREE.AnimationMixer(m);
     const clip = n => g.animations.find(c => c.name.endsWith('|' + n));
     s.idle = s.mixer.clipAction(clip('Idle')); s.idle.play(); s.idle.time = Math.random() * s.idle.getClip().duration;
@@ -4740,6 +5230,8 @@ function cpuCrash(c, why) {                      // bail: down on the road, slid
     const a = m.mixer.clipAction(m.clips.find(k => k.name.endsWith('|Death'))); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.play();
   }
   if (why && m?.node.position.distanceTo(camera.position) < 80) showTrick(why);
+  const d = m ? m.node.position.distanceTo(camera.position) : 1e9;
+  if (d < 120) sfx?.crash(0.5 * (1 - d / 120));
 }
 function nameTag(text) {
   const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
@@ -4771,6 +5263,7 @@ function buildCpuModel(c, i) {                 // (re)dress a CPU as roster ride
     char.position.set(-(cb.min.x + csz.x / 2) * k, -cb.min.y * k, -(cb.min.z + csz.z / 2) * k);
     const root = new THREE.Group(); root.add(char); root.rotation.y = -Math.PI / 2;
     lean.add(board, root);
+    node.updateMatrixWorld(true); dressRider(char, RIDERS[i].look);
     const bones = []; char.traverse(o => { if (o.isBone) bones.push(o); });
     const mixer = new THREE.AnimationMixer(char);
     const idleClip = g.animations.find(a => a.name.endsWith('|Idle'));
@@ -4930,10 +5423,26 @@ function kickRacer() {
     const a = rig.mixer.clipAction(clip); a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false; a.play();
     rig.kickAnim = a.getClip().duration * 0.8;
   }
-  if (!c) return;
+  if (!c) {                                                      // no racer — a spectator beside the road?
+    const P = skater.position;
+    const sp = crowd.find(p => !p.down && p.obj.visible && p.obj.position.distanceTo(P) < KICK_REACH_LAT + 0.6);
+    if (sp) { sfx?.hit(); knockDown(sp, sp.obj.position.clone().sub(P).setY(0).normalize()); award('KICKED A FAN', KICK_PTS / 2); }
+    return;
+  }
   c.lat += side * 1.2;
+  sfx?.hit();
   cpuCrash(c);
   award('KICKED ' + c.name, KICK_PTS);
+}
+// debug (9): drop you just before the finish line on whatever course you're on
+const SKIP_BACK = 80;          // world units short of the line
+function skipToFinish() {
+  if (gameState !== 'PLAYING' || finish.crossed) return;
+  if (state.free) state.free = false;
+  grind.on = false; trick.type = null; trickPivot.rotation.set(0, 0, 0);
+  Object.assign(state, { u: FINISH_U - SKIP_BACK / TOTAL_LEN, lateral: 0, height: 0, vy: 0, airborne: false,
+                         heading: 0, slideV: 0, crashT: 0, speed: Math.max(state.speed, 25) });
+  showTrick('SKIP TO FINISH');
 }
 // your place right now (1-based): finishers ahead of you, then everyone further down the hill
 function racePlace() {
@@ -5006,6 +5515,9 @@ function frame(now) {
     pitCam(dt);   // PIT → STATS → ENTRY → RESULTS: keep circling the rider
   }
   updateCrowd(dt);
+  sfx?.update(dt, gameState === 'PLAYING');
+  updateLandCall(dt);
+  updateSea(dt);
   updateCpus(dt);
   updatePads(dt);
   updateDetailLOD(dt);
@@ -5026,6 +5538,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 computePadMins();
+if (IS_LOOP) document.body.classList.add('no-brawl');
 openSelect();   // pick a rider, then every run opens with the flyover + countdown
 requestAnimationFrame(frame);
 

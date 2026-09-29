@@ -18,6 +18,8 @@ All assets are licensed **CC0** (public domain).
 | `models/riders/adventurer.glb` | [Adventurer](https://poly.pizza/m/5EGWBMpuXq) by Quaternius (via Poly Pizza); unused clips removed, meshes quantized |
 | `models/riders/suit.glb` | [Business Man](https://poly.pizza/m/JFrLIKqvCH) by Quaternius (via Poly Pizza); unused clips removed, meshes quantized |
 | `models/riders/hardhat.glb` | [Worker](https://poly.pizza/m/Yg2bQZO6Hj) by Quaternius (via Poly Pizza); unused clips removed, meshes quantized |
+| `models/sea/whale.glb` | [Whale](https://poly.pizza/m/JGFwp6xWgk) by Quaternius (via Poly Pizza) |
+| `models/sea/dolphin.glb` | [Dolphin](https://poly.pizza/m/3LzFgI3GLO) by Quaternius (via Poly Pizza) |
 | `models/props.glb` | Quaternius "Rock Medium" ×2 ([1](https://poly.pizza/m/KZdEP3uUpa), [2](https://poly.pizza/m/JQxF95498B)), ["Bush"](https://poly.pizza/m/ooG6CkLyE8), ["Bush with Flowers"](https://poly.pizza/m/U1ymDy8tbY) (via Poly Pizza); merged into one GLB, textures 512px |
 | `models/pines.glb` | Quaternius "Pine" ×3 — [1](https://poly.pizza/m/igSu0cPoBz), [2](https://poly.pizza/m/79gmlLnweB), [3](https://poly.pizza/m/Zt62gceKXZ) (via Poly Pizza); merged into one GLB with shared textures, bark downsized to 512px |
 
