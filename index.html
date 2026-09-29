@@ -119,6 +119,36 @@
   .title-big { font-size: 84px; font-weight: 900; letter-spacing: 8px; text-shadow: 0 6px 30px rgba(0,0,0,.7); }
   .title-sub { font-size: 18px; opacity: .8; margin-top: 12px; }
 
+  /* track select: day tracks on top, each night version right under it */
+  #tracksel { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #fff; user-select: none; background: rgba(6,10,22,.7); backdrop-filter: blur(4px); padding: 16px; box-sizing: border-box; }
+  #tracksel.hidden { display: none; }
+  .ts-title { font-size: 40px; font-weight: 900; letter-spacing: 6px; margin-bottom: 3vh; text-shadow: 0 4px 20px rgba(0,0,0,.6); text-align: center; }
+  .ts-grid { display: grid; grid-template-columns: repeat(3, min(27vw, 380px)); gap: 2.4vh 1.6vw; }
+  .ts-card { position: relative; border-radius: 14px; overflow: hidden; border: 2px solid rgba(255,255,255,.15); cursor: pointer;
+    opacity: .6; transform: scale(.94); transition: transform .18s, opacity .18s, border-color .18s, box-shadow .18s; background: #0b1224; }
+  .ts-card.sel { opacity: 1; transform: scale(1.04); border-color: #ffd23c; box-shadow: 0 0 0 2px rgba(255,210,60,.35), 0 0 34px rgba(255,210,60,.45); z-index: 1; }
+  .ts-shot { aspect-ratio: 16 / 9; background: linear-gradient(160deg, #36507a, #121a30) center / cover no-repeat; }
+  .ts-card.night .ts-shot { filter: brightness(.42) saturate(.55) hue-rotate(185deg); }
+  .ts-card.night .ts-shot::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 78% 22%, rgba(210,225,255,.5) 0 3%, transparent 4%),
+    linear-gradient(180deg, rgba(20,30,90,.45), rgba(0,0,20,.2)); }
+  .ts-card.locked .ts-shot { filter: grayscale(1) brightness(.22) blur(2px); }
+  .ts-label { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 12px 9px; display: flex; justify-content: space-between; align-items: baseline;
+    background: linear-gradient(transparent, rgba(0,0,0,.78)); }
+  .ts-name { font-size: 17px; font-weight: 900; letter-spacing: 2px; }
+  .ts-card.sel .ts-name { color: #ffd23c; }
+  .ts-best { font-size: 12px; font-weight: 700; opacity: .8; font-family: ui-monospace, Menlo, monospace; }
+  .ts-lock { position: absolute; inset: 0 0 34px; display: none; align-items: center; justify-content: center; }
+  .ts-card.locked .ts-lock { display: flex; }
+  .ts-lock svg { width: 17%; height: auto; opacity: .9; filter: drop-shadow(0 3px 10px rgba(0,0,0,.8)); }
+  .ts-soon { position: absolute; top: 10px; right: 10px; font-size: 11px; font-weight: 800; letter-spacing: 2px; padding: 3px 8px;
+    border-radius: 6px; background: rgba(60,166,255,.3); border: 1px solid rgba(60,166,255,.7); display: none; }
+  .ts-card.soon .ts-soon { display: block; }
+  .ts-info { margin-top: 3vh; font-size: 17px; font-weight: 700; letter-spacing: 1px; min-height: 1.4em; color: #cfe0ff; text-align: center; }
+  @keyframes tsShake { 0%,100% { translate: 0; } 20% { translate: -8px; } 40% { translate: 7px; } 60% { translate: -5px; } 80% { translate: 3px; } }
+  .ts-card.deny { animation: tsShake .35s; }
+  @media (max-width: 700px) { .ts-grid { grid-template-columns: repeat(3, 30vw); } .ts-name { font-size: 11px; letter-spacing: 1px; } .ts-best { display: none; } .ts-title { font-size: 26px; } }
+
   /* results / arcade high-score board */
   @keyframes arcadeBlink { 0%,49% { opacity: 1; } 50%,100% { opacity: .12; } }
   .blink { animation: arcadeBlink 1s steps(1) infinite; }
@@ -259,11 +289,6 @@
     </ul>
     <div class="menu-hint">↑ ↓ / stick to move · Enter / A to select · Esc to resume</div>
   </div>
-  <div class="menu-panel hidden" data-screen="tracks">
-    <div class="menu-title">TRACK SELECT</div>
-    <ul class="menu-list" id="track-list"><li data-action="back">Back</li></ul>
-    <div class="menu-hint">↑ ↓ to choose · Enter / A to ride · Esc to go back</div>
-  </div>
   <div class="menu-panel hidden" data-screen="settings">
     <div class="menu-title">SETTINGS</div>
     <ul class="menu-list">
@@ -331,6 +356,13 @@
   <div class="title-sub">Press Enter / click to ride</div>
 </div>
 
+<div id="tracksel" class="hidden">
+  <div class="ts-title">CHOOSE YOUR TRACK</div>
+  <div class="ts-grid"></div>
+  <div class="ts-info">&nbsp;</div>
+  <div class="menu-hint">← → ↑ ↓ choose · Enter / A to pick · Esc / B back</div>
+</div>
+
 <div id="results" class="hidden">
   <div class="rboard">
     <div class="rtitle blink">FINISH!</div>
@@ -385,9 +417,9 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 // final screen reloads into the next one, carrying the song + playback position across.
 // ------------------------------------------------------------------
 const LEVELS = [
-  { id: 'ridge',  name: 'RIDGE RUN',       lbKey: 'downhill.scores' },
-  { id: 'switch', name: 'SWITCHBACK PASS', lbKey: 'downhill.scores.switchback' },
-  { id: 'loops',  name: 'LOOP HEIGHTS',    lbKey: 'downhill.scores.loops' },
+  { id: 'ridge',  name: 'RIDGE RUN',       lbKey: 'downhill.scores',            shot: 'assets/tracks/ridge.jpg' },
+  { id: 'switch', name: 'SWITCHBACK PASS', lbKey: 'downhill.scores.switchback', shot: 'assets/tracks/switch.jpg' },
+  { id: 'loops',  name: 'LOOP HEIGHTS',    lbKey: 'downhill.scores.loops',      shot: 'assets/tracks/loops.jpg' },
 ];
 const LEVEL_IDX = THREE.MathUtils.clamp((parseInt(new URLSearchParams(location.search).get('level'), 10) || 1) - 1, 0, LEVELS.length - 1);
 const LV = LEVELS[LEVEL_IDX];
@@ -2776,6 +2808,7 @@ function crossFinish() {
   endCombo();
   lastRun = { timeS: run.t, topSpeed: run.topSpeed, dist: run.dist, airTime: run.airTime, score: run.score, combo: run.bestCombo, reason: 'end', rank: -1,
               place: 1 + cpus.filter(c => c.finished).length };
+  lastRun.unlocked = unlockOnFinish(lastRun.place);
   if (grind.on) endGrind();
   showTrick('FINISH!'); flash(0.3);
 }
@@ -3548,7 +3581,7 @@ function drawTimer(txt) {
   timerTex.needsUpdate = true;
 }
 function updateTimer() {
-  timerMesh.visible = !['TITLE', 'COUNTDOWN', 'SELECT'].includes(gameState) && hudMode === 0;   // from the green light; hides with the HUD (H)
+  timerMesh.visible = !['TITLE', 'TRACKSEL', 'COUNTDOWN', 'SELECT'].includes(gameState) && hudMode === 0;   // from the green light; hides with the HUD (H)
   if (!timerMesh.visible) return;
   const secs = finish.crossed && lastRun ? lastRun.timeS : run.t;
   const txt = String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(Math.floor(secs % 60)).padStart(2, '0');
@@ -4310,14 +4343,10 @@ audio.volume = settings.volume / 100;
 
 const menuEl = document.getElementById('menu');
 const titleEl = document.getElementById('title');
-const items = { main: ['resume', 'tracks', 'settings', 'controls', 'quit'], settings: ['volume', 'sfx', 'sens', 'fx', 'back'], controls: ['back'],
-                tracks: [...LEVELS.map((_, i) => 'level-' + (i + 1)), 'back'] };
-// Track Select: one row per course (the one loaded is marked); picking one reloads into it
-document.getElementById('track-list').insertAdjacentHTML('afterbegin', LEVELS.map((lv, i) =>
-  `<li data-action="level-${i + 1}">${i + 1}. ${lv.name}${i === LEVEL_IDX ? ' <span class="val dim">CURRENT</span>' : ''}</li>`).join(''));
-const inSubmenu = () => gameState === 'SETTINGS' || gameState === 'CONTROLS' || gameState === 'TRACKS';
+const items = { main: ['resume', 'tracks', 'settings', 'controls', 'quit'], settings: ['volume', 'sfx', 'sens', 'fx', 'back'], controls: ['back'] };
+const inSubmenu = () => gameState === 'SETTINGS' || gameState === 'CONTROLS';
 const inMenu = () => gameState === 'PAUSED' || inSubmenu();
-const curScreen = () => (gameState === 'SETTINGS' ? 'settings' : gameState === 'CONTROLS' ? 'controls' : gameState === 'TRACKS' ? 'tracks' : 'main');
+const curScreen = () => (gameState === 'SETTINGS' ? 'settings' : gameState === 'CONTROLS' ? 'controls' : 'main');
 const curItems = () => items[curScreen()];
 
 function showPanel(name) {
@@ -4337,21 +4366,137 @@ function renderValues() {
 function openMenu()  { gameState = 'PAUSED'; menuIndex = 0; document.exitPointerLock?.(); menuEl.classList.remove('hidden'); showPanel('main'); renderMenu(); }
 function closeMenu() { gameState = 'PLAYING'; menuEl.classList.add('hidden'); }
 function openSettings() { gameState = 'SETTINGS'; menuIndex = 0; showPanel('settings'); renderValues(); renderMenu(); }
-function openTracks()   { gameState = 'TRACKS'; menuIndex = LEVEL_IDX; showPanel('tracks'); renderMenu(); }
-// reload into course n (1-based); the song carries over
+// reload into course n (1-based) and straight on to the rider select; the song carries over
 function gotoLevel(n) {
-  try { sessionStorage.setItem('downhill.radio', JSON.stringify({ track, time: audio.currentTime, playing: !audio.paused })); } catch {}
+  try {
+    sessionStorage.setItem('downhill.radio', JSON.stringify({ track, time: audio.currentTime, playing: !audio.paused }));
+    sessionStorage.setItem(FLOW_KEY, 'rider');
+  } catch {}
   location.search = '?level=' + n;
 }
 function openControls() { gameState = 'CONTROLS'; menuIndex = 0; showPanel('controls'); renderMenu(); }
 function backToMain()   { gameState = 'PAUSED'; menuIndex = 0; showPanel('main'); renderMenu(); }
-function quitGame()  { gameState = 'TITLE'; menuEl.classList.add('hidden'); results.el.classList.add('hidden'); titleEl.classList.remove('hidden'); }
-function startFromTitle() { topSpeed = 0; titleEl.classList.add('hidden'); openSelect(); }
+function quitGame()  {
+  gameState = 'TITLE'; menuEl.classList.add('hidden'); results.el.classList.add('hidden'); tsEl.classList.add('hidden');
+  titleEl.classList.remove('hidden'); document.body.classList.add('selecting');
+}
+function startFromTitle() { topSpeed = 0; titleEl.classList.add('hidden'); openTrackSel('title'); }
 
 function activate(item) {
-  if (item.startsWith('level-')) return gotoLevel(+item.slice(6));
-  ({ resume: closeMenu, tracks: openTracks, settings: openSettings, controls: openControls, quit: quitGame, back: backToMain })[item]?.();
+  ({ resume: closeMenu, tracks: () => openTrackSel('pause'), settings: openSettings, controls: openControls, quit: quitGame, back: backToMain })[item]?.();
 }
+
+// ------------------------------------------------------------------
+// Track select + unlocks — title → track select → rider select → race. A fresh save only has
+// Ridge Run open: finishing a track (any place) opens the next one, winning it (1st) opens its
+// night version. Night versions sit under their day track; unlocked ones say COMING SOON until
+// the night tracks exist (NIGHT_READY). Picking another track reloads into its rider select.
+// ------------------------------------------------------------------
+const UNLOCK_KEY = 'downhill.unlocks';   // localStorage: { '1': true, '2': true, '1n': true, … }
+const FLOW_KEY = 'downhill.flow';        // sessionStorage: 'rider' = this reload goes straight to the rider select
+const NIGHT_READY = false;
+const trackKey = (i, night) => (i + 1) + (night ? 'n' : '');
+let unlocks = {};
+try { unlocks = JSON.parse(localStorage.getItem(UNLOCK_KEY)) || {}; } catch {}
+unlocks['1'] = true;
+const isUnlocked = (i, night = false) => !!unlocks[trackKey(i, night)];
+function saveUnlocks() { try { localStorage.setItem(UNLOCK_KEY, JSON.stringify(unlocks)); } catch {} }
+function unlockTrack(i, night) {
+  if (i >= LEVELS.length || isUnlocked(i, night)) return false;
+  unlocks[trackKey(i, night)] = true; saveUnlocks();
+  return true;
+}
+// what crossing the line on this track earns; returned so the finish can show it off
+function unlockOnFinish(place) {
+  const got = [];
+  if (unlockTrack(LEVEL_IDX + 1, false)) got.push({ i: LEVEL_IDX + 1, night: false });
+  if (place === 1 && unlockTrack(LEVEL_IDX, true)) got.push({ i: LEVEL_IDX, night: true });
+  return got;
+}
+function bestTime(i) {
+  try {
+    const runs = JSON.parse(localStorage.getItem(LEVELS[i].lbKey)) || [];
+    return runs.length ? Math.min(...runs.map(r => r.timeS)) : null;
+  } catch { return null; }
+}
+
+const tsEl = document.getElementById('tracksel');
+const ts = { col: 0, row: 0, from: 'title' };
+const LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.2" fill="rgba(255,255,255,.14)"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.6" r="1.4" fill="#fff" stroke="none"/></svg>';
+tsEl.querySelector('.ts-grid').innerHTML = [0, 1].map(row => LEVELS.map((lv, i) => `
+  <div class="ts-card${row ? ' night' : ''}" data-col="${i}" data-row="${row}">
+    <div class="ts-shot" style="background-image:url(${lv.shot}), linear-gradient(160deg, #36507a, #121a30)"></div>
+    <div class="ts-lock">${LOCK_SVG}</div>
+    <div class="ts-soon">COMING SOON</div>
+    <div class="ts-label"><span class="ts-name">${row ? '☾ ' : ''}${lv.name}</span><span class="ts-best"></span></div>
+  </div>`).join('')).join('');
+const tsCards = [...tsEl.querySelectorAll('.ts-card')];
+const tsCard = (col, row) => tsCards[row * LEVELS.length + col];
+
+function tsRequirement(col, row) {
+  if (row) return `Win ${LEVELS[col].name} (1st place) to unlock its night run`;
+  return `Finish ${LEVELS[col - 1].name} to unlock`;
+}
+function renderTrackSel() {
+  tsCards.forEach(c => {
+    const col = +c.dataset.col, row = +c.dataset.row, open = isUnlocked(col, row === 1);
+    c.classList.toggle('locked', !open);
+    c.classList.toggle('soon', open && row === 1 && !NIGHT_READY);
+    c.classList.toggle('sel', col === ts.col && row === ts.row);
+    const best = row === 0 && open ? bestTime(col) : null;
+    c.querySelector('.ts-best').textContent = best != null ? 'BEST ' + fmtTime(best) : '';
+  });
+  const open = isUnlocked(ts.col, ts.row === 1);
+  tsEl.querySelector('.ts-info').textContent = !open ? '🔒 ' + tsRequirement(ts.col, ts.row)
+    : ts.row === 1 && !NIGHT_READY ? 'Unlocked! Night tracks are on their way'
+    : ts.row === 1 ? LEVELS[ts.col].name + ' · NIGHT' : LEVELS[ts.col].name;
+}
+function openTrackSel(from) {
+  gameState = 'TRACKSEL'; ts.from = from;
+  ts.row = 0; ts.col = isUnlocked(LEVEL_IDX) ? LEVEL_IDX : 0;
+  menuEl.classList.add('hidden'); titleEl.classList.add('hidden'); results.el.classList.add('hidden');
+  tsEl.classList.remove('hidden'); document.body.classList.add('selecting');
+  renderTrackSel();
+}
+function tsMove(dc, dr) {
+  const n = LEVELS.length;
+  ts.col = (ts.col + dc + n) % n;
+  ts.row = THREE.MathUtils.clamp(ts.row + dr, 0, 1);
+  renderTrackSel();
+}
+function tsDeny() {
+  const c = tsCard(ts.col, ts.row);
+  c.classList.remove('deny'); void c.offsetWidth; c.classList.add('deny');
+}
+function pickTrack() {
+  const night = ts.row === 1;
+  if (!isUnlocked(ts.col, night) || (night && !NIGHT_READY)) return tsDeny();
+  if (ts.col !== LEVEL_IDX) return gotoLevel(ts.col + 1);
+  tsEl.classList.add('hidden');
+  openSelect();
+}
+function tsBack() {
+  tsEl.classList.add('hidden');
+  if (ts.from === 'pause') { document.body.classList.remove('selecting'); openMenu(); }
+  else quitGame();
+}
+function tsKey(e) {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') tsMove(-1, 0);
+  else if (e.code === 'ArrowRight' || e.code === 'KeyD') tsMove(1, 0);
+  else if (e.code === 'ArrowUp' || e.code === 'KeyW') tsMove(0, -1);
+  else if (e.code === 'ArrowDown' || e.code === 'KeyS') tsMove(0, 1);
+  else if (e.repeat) return;
+  else if (e.code === 'Enter' || e.code === 'Space') pickTrack();
+  else if (e.code === 'Escape') tsBack();
+  else if (e.code === 'KeyU' && e.shiftKey) {             // debug: unlock everything
+    LEVELS.forEach((_, i) => { unlocks[trackKey(i, false)] = unlocks[trackKey(i, true)] = true; });
+    saveUnlocks(); renderTrackSel();
+  }
+}
+tsCards.forEach(c => {
+  c.addEventListener('mouseenter', () => { if (gameState !== 'TRACKSEL') return; ts.col = +c.dataset.col; ts.row = +c.dataset.row; renderTrackSel(); });
+  c.addEventListener('click', e => { e.stopPropagation(); if (gameState === 'TRACKSEL') { ts.col = +c.dataset.col; ts.row = +c.dataset.row; pickTrack(); } });
+});
 function adjustSetting(item, dir) {
   if (item === 'volume') { settings.volume = THREE.MathUtils.clamp(settings.volume + dir * 5, 0, 100); audio.volume = settings.volume / 100; }
   else if (item === 'sfx') { settings.sfx = THREE.MathUtils.clamp(settings.sfx + dir * 5, 0, 100); sfx?.setVolume(settings.sfx); }
@@ -4370,7 +4515,8 @@ function menuNav(code) {
 
 // Global game/menu key handling
 addEventListener('keydown', e => {
-  if (gameState === 'TITLE') { if (e.code === 'Enter' || e.code === 'Space') startFromTitle(); return; }
+  if (gameState === 'TITLE') { if (!e.repeat && (e.code === 'Enter' || e.code === 'Space')) startFromTitle(); return; }
+  if (gameState === 'TRACKSEL') { e.preventDefault(); tsKey(e); return; }
   if (gameState === 'SELECT') {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') selMove(-1);
     else if (e.code === 'ArrowRight' || e.code === 'KeyD') selMove(1);
@@ -4455,6 +4601,11 @@ function pollMenuGamepad(dt) {
   const up = padEdge(p, 12), dn = padEdge(p, 13), lf = padEdge(p, 14), rt = padEdge(p, 15);
   const a = padEdge(p, 0), b = padEdge(p, 1); // consume edges regardless of state
   if (gameState === 'TITLE') { if (a) startFromTitle(); return; }
+  if (gameState === 'TRACKSEL') {
+    if (lf) tsMove(-1, 0); if (rt) tsMove(1, 0); if (up) tsMove(0, -1); if (dn) tsMove(0, 1);
+    if (a) pickTrack(); else if (b) tsBack();
+    return;
+  }
   if (gameState === 'SELECT') { if (lf) selMove(-1); if (rt) selMove(1); if (a) confirmSelect(); return; }
   if (gameState === 'STATS') { if (a || b) advanceStats(); return; }
   if (gameState === 'RACE') { if (lf) lbCycle(-1); if (rt) lbCycle(1); if (a || b) advanceRace(); return; }
@@ -5394,7 +5545,10 @@ function updateSelect(dt) {
     s.g.scale.setScalar(s.g.scale.x + (k - s.g.scale.x) * Math.min(1, dt * 8));
     s.mixer?.update(dt);
   });
-  // behind it: a slow, high orbit around the start line
+  menuOrbit(dt);
+}
+// behind the menus: a slow, high orbit around the start line
+function menuOrbit(dt) {
   sel.orbit += dt * 0.07;
   const P = frames[0].p;
   camPos.set(P.x + Math.cos(sel.orbit) * 34, P.y + 12, P.z + Math.sin(sel.orbit) * 34);
@@ -5597,7 +5751,7 @@ function updateCpu(c, i, dt) {
   if (!c.finished && c.u >= FINISH_U) { c.finished = true; c.finishT = c.t; }
 }
 function updateCpus(dt) {
-  if (gameState === 'SELECT' || gameState === 'TITLE') return;
+  if (gameState === 'SELECT' || gameState === 'TITLE' || gameState === 'TRACKSEL') return;
   kickT = Math.max(0, kickT - dt);
   cpus.forEach((c, i) => updateCpu(c, i, dt));
   // shoulder bumps with you (racing only): both get pushed apart sideways
@@ -5735,6 +5889,8 @@ function frame(now) {
     updateBrawl(dt);
   } else if (gameState === 'SELECT') {
     updateSelect(dt);
+  } else if (gameState === 'TITLE' || (gameState === 'TRACKSEL' && ts.from === 'title')) {
+    menuOrbit(dt);
   } else if (finish.stopped) {
     pitCam(dt);   // PIT → STATS → ENTRY → RESULTS: keep circling the rider
   }
@@ -5763,7 +5919,11 @@ function frame(now) {
 }
 computePadMins();
 if (IS_LOOP) document.body.classList.add('no-brawl');
-openSelect();   // pick a rider, then every run opens with the flyover + countdown
+// a fresh visit starts at the title (→ track select → rider select); a reload from picking a track
+// or Next Race goes straight to the rider select. Every run opens with the flyover + countdown.
+let flow = null;
+try { flow = sessionStorage.getItem(FLOW_KEY); sessionStorage.removeItem(FLOW_KEY); } catch {}
+if (flow === 'rider') openSelect(); else quitGame();
 requestAnimationFrame(frame);
 
 addEventListener('resize', () => {

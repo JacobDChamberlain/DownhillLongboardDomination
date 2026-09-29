@@ -24,3 +24,5 @@ All assets are licensed **CC0** (public domain).
 | `models/pines.glb` | Quaternius "Pine" ×3 — [1](https://poly.pizza/m/igSu0cPoBz), [2](https://poly.pizza/m/79gmlLnweB), [3](https://poly.pizza/m/Zt62gceKXZ) (via Poly Pizza); merged into one GLB with shared textures, bark downsized to 512px |
 
 HDRI and textures are from [Poly Haven](https://polyhaven.com).
+
+- `tracks/*.jpg` — track select screenshots, captured from the game itself (course tour).

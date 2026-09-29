@@ -31,7 +31,7 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
 2. **Presentation:** pre-race course flyover, level 1 sea giants, sound effects.
 3. **New riders:** Hesher, Mime, Cthulhu (safe to use).
 4. **Starry mode upgrade** (done).
-5. **Track select screen + unlock progression**, then **night tracks** with the unlock screen.
+5. **Track select screen + unlock progression** (done), then **night tracks** with the unlock screen.
 6. Then **2-player** — only after the user has played 5.
 7. Later: difficulty levels + cheat codes, unlockable riders, free carving, weapons in hand (water
    bottle explosions), mobile.
@@ -94,7 +94,7 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
   for everyone (CPUs too). A last half-twist hangs the run-out and finish pit upside down (crowd
   and all; the track holds you there).* Ideas: a crash-cam replay of falls, loop-specific trick
   points, a pit brawl on the ceiling (off in level 3's upside-down pit for now).
-- [ ] **Track select screen + unlocks** *(basic Track Select in the Esc menu + Next Race are done)*.
+- [x] **Track select screen + unlocks** — *done: title → track select → rider select → race; screenshots of each track in a 3×2 grid (the selection highlighted gold), night versions under each day track (unlocked ones say COMING SOON until the night tracks land), best times, lock + requirement for locked ones, and a shake if you pick one; the Esc menu's Track Select opens the same screen. Unlocks saved in localStorage. Debug: Shift+U on the track select unlocks everything.*
   Flow: title → track select → rider select → race. Three windows with a screenshot of each track;
   move to pick one, the selected one highlighted; each night track sits under its day track.
   Unlocks (saved locally), starting with only level 1 open:
