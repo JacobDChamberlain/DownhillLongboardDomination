@@ -6153,6 +6153,12 @@ const CPU_LINE    = 0.5;                     // how far toward the inside of a b
 const CPU_LAT_RATE = 3.2;                    // how fast they move across the road (u/s)
 const CPU_BUMP    = 1.5;                     // riders closer than this (sideways) bump apart
 const CPU_TAG_DIST = 70;                     // name tags show within this of the camera
+// free carve (when you've picked it): they steer a turn rate under the same grip as you, and brake/slide
+// for the bends ahead they can't hold (misjudge one and they hit the edge)
+const CPU_CORNER    = 0.9;                  // they use this much of the grip before braking for a bend
+const CPU_LOOKAHEAD = 170;                  // how far ahead (u) they look for bends to brake for…
+const CPU_BRAKE     = 22;                   // …assuming they can scrub this much (u/s²) on the way in
+const CPU_AIM       = 4;                    // how hard they turn toward their line (per rad of heading error)
 const cpus = CPU_NAMES.map((name, i) => ({
   name, skill: CPU_SKILL[i], u: START_U, lat: 0, speed: 0, height: 0, vy: 0, airborne: false, heading: 0,
   t: 0, finished: false, finishT: 0, stopped: false, kickCd: 0, model: null, riderIdx: -1,
@@ -6230,6 +6236,7 @@ function updateCpu(c, i, dt) {
   const racing = gameState === 'PLAYING' || finish.crossed;   // the green light has gone
   if (!racing) return;
   const f = frameAt(c.u), slope = Math.max(0, -f.tan.y);
+  c.pathK = 1; c.sliding = false;
   if (c.t === 0 && !c.finished) c.speed = LAUNCH_SPEED;      // green light: roll off the line like you do
   c.t += c.finished ? 0 : dt;
   if (c.crashT > 0) {                          // down: no control, skid to a stop, then get back up
@@ -6250,7 +6257,7 @@ function updateCpu(c, i, dt) {
     const behind = THREE.MathUtils.clamp(gap, -CPU_RUBBER_DOWN, CPU_RUBBER_UP);
     const pull = IS_LOOP ? -G * f.tan.y * (f.tan.y < 0 ? c.skill * (1 + behind) : 1) : G * slope * c.skill * (1 + behind);
     const air = IS_LOOP && c.airborne;                       // (no drag over level 3's gap, like yours)
-    let accel = pull - (air ? 0 : DRAG_TUCK * (tucked ? 1 : CPU_SITUP_DRAG) * c.speed * c.speed + ROLL) - Math.abs(c.heading) * c.speed * (CARVE_SCRUB / 100);
+    let accel = pull - (air ? 0 : DRAG_TUCK * (tucked ? 1 : CPU_SITUP_DRAG) * c.speed * c.speed + ROLL) - (c.turn ? Math.abs(c.turn) * c.speed * CARVE_SCRUB_TURN : Math.abs(c.heading) * c.speed * (CARVE_SCRUB / 100));
     c.speed = Math.max(0, c.speed + accel * dt);
     c.kickCd -= dt;
     c.recoverT = Math.max(0, (c.recoverT || 0) - dt);
@@ -6266,20 +6273,43 @@ function updateCpu(c, i, dt) {
     if (GAPS.some(g => { const d = (g.u0 - c.u) * TOTAL_LEN; return d > 0 && d < 120; })) target = 0;
     const lim = ROAD_HALF_WIDTH - 1.2;
     target = THREE.MathUtils.clamp(target, -lim, lim);
-    const dLat = THREE.MathUtils.clamp(target - c.lat, -CPU_LAT_RATE * dt, CPU_LAT_RATE * dt);
-    c.heading += (Math.atan2(dLat / dt, Math.max(c.speed, 1)) - c.heading) * Math.min(1, dt * 6);   // same sign as yours: +heading drifts +lateral
-    c.lat += dLat;
+    if (carveOn() && !(IS_LOOP && inStunt(f))) {
+      // free carve: brake (sliding) if a bend ahead can't be held at this speed, then turn toward the line
+      const kap = roadCurv(c.u);
+      c.pathK = THREE.MathUtils.clamp(1 - kap * c.lat, 0.5, 1.5);
+      for (let d = 10; d <= CPU_LOOKAHEAD && !c.airborne; d += 20) {
+        const k = Math.abs(roadCurv(c.u + d / TOTAL_LEN));
+        if (k > 1e-4 && c.speed * c.speed > CARVE_GRIP * CPU_CORNER / k + 2 * CPU_BRAKE * d) { c.sliding = true; break; }
+      }
+      if (c.sliding) c.speed = Math.max(0, c.speed - (SLIDE_DECEL + c.speed * 0.15) * dt);
+      const ff = kap * c.speed * Math.cos(c.heading) / c.pathK;            // the turn that just follows the road
+      const want = Math.atan2(THREE.MathUtils.clamp(target - c.lat, -8, 8) * 0.6, Math.max(c.speed, 5));
+      const cap = Math.min(CARVE_TURN, (c.sliding ? SLIDE_GRIP : CARVE_GRIP) / Math.max(c.speed, 1)) * (c.airborne ? AIR_STEER : 1);
+      c.turn = THREE.MathUtils.clamp(ff + (want - c.heading) * CPU_AIM, -cap, cap);
+      c.heading = THREE.MathUtils.clamp(c.heading + (c.turn - ff) * dt, -CARVE_MAX_HEADING, CARVE_MAX_HEADING);
+      c.lat += c.speed * Math.sin(c.heading) * dt;
+      const edge = ROAD_HALF_WIDTH - 0.5;
+      if (Math.abs(c.lat) > edge) {                                      // ran wide into the edge: a knock, then along it
+        if (Math.sign(c.heading) === Math.sign(c.lat)) { c.speed *= 1 - Math.min(0.1, Math.abs(Math.sin(c.heading)) * 0.2); c.heading = 0; }
+        c.lat = Math.sign(c.lat) * edge;
+      }
+    } else {
+      c.turn = 0;
+      const dLat = THREE.MathUtils.clamp(target - c.lat, -CPU_LAT_RATE * dt, CPU_LAT_RATE * dt);
+      c.heading += (Math.atan2(dLat / dt, Math.max(c.speed, 1)) - c.heading) * Math.min(1, dt * 6);   // same sign as yours: +heading drifts +lateral
+      c.lat += dLat;
+    }
   } else {
     // past the line: brake to a stop in the pit, spread out so nobody lands on you
     const stopU = PIT_STOP_U - (6 + i * 5) / TOTAL_LEN;
     const d = (stopU - c.u) * TOTAL_LEN;
     if (d <= 0.3) c.speed = 0;
     else c.speed = Math.max(Math.min(c.speed, 6), c.speed - (c.speed * c.speed) / (2 * Math.max(d, 0.5)) * dt);
-    c.heading *= Math.exp(-dt * 3);
+    c.heading *= Math.exp(-dt * 3); c.turn = 0;
     if (c.speed === 0) c.stopped = true;
   }
   const uPrev = c.u;
-  c.u = Math.min(STOP_U, c.u + (c.speed * dt) / TOTAL_LEN);
+  c.u = Math.min(STOP_U, c.u + (c.speed * dt) / c.pathK / TOTAL_LEN);
   // kickers (with the gap assist), flight, and gaps — same rules as yours
   for (const ru of RAMPS) {
     const s = (c.u - ru) * TOTAL_LEN, sPrev = (uPrev - ru) * TOTAL_LEN, half = KICKER_LEN / 2;
