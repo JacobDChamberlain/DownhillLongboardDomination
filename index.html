@@ -3939,6 +3939,7 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
       float h = hash(c);
       return h > thresh ? smoothstep(0.22, 0.0, length(f)) * (0.55 + 0.45 * sin(uTime * 3.0 + h * 90.0)) : 0.0;
     }
+    float fbm3(vec3 p){ return vnoise(p) * 0.57 + vnoise(p * 2.03 + vec3(1.7, 9.2, 3.1)) * 0.29 + vnoise(p * 4.1 + vec3(5.3, 1.1, 7.7)) * 0.14; }
     float fbm(vec3 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { s += a * vnoise(p); p = p * 2.03 + vec3(1.7, 9.2, 3.1); a *= 0.5; } return s; }
     vec3 rotAx(vec3 v, vec3 k, float a){ return v * cos(a) + cross(k, v) * sin(a) + k * dot(k, v) * (1.0 - cos(a)); }
     // STARRY stars: coloured, jittered in their cell, at least ~1.5px wide so they don't shimmer;
@@ -3952,7 +3953,7 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
       float k = (h - thresh) / (1.0 - thresh);
       float tw = 0.65 + 0.35 * sin(uTime * (2.0 + h * 5.0) + h * 90.0);
       vec3 col = mix(mix(vec3(1.0, 0.7, 0.45), vec3(0.6, 0.78, 1.0), hash(cell + 11.0)), vec3(1.0), 0.4);
-      float core = smoothstep(max(0.05 + 0.08 * k, px * 0.8), 0.0, r);
+      float core = 1.0 - smoothstep(0.0, max(0.05 + 0.08 * k, px * 0.8), r);
       return col * (core + exp(-r * r * 90.0) * 0.25) * bright * (0.35 + 2.2 * k * k) * tw;
     }
     // one planet: a sphere at unit distance along P.xyz with angular size P.w. Banded clouds shear
@@ -3981,7 +3982,7 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
       col = mix(col, cS, smoothstep(0.35, 0.95, w) * (0.6 + 0.4 * fine));            // the storm's own colour
       col *= 0.8 + 0.4 * fine;
       float ndl = dot(n, L), day = smoothstep(-0.12, 0.5, ndl);
-      float rim = pow(1.0 - max(dot(n, -d), 0.0), 2.5);
+      float rim = pow(clamp(1.0 - dot(n, -d), 0.0, 1.0), 2.5);   // n is only nearly unit: keep pow's base >= 0
       vec3 c = col * (0.025 + 1.25 * day) + atm * rim * (0.15 + 0.9 * day);
       // lightning in the dark side's storm belts, bursts on the beat
       vec3 lc = floor(m * 12.0), lf = fract(m * 12.0) - 0.5;
@@ -3998,11 +3999,13 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
         if (ph > 0.16) continue;
         float k = ph / 0.16;
         vec3 a0 = normalize(vec3(hash(vec3(id, fi, 1.0)) - 0.5, 0.2 + hash(vec3(id, fi, 2.0)) * 0.6, hash(vec3(id, fi, 3.0)) - 0.5));
-        vec3 dir = normalize(cross(a0, vec3(hash(vec3(id, fi, 4.0)) - 0.5, hash(vec3(id, fi, 5.0)) - 0.5, hash(vec3(id, fi, 6.0)) - 0.5)));
+        vec3 dir = cross(a0, vec3(hash(vec3(id, fi, 4.0)) - 0.5, hash(vec3(id, fi, 5.0)) - 0.5, hash(vec3(id, fi, 6.0)) - 0.5));
+        if (dot(dir, dir) < 0.01) continue;                // near-parallel pick: skip it rather than normalize ~0
+        dir = normalize(dir);
         vec3 nrm = cross(a0, dir);
         float off = dot(d, nrm), along = atan(dot(d, dir), dot(d, a0)), tail = k * 0.5 - along;
         float wdt = max(0.0016, fwidth(off) * 1.2);
-        float streak = exp(-off * off / (wdt * wdt)) * smoothstep(0.1, 0.0, tail) * smoothstep(-0.003, 0.0, tail) * step(0.0, dot(d, a0));
+        float streak = exp(-off * off / (wdt * wdt)) * (1.0 - smoothstep(0.0, 0.1, tail)) * smoothstep(-0.003, 0.0, tail) * step(0.0, dot(d, a0));
         c += vec3(1.0, 0.93, 0.8) * streak * 4.0 * sin(k * 3.14159);
       }
       return c;
@@ -4032,13 +4035,13 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
       } else if (uMode < 3.5) {                            // STARRY
         c = mix(vec3(0.03, 0.05, 0.12), vec3(0.0, 0.005, 0.03), smoothstep(-0.05, 0.7, el));
         vec3 axis = normalize(vec3(0.35, 0.8, 0.45));
-        float bandD = dot(d, axis), band = exp(-pow(bandD * 3.2, 2.0));
+        float bandD = dot(d, axis), band = exp(-bandD * bandD * 10.24);
         // the milky band + drifting nebula clouds (violet, teal, rose) along it
-        float n1 = fbm(d * 2.5 + vec3(0.0, uTime * 0.006, 0.0));
-        float n2 = fbm(d * 5.0 + n1 * 2.2);
+        float n1 = fbm3(d * 2.5 + vec3(0.0, uTime * 0.006, 0.0));   // 3 octaves: this runs on every sky pixel
+        float n2 = fbm3(d * 5.0 + n1 * 2.2);
         c += band * vec3(0.10, 0.08, 0.16) * (0.3 + n2);
         vec3 neb = mix(mix(vec3(0.45, 0.1, 0.6), vec3(0.05, 0.45, 0.55), smoothstep(0.35, 0.65, n1)), vec3(0.7, 0.2, 0.35), smoothstep(0.6, 0.8, n2));
-        c += neb * smoothstep(0.42, 0.8, n2) * exp(-pow(bandD * 1.8, 2.0)) * (0.35 + 0.25 * uMid);
+        c += neb * smoothstep(0.42, 0.8, n2) * exp(-bandD * bandD * 3.24) * (0.35 + 0.25 * uMid);
         // stars: a dense faint field, a brighter one, rare very bright ones, extra dust in the band
         vec3 st = starLayer(d, 150.0, 0.93, 0.9) + starLayer(d, 70.0, 0.965, 1.6) * (0.8 + uHigh * 0.8)
                 + starLayer(d, 32.0, 0.985, 2.6) + band * starLayer(d, 320.0, 0.9, 0.6);
@@ -4061,8 +4064,8 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
           float tR = dot(uPl[0].xyz, uPlA[0]) / den, r0 = sin(uPl[0].w);
           if (tR > 0.0 && (tA < 0.0 || tR < tA)) {
             float q = length(d * tR - uPl[0].xyz) / r0;
-            float ring = smoothstep(1.35, 1.42, q) * smoothstep(2.4, 2.3, q) * (0.35 + 0.65 * vnoise(vec3(q * 16.0, 0.0, 0.0))) * (0.8 + 0.2 * sin(q * 150.0));
-            ring *= 1.0 - 0.8 * smoothstep(1.9, 1.95, q) * smoothstep(2.02, 1.97, q);    // the dark gap
+            float ring = smoothstep(1.35, 1.42, q) * (1.0 - smoothstep(2.3, 2.4, q)) * (0.35 + 0.65 * vnoise(vec3(q * 16.0, 0.0, 0.0))) * (0.8 + 0.2 * sin(q * 150.0));
+            ring *= 1.0 - 0.8 * smoothstep(1.9, 1.95, q) * (1.0 - smoothstep(1.97, 2.02, q));    // the dark gap
             vec3 rc = mix(vec3(0.75, 0.62, 0.45), vec3(0.95, 0.9, 0.8), vnoise(vec3(q * 12.0)));
             c = mix(c, rc * 0.85, ring * 0.7);
           }
@@ -4074,6 +4077,8 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
         vec3 blk = floor(vec3(u * 40.0, el * 20.0, floor(uTime * 8.0)));
         if (hash(blk) > 0.93 - uBeat * 0.2) c += vec3(hash(blk + 1.0), hash(blk + 2.0), hash(blk + 3.0)) * 0.9;
       }
+      // a NaN/Inf here would be smeared into black blocks by the bloom's blur chain: drop it
+      c = (c.r + c.g + c.b) * 0.0 == 0.0 ? clamp(c, 0.0, 50.0) : vec3(0.0);
       gl_FragColor = vec4(c, 1.0);
     }`,
 }));
