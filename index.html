@@ -2574,6 +2574,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyR' && e.shiftKey) revert();
   else if (e.code === 'KeyK') kickRacer();
   else if (e.code === 'Digit9' || e.code === 'Numpad9') skipToFinish();   // debug
+  else if (e.code === 'Digit8' || e.code === 'Numpad8') summonUfo();      // debug: switches to STARRY + calls the UFO
   else if (e.code === 'Digit0' || e.code === 'Numpad0') beginRun();
   else if (e.code === 'KeyC') cycleCam();
   else if (e.code === 'KeyX') cycleChaos();
@@ -3771,6 +3772,17 @@ const sfx = (() => {
       const k = THREE.MathUtils.clamp(1 - dist / 2200, 0.05, 1);
       noise({ type: 'lowpass', f: 1600, to: 300, dur: 1.6, gain: 0.9 * k, attack: 0.03 }); tone({ f: 70, to: 35, dur: 0.8, gain: 0.6 * k });
     },
+    // theremin warble for the UFO: glides in, hums while it hovers, zwoops off
+    ufo(tin, thov, tout) {
+      const t0 = live(), o = ctx.createOscillator(), lfo = ctx.createOscillator(), lg = ctx.createGain(), g = ctx.createGain();
+      const t1 = t0 + tin, t2 = t1 + thov, t3 = t2 + tout;
+      o.frequency.setValueAtTime(380, t0); o.frequency.linearRampToValueAtTime(700, t1);
+      o.frequency.setValueAtTime(700, t2); o.frequency.exponentialRampToValueAtTime(2600, t3);
+      lfo.frequency.value = 9; lg.gain.value = 40; lfo.connect(lg).connect(o.frequency);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.13, t0 + 0.4);
+      g.gain.setValueAtTime(0.13, t2); g.gain.exponentialRampToValueAtTime(0.0001, t3 + 0.1);
+      o.connect(g).connect(out); o.start(t0); lfo.start(t0); o.stop(t3 + 0.15); lfo.stop(t3 + 0.15);
+    },
     // every frame: the loops follow what you're doing
     update(dt, riding) {
       const onBoard = riding && !state.free && !state.airborne && state.crashT <= 0;
@@ -3904,11 +3916,16 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
   uniforms: {
     uMode: { value: 1 }, uTime: { value: 0 }, uHue0: { value: RAVE_HUE0 }, uPulse: { value: 0 }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uBeat: { value: 0 },
     uFreq: { value: freqTex }, uSun: { value: new THREE.Vector3() },
+    // STARRY planets: direction + angular radius, spin axis, light direction (set by aimPlanets)
+    uPl: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
+    uPlA: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
+    uPlL: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
   },
   vertexShader: `varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: `
     const float CHAOS_PULSE_GLSL = ${CHAOS_PULSE.toFixed(3)};
     uniform float uMode, uTime, uHue0, uPulse, uBass, uMid, uHigh, uBeat; uniform sampler2D uFreq; uniform vec3 uSun;
+    uniform vec4 uPl[3]; uniform vec3 uPlA[3], uPlL[3];
     varying vec3 vD;
     float hash(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
     float vnoise(vec3 p){
@@ -3921,6 +3938,77 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
       vec3 p = d * scale, c = floor(p), f = fract(p) - 0.5;
       float h = hash(c);
       return h > thresh ? smoothstep(0.22, 0.0, length(f)) * (0.55 + 0.45 * sin(uTime * 3.0 + h * 90.0)) : 0.0;
+    }
+    float fbm3(vec3 p){ return vnoise(p) * 0.57 + vnoise(p * 2.03 + vec3(1.7, 9.2, 3.1)) * 0.29 + vnoise(p * 4.1 + vec3(5.3, 1.1, 7.7)) * 0.14; }
+    float fbm(vec3 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { s += a * vnoise(p); p = p * 2.03 + vec3(1.7, 9.2, 3.1); a *= 0.5; } return s; }
+    vec3 rotAx(vec3 v, vec3 k, float a){ return v * cos(a) + cross(k, v) * sin(a) + k * dot(k, v) * (1.0 - cos(a)); }
+    // STARRY stars: coloured, jittered in their cell, at least ~1.5px wide so they don't shimmer;
+    // the rare bright ones go well past 1.0 so the bloom haloes them
+    vec3 starLayer(vec3 d, float scale, float thresh, float bright){
+      vec3 p = d * scale, cell = floor(p), f = fract(p) - 0.5;
+      float h = hash(cell);
+      if (h < thresh) return vec3(0.0);
+      vec3 jit = vec3(hash(cell + 4.1), hash(cell + 7.3), hash(cell + 2.9)) - 0.5;
+      float r = length(f - jit * 0.45), px = length(fwidth(p));
+      float k = (h - thresh) / (1.0 - thresh);
+      float tw = 0.65 + 0.35 * sin(uTime * (2.0 + h * 5.0) + h * 90.0);
+      vec3 col = mix(mix(vec3(1.0, 0.7, 0.45), vec3(0.6, 0.78, 1.0), hash(cell + 11.0)), vec3(1.0), 0.4);
+      float core = 1.0 - smoothstep(0.0, max(0.05 + 0.08 * k, px * 0.8), r);
+      return col * (core + exp(-r * r * 90.0) * 0.25) * bright * (0.35 + 2.2 * k * k) * tw;
+    }
+    // one planet: a sphere at unit distance along P.xyz with angular size P.w. Banded clouds shear
+    // with latitude (faster at the equator), a storm vortex churns through them, the night side
+    // flickers with lightning on the beat, and the limb glows with atmosphere. Returns colour + hit.
+    vec4 planet(vec3 d, vec4 P, vec3 axis, vec3 L, vec3 cA, vec3 cB, vec3 cS, vec3 atm, float bands, float seed, out float tHit){
+      float r = sin(P.w), b = dot(d, P.xyz), h = b * b - 1.0 + r * r;
+      tHit = -1.0;
+      float ang = acos(clamp(b, -1.0, 1.0));
+      float halo = exp(-max(ang - P.w, 0.0) / (P.w * 0.07)) * step(0.0, b);
+      if (h < 0.0) {                                   // just outside: the lit side's atmosphere haze
+        float lit = clamp(dot(normalize(d - P.xyz * b), L) * 0.5 + 0.5, 0.0, 1.0);
+        return vec4(atm * halo * (0.1 + 0.6 * lit), 0.0);
+      }
+      tHit = b - sqrt(h);
+      vec3 n = (d * tHit - P.xyz) / r;
+      float lat = dot(n, axis);
+      vec3 m = rotAx(n, axis, uTime * (0.015 + 0.03 * cos(lat * 3.0)) + seed);        // differential spin
+      vec3 sc = normalize(rotAx(normalize(cross(axis, vec3(0.3, 0.1, 0.9))), axis, seed * 2.0) - axis * 0.3);   // storm centre, south of the equator
+      float dq = length(m - sc), w = exp(-dq * dq * 26.0);
+      vec3 mw = rotAx(m, sc, w * (5.0 + sin(uTime * 0.25) * 1.5));                     // the vortex twist
+      float warp = fbm(mw * 3.0 + seed + vec3(0.0, 0.0, uTime * 0.04));
+      float fine = fbm(mw * 9.0 + vec3(uTime * 0.05, 0.0, seed));
+      float band = sin((lat * bands + warp * 1.6 + fine * 0.35) * 3.14159);
+      vec3 col = mix(cA, cB, 0.5 + 0.5 * band);
+      col = mix(col, cS, smoothstep(0.35, 0.95, w) * (0.6 + 0.4 * fine));            // the storm's own colour
+      col *= 0.8 + 0.4 * fine;
+      float ndl = dot(n, L), day = smoothstep(-0.12, 0.5, ndl);
+      float rim = pow(clamp(1.0 - dot(n, -d), 0.0, 1.0), 2.5);   // n is only nearly unit: keep pow's base >= 0
+      vec3 c = col * (0.025 + 1.25 * day) + atm * rim * (0.15 + 0.9 * day);
+      // lightning in the dark side's storm belts, bursts on the beat
+      vec3 lc = floor(m * 12.0), lf = fract(m * 12.0) - 0.5;
+      float flash = step(0.993 - 0.03 * uBeat, hash(lc + floor(uTime * 9.0) * 0.137));
+      float bolt = flash * exp(-dot(lf, lf) * 9.0) * (1.0 - day) * smoothstep(0.3, 0.8, fine + w);
+      c += vec3(0.65, 0.8, 1.0) * bolt * 2.2;
+      return vec4(c, 1.0);
+    }
+    // a few shooting stars at a time, each a streak along a random great circle
+    vec3 meteors(vec3 d){
+      vec3 c = vec3(0.0);
+      for (int i = 0; i < 3; i++) {
+        float fi = float(i), tt = uTime / (3.0 + fi * 1.7) + fi * 0.37, id = floor(tt), ph = fract(tt);
+        if (ph > 0.16) continue;
+        float k = ph / 0.16;
+        vec3 a0 = normalize(vec3(hash(vec3(id, fi, 1.0)) - 0.5, 0.2 + hash(vec3(id, fi, 2.0)) * 0.6, hash(vec3(id, fi, 3.0)) - 0.5));
+        vec3 dir = cross(a0, vec3(hash(vec3(id, fi, 4.0)) - 0.5, hash(vec3(id, fi, 5.0)) - 0.5, hash(vec3(id, fi, 6.0)) - 0.5));
+        if (dot(dir, dir) < 0.01) continue;                // near-parallel pick: skip it rather than normalize ~0
+        dir = normalize(dir);
+        vec3 nrm = cross(a0, dir);
+        float off = dot(d, nrm), along = atan(dot(d, dir), dot(d, a0)), tail = k * 0.5 - along;
+        float wdt = max(0.0016, fwidth(off) * 1.2);
+        float streak = exp(-off * off / (wdt * wdt)) * (1.0 - smoothstep(0.0, 0.1, tail)) * smoothstep(-0.003, 0.0, tail) * step(0.0, dot(d, a0));
+        c += vec3(1.0, 0.93, 0.8) * streak * 4.0 * sin(k * 3.14159);
+      }
+      return c;
     }
     void main(){
       vec3 d = normalize(vD);
@@ -3947,14 +4035,41 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
       } else if (uMode < 3.5) {                            // STARRY
         c = mix(vec3(0.03, 0.05, 0.12), vec3(0.0, 0.005, 0.03), smoothstep(-0.05, 0.7, el));
         vec3 axis = normalize(vec3(0.35, 0.8, 0.45));
-        float band = exp(-pow(dot(d, axis) * 3.2, 2.0));
-        float cloud = vnoise(d * 9.0) * 0.6 + vnoise(d * 23.0) * 0.4;
-        c += band * vec3(0.10, 0.08, 0.16) * (0.3 + cloud);
-        c += stars(d, 260.0, 0.975) * (0.8 + uHigh * 1.2) + stars(d, 90.0, 0.992) * 1.4;
-        c += band * stars(d, 500.0, 0.95) * 0.45;
+        float bandD = dot(d, axis), band = exp(-bandD * bandD * 10.24);
+        // the milky band + drifting nebula clouds (violet, teal, rose) along it
+        float n1 = fbm3(d * 2.5 + vec3(0.0, uTime * 0.006, 0.0));   // 3 octaves: this runs on every sky pixel
+        float n2 = fbm3(d * 5.0 + n1 * 2.2);
+        c += band * vec3(0.10, 0.08, 0.16) * (0.3 + n2);
+        vec3 neb = mix(mix(vec3(0.45, 0.1, 0.6), vec3(0.05, 0.45, 0.55), smoothstep(0.35, 0.65, n1)), vec3(0.7, 0.2, 0.35), smoothstep(0.6, 0.8, n2));
+        c += neb * smoothstep(0.42, 0.8, n2) * exp(-bandD * bandD * 3.24) * (0.35 + 0.25 * uMid);
+        // stars: a dense faint field, a brighter one, rare very bright ones, extra dust in the band
+        vec3 st = starLayer(d, 150.0, 0.93, 0.9) + starLayer(d, 70.0, 0.965, 1.6) * (0.8 + uHigh * 0.8)
+                + starLayer(d, 32.0, 0.985, 2.6) + band * starLayer(d, 320.0, 0.9, 0.6);
         vec3 moon = normalize(vec3(0.5, 0.45, -0.75));
         float md = dot(d, moon);
-        c += smoothstep(0.9993, 0.9996, md) * vec3(1.6, 1.55, 1.4) + pow(max(md, 0.0), 300.0) * vec3(0.3, 0.35, 0.5);
+        vec3 sky = c + meteors(d);
+        // the planets, nearest drawn last so it covers the others; stars only where no planet is
+        float tA, tB, tC;
+        vec4 pC = planet(d, uPl[2], uPlA[2], uPlL[2], vec3(0.55, 0.2, 0.1), vec3(0.85, 0.45, 0.25), vec3(1.0, 0.8, 0.5), vec3(1.0, 0.45, 0.3), 5.0, 7.0, tC);
+        vec4 pB = planet(d, uPl[1], uPlA[1], uPlL[1], vec3(0.15, 0.45, 0.7), vec3(0.55, 0.85, 0.95), vec3(0.95, 1.0, 1.0), vec3(0.4, 0.8, 1.0), 3.0, 3.0, tB);
+        vec4 pA = planet(d, uPl[0], uPlA[0], uPlL[0], vec3(0.55, 0.36, 0.22), vec3(0.95, 0.82, 0.6), vec3(0.85, 0.3, 0.15), vec3(1.0, 0.75, 0.5), 7.0, 0.0, tA);
+        float cover = max(max(pA.w, pB.w), pC.w);
+        c = sky + st * (1.0 - cover) + (1.0 - cover) * (smoothstep(0.9993, 0.9996, md) * vec3(1.6, 1.55, 1.4) + pow(max(md, 0.0), 300.0) * vec3(0.3, 0.35, 0.5));
+        c = mix(c, pC.rgb, pC.w) + pC.rgb * (1.0 - pC.w);
+        c = mix(c, pB.rgb, pB.w) + pB.rgb * (1.0 - pB.w);
+        c = mix(c, pA.rgb, pA.w) + pA.rgb * (1.0 - pA.w);
+        // the gas giant's rings: the ray meets its equatorial plane between 1.35 and 2.4 radii
+        float den = dot(d, uPlA[0]);
+        if (abs(den) > 1e-4) {
+          float tR = dot(uPl[0].xyz, uPlA[0]) / den, r0 = sin(uPl[0].w);
+          if (tR > 0.0 && (tA < 0.0 || tR < tA)) {
+            float q = length(d * tR - uPl[0].xyz) / r0;
+            float ring = smoothstep(1.35, 1.42, q) * (1.0 - smoothstep(2.3, 2.4, q)) * (0.35 + 0.65 * vnoise(vec3(q * 16.0, 0.0, 0.0))) * (0.8 + 0.2 * sin(q * 150.0));
+            ring *= 1.0 - 0.8 * smoothstep(1.9, 1.95, q) * (1.0 - smoothstep(1.97, 2.02, q));    // the dark gap
+            vec3 rc = mix(vec3(0.75, 0.62, 0.45), vec3(0.95, 0.9, 0.8), vnoise(vec3(q * 12.0)));
+            c = mix(c, rc * 0.85, ring * 0.7);
+          }
+        }
       } else {                                             // GLITCH
         c = vec3(0.0, 0.02, 0.01);
         float gx = step(0.985, fract(u * 72.0)), gy = step(0.97, fract(el * 24.0 - uTime * 0.6));
@@ -3962,6 +4077,8 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
         vec3 blk = floor(vec3(u * 40.0, el * 20.0, floor(uTime * 8.0)));
         if (hash(blk) > 0.93 - uBeat * 0.2) c += vec3(hash(blk + 1.0), hash(blk + 2.0), hash(blk + 3.0)) * 0.9;
       }
+      // a NaN/Inf here would be smeared into black blocks by the bloom's blur chain: drop it
+      c = (c.r + c.g + c.b) * 0.0 == 0.0 ? clamp(c, 0.0, 50.0) : vec3(0.0);
       gl_FragColor = vec4(c, 1.0);
     }`,
 }));
@@ -3994,6 +4111,8 @@ function setChaosMode(m) {
   finishPass.uniforms.uGlitch.value = m === 4 ? 1 : 0;
   finishPass.uniforms.uFlash.value.setRGB(0, 0, 0);
   bloomPass.strength = BLOOM_STRENGTH; bloomPass.threshold = BLOOM_THRESHOLD;
+  ufo.obj.visible = false; ufo.t = -1;
+  if (m === 3) { aimPlanets(); ufo.wait = UFO_FIRST[0] + Math.random() * (UFO_FIRST[1] - UFO_FIRST[0]); }
   if (m === 0) { chaos.saved = null; showTrick('CHAOS OFF'); return; }
   ensureAnalyser();
   for (const g of glowMats) { g.mat.emissive.set(g.color); g.mat.emissiveIntensity = CHAOS_GLOW * g.k; }
@@ -4016,6 +4135,110 @@ function setChaosMode(m) {
   showTrick('CHAOS: ' + CHAOS_MODES[m]);
 }
 function cycleChaos() { setChaosMode((chaos.mode + 1) % CHAOS_MODES.length); }
+
+// STARRY planets hang around the course's overall downhill heading, so you ride towards them:
+// a ringed gas giant just off it, an ice giant off to one side, a small red one high up.
+const PLANETS = [   // [bearing from the downhill heading (rad), elevation (rad), angular radius (rad), axis tilt]
+  [0.35, 0.17, 0.22, 0.45],
+  [-1.4, 0.32, 0.11, -0.2],
+  [2.6, 0.62, 0.05, 0.3],
+];
+function aimPlanets() {
+  const U = chaosSky.material.uniforms;
+  const dn = frames[SAMPLES].p.clone().sub(frames[0].p); dn.y = 0; dn.normalize();
+  const base = Math.atan2(dn.z, dn.x), up = new THREE.Vector3(0, 1, 0);
+  // on the switchbacks you mostly ride across the slope with the hill on one side, so the two big
+  // ones hang out over the valley, one ahead of each traverse direction
+  const leg = IS_SWITCH ? frameAt(sbMidU(0, 0)).tan.clone().setY(0).normalize() : null;
+  const sbHeading = k => Math.atan2(leg.z * k + dn.z * 0.8, leg.x * k + dn.x * 0.8);
+  PLANETS.forEach(([brg, el, rad, tilt], i) => {
+    if (IS_SWITCH && i < 2) brg = sbHeading(i ? -1 : 1) - base;
+    const a = base + brg, dir = new THREE.Vector3(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el));
+    const side = new THREE.Vector3().crossVectors(up, dir).normalize();
+    U.uPl.value[i].set(dir.x, dir.y, dir.z, rad);
+    U.uPlA.value[i].copy(up).applyAxisAngle(side, 0.25).applyAxisAngle(dir, tilt).normalize();
+    // lit from beside and a little behind you: a fat gibbous with the terminator in view
+    U.uPlL.value[i].copy(dir).multiplyScalar(-0.45).addScaledVector(side, 0.85).addScaledVector(up, 0.3).normalize();
+  });
+}
+
+// Once in a blue moon (STARRY only) a UFO zips in, hovers over the road with its beam on, then
+// shoots off up into the sky. Its path is laid out around the rider, so it stays in view at speed.
+const UFO_FIRST = [20, 35];      // seconds after switching STARRY on until the first visit
+const UFO_EVERY = [70, 150];     // seconds between later visits
+const UFO_IN = 1.3, UFO_HOVER = 1.4, UFO_OUT = 0.8;   // zip in, hover, zip off (seconds)
+const ufo = (() => {
+  const obj = new THREE.Group();
+  const hull = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 12),
+    new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.9, roughness: 0.25, emissive: 0x1a2230 }));
+  hull.scale.set(12, 2.2, 12);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(4.6, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.6, 1.4), transparent: true, opacity: 0.85, fog: false }));
+  dome.position.y = 1.2;
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 22, 90, 24, 1, true),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 1.4, 1.0), transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+      depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  beam.position.y = -46;
+  obj.add(hull, dome, beam);
+  const lights = [];
+  for (let i = 0; i < 14; i++) {
+    const a = i / 14 * Math.PI * 2, l = new THREE.Mesh(new THREE.SphereGeometry(0.75, 8, 6), new THREE.MeshBasicMaterial({ fog: false }));
+    l.position.set(Math.cos(a) * 10.8, -0.3, Math.sin(a) * 10.8);
+    obj.add(l); lights.push(l);
+  }
+  obj.visible = false;
+  scene.add(obj);
+  return { obj, beam, lights, t: -1, wait: 1e9, side: 1, spin: 0,
+           basis: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()],
+           S: new THREE.Vector3(), H: new THREE.Vector3(), E: new THREE.Vector3(), prev: new THREE.Vector3() };
+})();
+function summonUfo() {
+  if (chaos.mode !== 3) setChaosMode(3);
+  const fwd = camera.getWorldDirection(new THREE.Vector3()); fwd.y = 0;
+  if (fwd.lengthSq() < 1e-4) fwd.set(0, 0, 1);
+  fwd.normalize();
+  const up = new THREE.Vector3(0, 1, 0), right = new THREE.Vector3().crossVectors(fwd, up);
+  ufo.basis[0].copy(right); ufo.basis[1].copy(up); ufo.basis[2].copy(fwd);
+  ufo.side = Math.random() < 0.5 ? 1 : -1;
+  const sd = ufo.side, rnd = () => Math.random() - 0.5;
+  ufo.S.set(sd * 750, 170, 450);                       // (right, up, forward) from the rider
+  ufo.H.set(sd * -25 + rnd() * 50, 38 + rnd() * 12, 175);
+  ufo.E.set(-sd * 350, 1000, 950);
+  ufo.t = 0; ufo.obj.visible = true;
+  sfx?.ufo(UFO_IN, UFO_HOVER, UFO_OUT);
+}
+const _ufoP = new THREE.Vector3();
+function updateUfo(dt) {
+  if (chaos.mode !== 3) return;
+  if (ufo.t < 0) {
+    if (gameState === 'PLAYING' && (ufo.wait -= dt) <= 0) {
+      summonUfo();
+      ufo.wait = UFO_EVERY[0] + Math.random() * (UFO_EVERY[1] - UFO_EVERY[0]);
+    }
+    return;
+  }
+  ufo.t += dt;
+  const t = ufo.t, ease = x => 1 - Math.pow(1 - x, 3);
+  let beam = 0;
+  if (t < UFO_IN) _ufoP.lerpVectors(ufo.S, ufo.H, ease(t / UFO_IN));
+  else if (t < UFO_IN + UFO_HOVER) {
+    const h = t - UFO_IN;
+    _ufoP.copy(ufo.H).add({ x: Math.sin(h * 5) * 3, y: Math.sin(h * 7.3) * 2, z: 0 });
+    beam = Math.min(1, h * 5, (UFO_HOVER - h) * 5);
+  } else if (t < UFO_IN + UFO_HOVER + UFO_OUT) {
+    const k = (t - UFO_IN - UFO_HOVER) / UFO_OUT;
+    _ufoP.lerpVectors(ufo.H, ufo.E, k * k * k);
+  } else { ufo.t = -1; ufo.obj.visible = false; return; }
+  const [R, Up, F] = ufo.basis;
+  ufo.prev.copy(ufo.obj.position);
+  ufo.obj.position.copy(skater.position).addScaledVector(R, _ufoP.x).addScaledVector(Up, _ufoP.y).addScaledVector(F, _ufoP.z);
+  // bank into the sideways motion, spin the light ring faster when it's moving
+  const vx = ufo.prev.distanceToSquared(ufo.obj.position) > 0 ? ufo.obj.position.clone().sub(ufo.prev).dot(R) / Math.max(dt, 1e-3) : 0;
+  ufo.obj.rotation.set(0, 0, THREE.MathUtils.clamp(-vx * 0.0008, -0.45, 0.45));
+  ufo.spin += dt * (beam ? 3 : 9);
+  ufo.lights.forEach((l, i) => l.material.color.setHSL((i / ufo.lights.length + ufo.spin * 0.15) % 1, 1, 0.5).multiplyScalar(3.5));
+  ufo.beam.material.opacity = beam * (0.22 + chaos.beat * 0.15);
+}
 
 function updateChaos(dt) {
   if (!chaos.mode) return;
@@ -4064,6 +4287,7 @@ function updateChaos(dt) {
   U.uTime.value = chaos.t; U.uBass.value = chaos.bass; U.uMid.value = chaos.mid; U.uHigh.value = chaos.high; U.uBeat.value = chaos.beat;
   U.uSun.value.copy(SUN_LIGHT_DIR);
   chaosSky.position.copy(camera.position);
+  updateUfo(dt);
   finishPass.uniforms.uBeat.value = chaos.beat;
   bloomPass.strength = BLOOM_STRENGTH + 0.15 + (chaos.beat * 0.45 + chaos.bass * 0.15) * CHAOS_PULSE;
   bloomPass.threshold = 1.0;
