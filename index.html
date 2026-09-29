@@ -325,6 +325,7 @@
       <li data-setting="volume">Music Volume <span class="val">70</span></li>
       <li data-setting="sfx">Effects Volume <span class="val">70</span></li>
       <li data-setting="sens">Look Sensitivity <span class="val">100</span></li>
+      <li data-setting="steer">Steering <span class="val">FREE CARVE</span></li>
       <li data-setting="fx">Cinematic FX <span class="val">ON</span></li>
       <li data-action="back">Back</li>
     </ul>
@@ -338,6 +339,7 @@
         <dt><kbd>Shift</kbd> hold</dt><dd>tuck — go faster</dd>
         <dt><kbd>W</kbd> / <kbd>↑</kbd></dt><dd>kick-push</dd>
         <dt><kbd>B</kbd> hold</dt><dd>brake to a stop</dd>
+        <dt><kbd>B</kbd> + <kbd>A</kbd>/<kbd>D</kbd></dt><dd>slide — a tighter turn that scrubs speed (Free Carve steering; switch in Settings)</dd>
         <dt><kbd>K</kbd></dt><dd>kick a racer (or a fan) riding beside you</dd>
         <dt><kbd>9</kbd></dt><dd>skip to just before the finish (testing)</dd>
         <dt><kbd>0</kbd></dt><dd>reset run</dd>
@@ -2726,6 +2728,26 @@ const MAX_HEADING = 0.62;
 // steer authority drops with speed, so at ~60–80 u/s the reachable heading is ~0.45 and
 // loss ≈ 0.45 * 9/100 ≈ 4%/sec. A stand-up slide (out of scope) would be far harsher.
 const CARVE_SCRUB = 9.0;   // speed lost while carving hard
+// --- Free carve (Settings → Steering: FREE CARVE; CLASSIC keeps the lane-style steering above).
+// Classic steers a heading *relative to the road*, so the road turns you through every bend. Free
+// carve steers a *turn rate*: let go and the board holds its line while the road bends away under
+// it, so every corner has to be carved — miss one and you're on the grass, the rail or over the edge.
+// Grip caps the turn rate at speed (turn ≤ grip / speed); brake + steer slides for a tighter turn
+// that scrubs speed (the way into a hairpin when you come in hot).
+const CARVE_TURN        = 1.8;   // rad/s turn rate at full lock, at low speed
+const CARVE_GRIP        = 40;    // u/s² sideways grip: a level-2 hairpin (R 70) holds ~53 u/s
+const SLIDE_GRIP        = 85;    // brake + steer: a slide turns up to this hard…
+const SLIDE_DECEL       = 16;    // …and scrubs this much (u/s², plus a speed-proportional part)
+const CARVE_ASSIST      = 0;     // rad/s the board eases back to the road's line with no steer (level 1 bends turn only 0.05–0.2 rad/s, so much above 0.03 steers them for you)
+const CARVE_MAX_HEADING = 1.25;  // never more than this across the road (no riding back up the hill)
+const CARVE_SCRUB_TURN  = 0.07;  // speed lost per (rad/s of turn × speed); ≈ classic's CARVE_SCRUB at full lock
+let carveRate = 0;               // this frame's carve turn rate (rad/s), for the scrub
+const carveOn = () => settings.steer === 'carve';
+// signed horizontal bend of the road at u (rad per unit length, + = turning toward +side)
+function roadCurv(u) {
+  const x = THREE.MathUtils.clamp(u, 0, 1) * SAMPLES, i = Math.min(SAMPLES - 1, Math.floor(x)), k = x - i;
+  return THREE.MathUtils.lerp(CURV[i].dot(frames[i].side), CURV[i + 1].dot(frames[i + 1].side), k);
+}
 const OFFROAD_DRAG = 9.0;
 const BRAKE_DECEL = 30;    // u/s² while braking (plus a speed-proportional part)
 
@@ -3214,10 +3236,25 @@ function update(dt) {
   if (finish.crossed) return updateCoast(dt, inp, f, slope);
   if (grind.on) return updateGrind(dt, inp, f, slope, jumpPressed);
 
-  // steering -> heading (less authority at very high speed, like real carving)
-  const authority = THREE.MathUtils.clamp(1.3 - state.speed / 120, 0.35, 1.1);
-  const targetHeading = -state.steerSmooth * MAX_HEADING * authority * (state.airborne ? AIR_STEER : 1);
-  state.heading += (targetHeading - state.heading) * Math.min(1, dt * TURN_RATE * 3);
+  // steering -> heading. Classic: heading relative to the road (less authority at very high speed).
+  // Free carve: steer sets a turn rate and the road's bend turns the road away under you; level 3's
+  // stunt sections (loops, banks) stay classic
+  const carve = carveOn() && !(IS_LOOP && inStunt(f));
+  const kap = carve ? roadCurv(state.u) : 0;
+  const pathK = carve ? THREE.MathUtils.clamp(1 - kap * state.lateral, 0.5, 1.5) : 1;   // inside of a bend is a shorter way round
+  state.sliding = carve && inp.brake && !state.airborne && Math.abs(state.steerSmooth) > 0.3;
+  if (carve) {
+    const cap = Math.min(CARVE_TURN, (state.sliding ? SLIDE_GRIP : CARVE_GRIP) / Math.max(state.speed, 1));
+    carveRate = -state.steerSmooth * cap * (state.airborne ? AIR_STEER : 1);
+    let dh = carveRate - kap * state.speed * Math.cos(state.heading) / pathK;
+    if (Math.abs(state.steerSmooth) < 0.1 && !state.airborne) dh -= Math.sign(state.heading) * Math.min(Math.abs(state.heading) / dt, CARVE_ASSIST);
+    state.heading = THREE.MathUtils.clamp(state.heading + dh * dt, -CARVE_MAX_HEADING, CARVE_MAX_HEADING);
+    if (state.crashT > 0) state.heading *= Math.exp(-dt * 2);   // down and sliding: settle along the road
+  } else {
+    const authority = THREE.MathUtils.clamp(1.3 - state.speed / 120, 0.35, 1.1);
+    const targetHeading = -state.steerSmooth * MAX_HEADING * authority * (state.airborne ? AIR_STEER : 1);
+    state.heading += (targetHeading - state.heading) * Math.min(1, dt * TURN_RATE * 3);
+  }
 
   // speed integration
   const drag = (inp.tuck || (IS_LOOP && inStunt(f)) ? DRAG_TUCK : DRAG_UP);
@@ -3225,14 +3262,15 @@ function update(dt) {
   const flying = IS_LOOP && state.airborne;              // level 3's gap is a 5-second flight: no drag in the air, or the lip's launch falls short
   if (!flying) accel -= drag * state.speed * state.speed;
   if (!flying) accel -= ROLL;
-  if (!state.atEdge) accel -= Math.abs(state.heading) * state.speed * (CARVE_SCRUB / 100);   // pinned on a rail isn't a carve
+  if (!state.atEdge) accel -= carve ? Math.abs(carveRate) * state.speed * CARVE_SCRUB_TURN   // pinned on a rail isn't a carve
+                                    : Math.abs(state.heading) * state.speed * (CARVE_SCRUB / 100);
 
   // grass drag past the road edge — but not where rails hold you on the asphalt (level 2, the bridge):
   // riding along the rail there counted as off-road and dragged you to a stop
   const offroad = Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1.0 && IS_RIDGE && !onBridge(state.u);
   if (offroad && !state.airborne) accel -= OFFROAD_DRAG;
   // brakes (B / LT): a foot-drag stop — strong enough to hold you still on the steepest pitch
-  if ((inp.brake || state.crashT > 0) && !state.airborne) accel -= BRAKE_DECEL + state.speed * 0.3;
+  if ((inp.brake || state.crashT > 0) && !state.airborne) accel -= state.sliding ? SLIDE_DECEL + state.speed * 0.15 : BRAKE_DECEL + state.speed * 0.3;
 
   state.speed = Math.max(0, state.speed + accel * dt);
 
@@ -3287,7 +3325,7 @@ function update(dt) {
   const forward = state.speed * Math.cos(state.heading);
   const strafe  = state.speed * Math.sin(state.heading);
   const uPrev = state.u;
-  state.u += (forward * dt) / TOTAL_LEN;
+  state.u += (forward * dt) / pathK / TOTAL_LEN;
   state.lateral += strafe * dt;
 
   // course features crossed this step (ramps / pickups), then gap check on the new position
@@ -3401,7 +3439,7 @@ function place(info) {
   // switch stance turns the whole board + rider 180° (animated — that's the revert); the carve
   // lean is applied inside that turn, so flip it with the stance to keep leaning into the carve
   stanceYaw += ((stance === 1 ? 0 : Math.PI) - stanceYaw) * Math.min(1, dt * 12);
-  const slideYaw = grind.on && grind.name === 'BOARDSLIDE' ? Math.PI / 2 : 0;
+  const slideYaw = grind.on && grind.name === 'BOARDSLIDE' ? Math.PI / 2 : state.sliding ? -state.steerSmooth * 0.7 : 0;   // free-carve slide kicks the board round
   slideYawAnim += (slideYaw - slideYawAnim) * Math.min(1, dt * 14);
   lean.rotation.y = stanceYaw + slideYawAnim;
   lean.rotation.z = grind.on ? -grind.bal * 0.45 * (grind.name === 'BOARDSLIDE' ? -1 : 1) : -state.steerSmooth * 0.5;   // board across the rail: needle side flips
@@ -4816,12 +4854,15 @@ function updateChaos(dt) {
 // ------------------------------------------------------------------
 let gameState = 'PLAYING';   // COUNTDOWN | PLAYING | PIT | STATS | ENTRY | RESULTS | END | PAUSED | SETTINGS | CONTROLS | TRACKS | TITLE | BRAWL | SELECT | RACE | WORLD
 let menuIndex = 0;
-const settings = { volume: 70, sfx: SFX_DEFAULT, sens: 100 };
+// steer: 'carve' (free carve) or 'classic' (the road turns you); remembered, and each has its own local board
+const STEER_KEY = 'downhill.steer';
+const settings = { volume: 70, sfx: SFX_DEFAULT, sens: 100, steer: 'carve' };
+try { if (localStorage.getItem(STEER_KEY) === 'classic') settings.steer = 'classic'; } catch {}
 audio.volume = settings.volume / 100;
 
 const menuEl = document.getElementById('menu');
 const titleEl = document.getElementById('title');
-const items = { main: ['resume', 'tracks', 'settings', 'controls', 'quit'], settings: ['volume', 'sfx', 'sens', 'fx', 'back'], controls: ['back'] };
+const items = { main: ['resume', 'tracks', 'settings', 'controls', 'quit'], settings: ['volume', 'sfx', 'sens', 'steer', 'fx', 'back'], controls: ['back'] };
 const inSubmenu = () => gameState === 'SETTINGS' || gameState === 'CONTROLS';
 const inMenu = () => gameState === 'PAUSED' || inSubmenu();
 const curScreen = () => (gameState === 'SETTINGS' ? 'settings' : gameState === 'CONTROLS' ? 'controls' : 'main');
@@ -4838,6 +4879,7 @@ function renderValues() {
   menuEl.querySelector('[data-setting="volume"] .val').textContent = settings.volume;
   menuEl.querySelector('[data-setting="sfx"] .val').textContent = settings.sfx;
   menuEl.querySelector('[data-setting="sens"] .val').textContent = settings.sens;
+  menuEl.querySelector('[data-setting="steer"] .val').textContent = carveOn() ? 'FREE CARVE' : 'CLASSIC';
   menuEl.querySelector('[data-setting="fx"] .val').textContent = fx.on ? 'ON' : 'OFF';
 }
 
@@ -4894,7 +4936,7 @@ function unlockOnFinish(place) {
 }
 function bestTime(i, night = false) {
   try {
-    const runs = JSON.parse(localStorage.getItem(LEVELS[i].lbKey + (night ? '.night' : ''))) || [];
+    const runs = JSON.parse(localStorage.getItem(LEVELS[i].lbKey + (night ? '.night' : '') + (carveOn() ? '.carve' : ''))) || [];
     return runs.length ? Math.min(...runs.map(r => r.timeS)) : null;
   } catch { return null; }
 }
@@ -5015,6 +5057,7 @@ function adjustSetting(item, dir) {
   else if (item === 'sfx') { settings.sfx = THREE.MathUtils.clamp(settings.sfx + dir * 5, 0, 100); sfx?.setVolume(settings.sfx); }
   else if (item === 'sens') { settings.sens = THREE.MathUtils.clamp(settings.sens + dir * 5, 25, 300); lookSensMul = settings.sens / 100; }
   else if (item === 'fx') fx.on = !fx.on;
+  else if (item === 'steer') { settings.steer = carveOn() ? 'classic' : 'carve'; try { localStorage.setItem(STEER_KEY, settings.steer); } catch {} }
   renderValues();
 }
 function menuNav(code) {
@@ -5167,14 +5210,16 @@ function pollMenuGamepad(dt) {
 // Ranked by fastest completion time for now; each entry also stores top speed,
 // distance and score so a future rank-toggle can sort by any metric via compareBy[].
 // ------------------------------------------------------------------
-const LB_KEY = LV.lbKey + (NIGHT ? '.night' : '');
+// free-carve runs keep their own local board (and stay off the world board) while it's an experiment
+const lbKeyNow = () => LV.lbKey + (NIGHT ? '.night' : '') + (carveOn() ? '.carve' : '');
 const LB_LEVEL = LV.id + (NIGHT ? '-night' : '');   // the world board's level id               // localStorage key for this level's leaderboard (level 1 keeps 'downhill.scores')
 // Global leaderboard (Supabase). Paste the project URL and its anon / publishable key to turn on the
 // WORLD board; left blank, scores stay local only. The key is meant to be public: the table's
 // row-level security only lets anyone read and add scores (see supabase/schema.sql).
 const SUPABASE_URL = 'https://daugbbqekkptwycxcahy.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_gQUP3UcNCJEmzNz1Uzm9oA_GdMFu-eM';
-const WORLD_ON = !!(SUPABASE_URL && SUPABASE_KEY) && location.protocol.startsWith('http');
+const WORLD_LIVE = !!(SUPABASE_URL && SUPABASE_KEY) && location.protocol.startsWith('http');
+const worldOn = () => WORLD_LIVE && !carveOn();   // no world board for free carve yet (it needs its own level ids in supabase/schema.sql)
 const NAME_KEY = 'downhill.initials';  // last initials the player entered
 const LB_MAX = 8;                      // rows kept on the board
 const ENTRY_LEN = 3;                   // arcade initials
@@ -5239,8 +5284,8 @@ function showRace() {                         // 2) this race's standings
   raceTimer = setInterval(() => { if (gameState === 'RACE') renderRace(); else clearInterval(raceTimer); }, 500);
 }
 
-function loadScores() { try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; } catch { return []; } }
-function saveScores(s) { try { localStorage.setItem(LB_KEY, JSON.stringify(s)); } catch {} }
+function loadScores() { try { return JSON.parse(localStorage.getItem(lbKeyNow())) || []; } catch { return []; } }
+function saveScores(s) { try { localStorage.setItem(lbKeyNow(), JSON.stringify(s)); } catch {} }
 
 let lastInitials = 'AAA';
 try { lastInitials = ((localStorage.getItem(NAME_KEY) || 'AAA') + 'AAA').slice(0, 3).toUpperCase(); } catch {}
@@ -5363,7 +5408,7 @@ function sbHeaders(extra = {}) {
 }
 const fromRow = r => ({ id: r.id, name: r.name, timeS: r.time_s, score: r.score, combo: r.combo, airTime: r.air_time, topSpeed: r.top_speed });
 function fetchWorld(key, force = false) {
-  if (!WORLD_ON || (world.tops[key] && !force) || world.loading[key]) return world.loading[key] || Promise.resolve();
+  if (!worldOn() || (world.tops[key] && !force) || world.loading[key]) return world.loading[key] || Promise.resolve();
   const url = `${SUPABASE_URL}/rest/v1/scores?select=id,name,time_s,score,combo,air_time,top_speed`
             + `&level=eq.${LB_LEVEL}&order=${WORLD_COLS[key]}&limit=${LB_MAX}`;
   return world.loading[key] = fetch(url, { headers: sbHeaders() })
@@ -5375,14 +5420,14 @@ function fetchWorld(key, force = false) {
 function refreshWorld() { world.tops = {}; for (const c of LB_CATS) fetchWorld(c.key); }
 // would this run make the world top LB_MAX on any ranking? (unknown boards count as "yes")
 function placesWorld(rec) {
-  if (!WORLD_ON) return false;
+  if (!worldOn()) return false;
   return LB_CATS.some(c => {
     const top = world.tops[c.key];
     return !top || top.length < LB_MAX || top.filter(s => compareBy[c.key](s, rec) < 0).length < LB_MAX;
   });
 }
 function postWorld(rec) {
-  if (!WORLD_ON) return;
+  if (!worldOn()) return;
   const body = { level: LB_LEVEL, name: rec.name, time_s: rec.timeS, score: rec.score, combo: rec.combo || 0,
                  air_time: rec.airTime || 0, top_speed: rec.topSpeed, rider: RIDERS[riderIdx]?.name || null };
   fetch(`${SUPABASE_URL}/rest/v1/scores`, { method: 'POST', headers: sbHeaders({ Prefer: 'return=representation' }), body: JSON.stringify(body) })
@@ -5418,7 +5463,7 @@ function showWorld() {                         // after ALL TIME: the global boa
   results.el.dataset.stage = 'world';
   renderWorld();
 }
-const afterBoard = () => WORLD_ON ? showWorld() : showEnd();
+const afterBoard = () => worldOn() ? showWorld() : showEnd();
 
 function showBoard(scores) {
   gameState = 'RESULTS';
