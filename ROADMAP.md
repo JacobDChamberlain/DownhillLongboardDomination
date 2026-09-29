@@ -30,8 +30,11 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
    for clean landings, and a **9** debug key that skips to just before the finish line.
 2. **Presentation:** pre-race course flyover, level 1 sea giants, sound effects.
 3. **New riders:** Hesher, Mime, Cthulhu (safe to use).
-4. Later: difficulty levels + cheat codes, unlockable riders, free carving, night tracks, weapons in
-   hand (water bottle explosions), mobile, online.
+4. **Starry mode upgrade** (done).
+5. **Track select screen + unlock progression**, then **night tracks** with the unlock screen.
+6. Then **2-player** — only after the user has played 5.
+7. Later: difficulty levels + cheat codes, unlockable riders, free carving, weapons in hand (water
+   bottle explosions), mobile.
 
 ---
 
@@ -80,9 +83,10 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
   Real steering means a free heading on the road surface, so you can take hairpins with
   a drift/carve (NFS Underground 2-style grip → slide), or miss the turn, hit the rail and fly
   off the ledge. Biggest mechanics change on the list; do it before more switchback maps.
-- [ ] **Night tracks** — night versions of each track, unlocked by beating the day one
-  (with an unlock notification). Street lights and nightlife lights; fireflies in the level 1
-  forest.
+- [ ] **Night tracks** — night versions of each track, unlocked by winning (1st) the day one.
+  Street lights and nightlife lights; fireflies in the level 1 forest. **Unlock screen:** right
+  after the FINISH! screen when one unlocks, the night track's screenshot goes from blacked
+  out/faded to fully visible with a quick lock-breaking animation.
 - [x] **Loop-de-loop track** — *done: level 3 "Loop Heights" (`?level=3`): a sky course on pillars —
   a loop, three shrinking loops in a row, a lip into a ~540-unit gap, a figure-8 banked nearly sideways
   at its ends, a mountain-sized loop (R 230), the finish. Real loop physics (fall off if too slow over
@@ -90,8 +94,13 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
   for everyone (CPUs too). A last half-twist hangs the run-out and finish pit upside down (crowd
   and all; the track holds you there).* Ideas: a crash-cam replay of falls, loop-specific trick
   points, a pit brawl on the ceiling (off in level 3's upside-down pit for now).
-- [ ] Fleshed-out track select — previews, best times, on the title screen *(basic Track Select
-  in the Esc menu + Next Race are done)*.
+- [ ] **Track select screen + unlocks** *(basic Track Select in the Esc menu + Next Race are done)*.
+  Flow: title → track select → rider select → race. Three windows with a screenshot of each track;
+  move to pick one, the selected one highlighted; each night track sits under its day track.
+  Unlocks (saved locally), starting with only level 1 open:
+  - finish level 1 (any place) → level 2; 1st on level 1 → level 1 night
+  - finish level 2 (any place) → level 3; 1st on level 2 → level 2 night
+  - 1st on level 3 → level 3 night
 - [ ] Keep the rider out of the mountain on level 1 (parked — "reminds me of the old days").
 
 ## ✨ Quick wins (from the second wishlist)
@@ -110,12 +119,18 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
   done in the finish-flow update.*
 
 ## 🎨 Presentation & chaos modes
-- [ ] **Pickups brighter**, stand out more (labels and beams are in; push the glow/size).
+- [x] **Pickups brighter**, stand out more (labels and beams are in; push the glow/size).
 - [x] **Sound effects** — *done: all synthesized (Web Audio, no files): ollie pop, landing thud + sketchy scrape, crash, rolling-wheels loop (grittier on grass), grind scrape loop, pickup chime, boost whoosh, punch/kick smack + swing, crowd roar by proximity with cheers, sea splashes; Effects Volume in Settings.* Was: — ollie pop, grind loop, landing, crash, crowd cheers (synth or CC0).
 - [ ] **Rave mode** — glowsticks on the crowd; more bass (low-shelf boost on the music via Web
   Audio; only works over http(s), like the analyser).
-- [ ] **Starry mode** — brighter stars, more cosmic activity: huge nearby planets with flowing
-  storms, and once in a blue moon a UFO zips by.
+- [x] **Starry mode** — *done: coloured stars in four layers (the bright ones bloom), drifting
+  nebula clouds along the milky band, shooting stars, three planets hung around each course's
+  heading (a ringed gas giant, an ice giant, a small red one; over the valley on level 2) with
+  bands that shear by latitude, a churning storm vortex, atmosphere glow and night-side lightning
+  that bursts on the beat. Once in a blue moon (first visit 20–35 s in, then every 70–150 s) a UFO
+  zips in, hovers over the road with its beam on to a theremin warble, and shoots off. Debug: **8**
+  switches to STARRY and calls the UFO.* Was: brighter stars, more cosmic activity: huge nearby
+  planets with flowing storms, and once in a blue moon a UFO zips by.
 - [ ] Meme/image skies (need image assets).
 - [x] **Pre-race course flyover:** before the start cam cuts to you, a short tour of the track's
   highlights (the gap, the loops, the bridge). Hand-picked camera points per level, skippable like
@@ -180,6 +195,7 @@ that method (keep the shared `audioCtx`; don't create a context mid-run).
 | [ ] Punch / kick swing | `sfx.swing()` | throwing a punch or kick in the pit brawl |
 | [ ] Hit smack | `sfx.hit()` | a punch/kick landing; kicking a racer or a fan |
 | [ ] Splash | `sfx.splash(dist)` | a whale or dolphin leaving or entering the lake (level 1) |
+| [ ] UFO warble | `sfx.ufo(in, hover, out)` | the STARRY-mode UFO flying in, hovering and zipping off |
 | [ ] Countdown beeps | `beep()` | the three start lights (not in `sfx`; uses the music volume) |
 
 Nice-to-haves once real audio is in: wind rush at speed, board clack on kicks, a crowd "ohhh" on
