@@ -83,7 +83,7 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
   Real steering means a free heading on the road surface, so you can take hairpins with
   a drift/carve (NFS Underground 2-style grip → slide), or miss the turn, hit the rail and fly
   off the ledge. Biggest mechanics change on the list; do it before more switchback maps.
-- [ ] **Night tracks** — night versions of each track, unlocked by winning (1st) the day one.
+- [x] **Night tracks** — *done: `?night=1` on any level: moonlit starry sky with a big moon ahead, moonlight shadows, street lamps with light pools (levels 1–2), a rider headlamp, fireflies in the trees, glowsticks in the crowd, sweeping searchlights, neon road edges on level 3; own local + world leaderboards (re-run `supabase/schema.sql` for the `*-night` level ids). The unlock screen after FINISH! plays for every unlock (lock rattles, pops and cracks in half, the track fades in).* Was: night versions of each track, unlocked by winning (1st) the day one.
   Street lights and nightlife lights; fireflies in the level 1 forest. **Unlock screen:** right
   after the FINISH! screen when one unlocks, the night track's screenshot goes from blacked
   out/faded to fully visible with a quick lock-breaking animation.
@@ -135,6 +135,8 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
 - [x] **Pre-race course flyover:** before the start cam cuts to you, a short tour of the track's
   highlights (the gap, the loops, the bridge). Hand-picked camera points per level, skippable like
   the current flyover.
+- [x] **Level 3 monsters:** *done: a hideous Lovecraftian leviathan (~2500 long, 5× the whale: lamprey maw ringed with teeth, burning throat, a spray of glowing eyes, writhing face tentacles, bone spines) leaps up out of the depths and threads the monster loop's hoop as you reach the top; three demon dragons (horned, glowing eyes, ember-lit hides, flapping bat wings) weave over and under the figure-8 while you ride it.*
+- [x] **End menu:** Next Race (straight into it, same rider) / Restart / Quit, centred; pause menu options centred.
 - [x] **Level 1 sea giants:** mountain-sized whales and dolphins breaching out of the lake beside
   the course and arcing *over the bridge*. Needs a CC0 whale/dolphin model (or a stylized
   procedural one), a breach path + splash, and one timed to cross as you ride the viaduct.
@@ -152,7 +154,7 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
 
 ## 👤 Characters & customization
 - [x] **Character select** — *done: a turntable carousel before the race (on load, from the title
-  screen, and "Change Rider" on the end screen); ← → spins, Enter rides, last pick remembered.
+  screen; to switch riders, Quit → track select → rider select); ← → spins, Enter rides, last pick remembered.
   Eight Quaternius riders on the same rig + THE OG (box rider, own board).* Still open: stats per
   rider, the OG in the pit brawl (he has no animations), rider-specific boards.
 - [ ] **Keep the OG version playable** — the pre-visual-upgrade build is commit `c66d8dc`
@@ -195,6 +197,7 @@ that method (keep the shared `audioCtx`; don't create a context mid-run).
 | [ ] Punch / kick swing | `sfx.swing()` | throwing a punch or kick in the pit brawl |
 | [ ] Hit smack | `sfx.hit()` | a punch/kick landing; kicking a racer or a fan |
 | [ ] Splash | `sfx.splash(dist)` | a whale or dolphin leaving or entering the lake (level 1) |
+| [ ] Unlock | `sfx.unlock()` | the lock breaking on the unlock screen |
 | [ ] UFO warble | `sfx.ufo(in, hover, out)` | the STARRY-mode UFO flying in, hovering and zipping off |
 | [ ] Countdown beeps | `beep()` | the three start lights (not in `sfx`; uses the music volume) |
 

@@ -119,6 +119,38 @@
   .title-big { font-size: 84px; font-weight: 900; letter-spacing: 8px; text-shadow: 0 6px 30px rgba(0,0,0,.7); }
   .title-sub { font-size: 18px; opacity: .8; margin-top: 12px; }
 
+  /* unlock screen (after FINISH!): the lock rattles, pops, cracks in half, and the track fades in */
+  #unlock { position: fixed; inset: 0; z-index: 26; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #fff; user-select: none; background: rgba(6,10,22,.8); backdrop-filter: blur(4px); padding: 16px; box-sizing: border-box; }
+  #unlock.hidden { display: none; }
+  .ul-title { font-size: 46px; font-weight: 900; letter-spacing: 6px; color: #ffd23c; text-shadow: 0 0 22px rgba(255,210,60,.6); margin-bottom: 4vh; text-align: center; }
+  .ul-cards { display: flex; gap: 3vw; flex-wrap: wrap; justify-content: center; }
+  .ul-card { position: relative; width: min(40vw, 520px); --d: 0s; }
+  .ul-frame { position: relative; border-radius: 16px; overflow: hidden; border: 2px solid rgba(255,210,60,.0);
+    animation: ulFrame .6s calc(var(--d) + .75s) forwards; }
+  .ul-shot { aspect-ratio: 16 / 9; background: #0b1224 center / cover no-repeat; filter: grayscale(1) brightness(.12) blur(3px); transform: scale(1.08);
+    animation: ulReveal 1.1s calc(var(--d) + .7s) cubic-bezier(.2,.7,.2,1) forwards; }
+  .ul-flash { position: absolute; inset: 0; background: radial-gradient(circle, rgba(255,245,200,.95), rgba(255,210,60,.3) 40%, transparent 70%);
+    opacity: 0; animation: ulFlash .7s calc(var(--d) + .68s) ease-out; pointer-events: none; }
+  .ul-lock { position: absolute; left: 50%; top: 50%; width: 22%; aspect-ratio: 1; transform: translate(-50%, -50%);
+    animation: ulRattle .5s var(--d) ease-in-out; }
+  .ul-lock svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 4px 12px rgba(0,0,0,.8)); }
+  .ul-shackle { animation: ulShackle .35s calc(var(--d) + .45s) cubic-bezier(.3,1.6,.5,1) forwards, ulFade .3s calc(var(--d) + .8s) forwards; transform-origin: 66% 45%; }
+  .ul-left  { animation: ulLeft  .7s calc(var(--d) + .7s) cubic-bezier(.3,.6,.6,1) forwards; }
+  .ul-right { animation: ulRight .7s calc(var(--d) + .7s) cubic-bezier(.3,.6,.6,1) forwards; }
+  .ul-name { margin-top: 14px; font-size: 24px; font-weight: 900; letter-spacing: 3px; text-align: center; opacity: 0; animation: ulUp .5s calc(var(--d) + 1.2s) forwards; }
+  .ul-sub { font-size: 13px; font-weight: 800; letter-spacing: 4px; text-align: center; color: #8fb8ff; opacity: 0; animation: ulUp .5s calc(var(--d) + 1.35s) forwards; }
+  @keyframes ulRattle { 0%,100% { rotate: 0deg; } 15% { rotate: -9deg; } 30% { rotate: 8deg; } 45% { rotate: -7deg; } 60% { rotate: 6deg; } 75% { rotate: -3deg; } }
+  @keyframes ulShackle { to { transform: translateY(-16%) rotate(28deg); } }
+  @keyframes ulLeft  { to { transform: translate(-70%, 60%) rotate(-40deg); opacity: 0; } }
+  @keyframes ulRight { to { transform: translate(70%, 55%) rotate(38deg); opacity: 0; } }
+  @keyframes ulFade { to { opacity: 0; } }
+  @keyframes ulFlash { 0% { opacity: 0; transform: scale(.4); } 25% { opacity: 1; } 100% { opacity: 0; transform: scale(1.4); } }
+  @keyframes ulReveal { to { filter: none; transform: scale(1); } }
+  @keyframes ulFrame { to { border-color: #ffd23c; box-shadow: 0 0 36px rgba(255,210,60,.5); } }
+  @keyframes ulUp { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
+  @media (max-width: 700px) { .ul-card { width: 86vw; } .ul-title { font-size: 30px; } }
+
   /* track select: day tracks on top, each night version right under it */
   #tracksel { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center;
     color: #fff; user-select: none; background: rgba(6,10,22,.7); backdrop-filter: blur(4px); padding: 16px; box-sizing: border-box; }
@@ -129,9 +161,6 @@
     opacity: .6; transform: scale(.94); transition: transform .18s, opacity .18s, border-color .18s, box-shadow .18s; background: #0b1224; }
   .ts-card.sel { opacity: 1; transform: scale(1.04); border-color: #ffd23c; box-shadow: 0 0 0 2px rgba(255,210,60,.35), 0 0 34px rgba(255,210,60,.45); z-index: 1; }
   .ts-shot { aspect-ratio: 16 / 9; background: linear-gradient(160deg, #36507a, #121a30) center / cover no-repeat; }
-  .ts-card.night .ts-shot { filter: brightness(.42) saturate(.55) hue-rotate(185deg); }
-  .ts-card.night .ts-shot::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 78% 22%, rgba(210,225,255,.5) 0 3%, transparent 4%),
-    linear-gradient(180deg, rgba(20,30,90,.45), rgba(0,0,20,.2)); }
   .ts-card.locked .ts-shot { filter: grayscale(1) brightness(.22) blur(2px); }
   .ts-label { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 12px 9px; display: flex; justify-content: space-between; align-items: baseline;
     background: linear-gradient(transparent, rgba(0,0,0,.78)); }
@@ -231,6 +260,7 @@
   #results:not([data-stage="end"]) #rend { display: none; }
   #results[data-stage="end"] .rboard > :not(#rend) { display: none; }
   .rmenu { min-width: 320px; }
+  .rmenu li, .menu-panel[data-screen="main"] .menu-list li { justify-content: center; }
   .rhint { margin-top: 22px; font-size: 13px; letter-spacing: 2px; opacity: .7; text-align: center; }
 </style>
 </head>
@@ -356,6 +386,12 @@
   <div class="title-sub">Press Enter / click to ride</div>
 </div>
 
+<div id="unlock" class="hidden">
+  <div class="ul-title">UNLOCKED!</div>
+  <div class="ul-cards"></div>
+  <div class="menu-hint">Enter / A to continue</div>
+</div>
+
 <div id="tracksel" class="hidden">
   <div class="ts-title">CHOOSE YOUR TRACK</div>
   <div class="ts-grid"></div>
@@ -392,7 +428,7 @@
     <div id="rcontinue" class="rhint blink">Enter / A / click — continue · ← → rankings</div>
     <div class="rhint brawl">F + J — step off your board</div>
     <div id="rend">
-      <ul class="menu-list rmenu"><li data-r="restart" class="sel">Restart</li><li data-r="next">Next Race</li><li data-r="rider">Change Rider</li><li data-r="quit">Quit</li></ul>
+      <ul class="menu-list rmenu"><li data-r="next" class="sel">Next Race</li><li data-r="restart">Restart</li><li data-r="quit">Quit</li></ul>
       <div class="menu-hint">↑ ↓ to choose · Enter / A to select · F + J step off your board</div>
     </div>
   </div>
@@ -417,15 +453,16 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 // final screen reloads into the next one, carrying the song + playback position across.
 // ------------------------------------------------------------------
 const LEVELS = [
-  { id: 'ridge',  name: 'RIDGE RUN',       lbKey: 'downhill.scores',            shot: 'assets/tracks/ridge.jpg' },
-  { id: 'switch', name: 'SWITCHBACK PASS', lbKey: 'downhill.scores.switchback', shot: 'assets/tracks/switch.jpg' },
-  { id: 'loops',  name: 'LOOP HEIGHTS',    lbKey: 'downhill.scores.loops',      shot: 'assets/tracks/loops.jpg' },
+  { id: 'ridge',  name: 'RIDGE RUN',       lbKey: 'downhill.scores',            shot: 'assets/tracks/ridge.jpg', shotNight: 'assets/tracks/ridge-night.jpg' },
+  { id: 'switch', name: 'SWITCHBACK PASS', lbKey: 'downhill.scores.switchback', shot: 'assets/tracks/switch.jpg', shotNight: 'assets/tracks/switch-night.jpg' },
+  { id: 'loops',  name: 'LOOP HEIGHTS',    lbKey: 'downhill.scores.loops',      shot: 'assets/tracks/loops.jpg', shotNight: 'assets/tracks/loops-night.jpg' },
 ];
 const LEVEL_IDX = THREE.MathUtils.clamp((parseInt(new URLSearchParams(location.search).get('level'), 10) || 1) - 1, 0, LEVELS.length - 1);
 const LV = LEVELS[LEVEL_IDX];
 const IS_SWITCH = LV.id === 'switch';
 const IS_RIDGE = LV.id === 'ridge';   // level 1: grass shoulders, cliffs, bridge, mountain walls
-const IS_LOOP = LV.id === 'loops';    // level 3: loops, a huge gap, a banked figure-8 — track frames can go upside down
+const IS_LOOP = LV.id === 'loops';
+const NIGHT = new URLSearchParams(location.search).get('night') === '1';   // the night version (unlocked by winning the day one)    // level 3: loops, a huge gap, a banked figure-8 — track frames can go upside down
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -634,6 +671,7 @@ const _proj = new THREE.Vector3();
 // Aim the radial blur at the point we're travelling toward, scaled by speed.
 function setSpeedFx(pos, dir, speedT, blurMul) {
   _proj.copy(pos).addScaledVector(dir, 200).project(camera);
+  if (!Number.isFinite(_proj.x) || !Number.isFinite(_proj.y)) _proj.set(0, 0, 0);   // a NaN centre would black out the whole frame
   speedPass.uniforms.uCenter.value.set(
     THREE.MathUtils.clamp(_proj.x * 0.5 + 0.5, 0.2, 0.8),
     THREE.MathUtils.clamp(_proj.y * 0.5 + 0.5, 0.2, 0.8));
@@ -1839,6 +1877,7 @@ function aimHdri(tex, az) {
 }
 
 (async () => {
+  if (NIGHT) return;                     // night tracks light themselves (see "Night tracks")
   try {
     const hdr = await new RGBELoader().setDataType(THREE.FloatType).loadAsync(HDRI_URL);
     const horizon = aimHdri(hdr, SUN_AZIMUTH);
@@ -2529,6 +2568,7 @@ const crowd = [];             // { mixer, obj }
       action.play(); action.time = rnd() * action.getClip().duration;
       action.timeScale = 0.85 + rnd() * 0.3;
       mixer.update(0);
+      if (NIGHT && rnd() < 0.6) addGlowstick(person, rnd);
       scene.add(person);
       const meshes = []; person.traverse(o => { if (o.isMesh) meshes.push(o); });
       crowd.push({ mixer, obj: person, meshes, shadow: true, action, death: clips.death, rotY: person.rotation.y, pos0: person.position.clone(), down: false });
@@ -2754,6 +2794,7 @@ function resetRun() {
   run.t = 0; run.topSpeed = 0; run.dist = 0; run.airTime = 0; run.score = 0; run.bestCombo = 0;
   combo.n = combo.pts = combo.t = 0; state.crashT = 0; state.free = false; state.atEdge = false; state.slideV = 0;
   sea.bridgeDone = false; sea.showsDone = [];
+  resetMonsters();
   push.meter = 1; push.cd = 0; kickWasDown = false;
   trick.type = null; trick.spin = 0; trick.air = 0; trick.grab = false;
   if (rig.mixer) rig.mixer.stopAllAction();
@@ -3805,6 +3846,11 @@ const sfx = (() => {
       const k = THREE.MathUtils.clamp(1 - dist / 2200, 0.05, 1);
       noise({ type: 'lowpass', f: 1600, to: 300, dur: 1.6, gain: 0.9 * k, attack: 0.03 }); tone({ f: 70, to: 35, dur: 0.8, gain: 0.6 * k });
     },
+    // lock breaking: a metallic clack, then a rising chime
+    unlock() {
+      noise({ type: 'bandpass', f: 3200, q: 3, dur: 0.12, gain: 0.6 }); tone({ type: 'square', f: 520, to: 260, dur: 0.1, gain: 0.12 });
+      [660, 880, 1320, 1760].forEach((f, k) => tone({ type: 'triangle', f, dur: 0.35, gain: 0.22, delay: 0.1 + k * 0.08 }));
+    },
     // theremin warble for the UFO: glides in, hums while it hovers, zwoops off
     ufo(tin, thov, tout) {
       const t0 = live(), o = ctx.createOscillator(), lfo = ctx.createOscillator(), lg = ctx.createGain(), g = ctx.createGain();
@@ -3953,12 +3999,15 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
     uPl: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
     uPlA: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
     uPlL: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
+    uPlanets: { value: 1 },
+    uNeb: { value: 1 },                                                      // nebula strength (quieter on the night tracks)                                                  // 0 on the night tracks' plain night sky
+    uMoon: { value: new THREE.Vector4(0.5, 0.45, -0.75, 0.03).normalize().setW(0.03) },   // direction + angular radius
   },
   vertexShader: `varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: `
     const float CHAOS_PULSE_GLSL = ${CHAOS_PULSE.toFixed(3)};
     uniform float uMode, uTime, uHue0, uPulse, uBass, uMid, uHigh, uBeat; uniform sampler2D uFreq; uniform vec3 uSun;
-    uniform vec4 uPl[3]; uniform vec3 uPlA[3], uPlL[3];
+    uniform vec4 uPl[3]; uniform vec3 uPlA[3], uPlL[3]; uniform float uPlanets, uNeb; uniform vec4 uMoon;
     varying vec3 vD;
     float hash(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
     float vnoise(vec3 p){
@@ -4072,28 +4121,34 @@ const chaosSky = new THREE.Mesh(new THREE.SphereGeometry(9000, 64, 32), new THRE
         // the milky band + drifting nebula clouds (violet, teal, rose) along it
         float n1 = fbm3(d * 2.5 + vec3(0.0, uTime * 0.006, 0.0));   // 3 octaves: this runs on every sky pixel
         float n2 = fbm3(d * 5.0 + n1 * 2.2);
-        c += band * vec3(0.10, 0.08, 0.16) * (0.3 + n2);
+        c += band * vec3(0.10, 0.08, 0.16) * (0.3 + n2) * (0.5 + 0.5 * uNeb);
         vec3 neb = mix(mix(vec3(0.45, 0.1, 0.6), vec3(0.05, 0.45, 0.55), smoothstep(0.35, 0.65, n1)), vec3(0.7, 0.2, 0.35), smoothstep(0.6, 0.8, n2));
-        c += neb * smoothstep(0.42, 0.8, n2) * exp(-bandD * bandD * 3.24) * (0.35 + 0.25 * uMid);
+        c += neb * smoothstep(0.42, 0.8, n2) * exp(-bandD * bandD * 3.24) * (0.35 + 0.25 * uMid) * uNeb;
         // stars: a dense faint field, a brighter one, rare very bright ones, extra dust in the band
         vec3 st = starLayer(d, 150.0, 0.93, 0.9) + starLayer(d, 70.0, 0.965, 1.6) * (0.8 + uHigh * 0.8)
                 + starLayer(d, 32.0, 0.985, 2.6) + band * starLayer(d, 320.0, 0.9, 0.6);
-        vec3 moon = normalize(vec3(0.5, 0.45, -0.75));
-        float md = dot(d, moon);
+        // the moon: a cratered disc with a soft halo
+        float mdot = dot(d, uMoon.xyz), mr = uMoon.w, ma = acos(clamp(mdot, -1.0, 1.0));
+        float disc = 1.0 - smoothstep(mr * 0.96, mr, ma);
+        vec3 moonC = disc * vec3(1.5, 1.47, 1.35) * (0.8 + 0.2 * vnoise(d * 900.0)) * (1.0 - 0.3 * smoothstep(0.55, 0.75, vnoise(d * 240.0)))
+                   + (1.0 - disc) * step(0.0, mdot) * exp(-max(ma - mr, 0.0) / (mr * 1.6)) * vec3(0.22, 0.27, 0.42);
         vec3 sky = c + meteors(d);
         // the planets, nearest drawn last so it covers the others; stars only where no planet is
-        float tA, tB, tC;
-        vec4 pC = planet(d, uPl[2], uPlA[2], uPlL[2], vec3(0.55, 0.2, 0.1), vec3(0.85, 0.45, 0.25), vec3(1.0, 0.8, 0.5), vec3(1.0, 0.45, 0.3), 5.0, 7.0, tC);
-        vec4 pB = planet(d, uPl[1], uPlA[1], uPlL[1], vec3(0.15, 0.45, 0.7), vec3(0.55, 0.85, 0.95), vec3(0.95, 1.0, 1.0), vec3(0.4, 0.8, 1.0), 3.0, 3.0, tB);
-        vec4 pA = planet(d, uPl[0], uPlA[0], uPlL[0], vec3(0.55, 0.36, 0.22), vec3(0.95, 0.82, 0.6), vec3(0.85, 0.3, 0.15), vec3(1.0, 0.75, 0.5), 7.0, 0.0, tA);
+        float tA = -1.0, tB = -1.0, tC = -1.0;
+        vec4 pA = vec4(0.0), pB = vec4(0.0), pC = vec4(0.0);
+        if (uPlanets > 0.5) {
+          pC = planet(d, uPl[2], uPlA[2], uPlL[2], vec3(0.55, 0.2, 0.1), vec3(0.85, 0.45, 0.25), vec3(1.0, 0.8, 0.5), vec3(1.0, 0.45, 0.3), 5.0, 7.0, tC);
+          pB = planet(d, uPl[1], uPlA[1], uPlL[1], vec3(0.15, 0.45, 0.7), vec3(0.55, 0.85, 0.95), vec3(0.95, 1.0, 1.0), vec3(0.4, 0.8, 1.0), 3.0, 3.0, tB);
+          pA = planet(d, uPl[0], uPlA[0], uPlL[0], vec3(0.55, 0.36, 0.22), vec3(0.95, 0.82, 0.6), vec3(0.85, 0.3, 0.15), vec3(1.0, 0.75, 0.5), 7.0, 0.0, tA);
+        }
         float cover = max(max(pA.w, pB.w), pC.w);
-        c = sky + st * (1.0 - cover) + (1.0 - cover) * (smoothstep(0.9993, 0.9996, md) * vec3(1.6, 1.55, 1.4) + pow(max(md, 0.0), 300.0) * vec3(0.3, 0.35, 0.5));
+        c = sky + st * (1.0 - cover) * (1.0 - disc) + (1.0 - cover) * moonC;
         c = mix(c, pC.rgb, pC.w) + pC.rgb * (1.0 - pC.w);
         c = mix(c, pB.rgb, pB.w) + pB.rgb * (1.0 - pB.w);
         c = mix(c, pA.rgb, pA.w) + pA.rgb * (1.0 - pA.w);
         // the gas giant's rings: the ray meets its equatorial plane between 1.35 and 2.4 radii
         float den = dot(d, uPlA[0]);
-        if (abs(den) > 1e-4) {
+        if (uPlanets > 0.5 && abs(den) > 1e-4) {
           float tR = dot(uPl[0].xyz, uPlA[0]) / den, r0 = sin(uPl[0].w);
           if (tR > 0.0 && (tA < 0.0 || tR < tA)) {
             float q = length(d * tR - uPl[0].xyz) / r0;
@@ -4138,9 +4193,11 @@ function setChaosMode(m) {
   if (chaos.mode === 0 && m !== 0) chaos.saved = saveWorld();
   if (chaos.saved) restoreWorld(chaos.saved);
   chaos.mode = m;
-  chaosSky.visible = m !== 0;
-  skyDome.visible = m === 0;   // the fallback sky (file://) would draw over the chaos sky
-  chaosSky.material.uniforms.uMode.value = m;
+  chaosSky.visible = m !== 0 || NIGHT;   // night tracks keep the starry sky (minus the planets) with chaos off
+  skyDome.visible = m === 0 && !NIGHT;   // the fallback sky (file://) would draw over the chaos sky
+  chaosSky.material.uniforms.uMode.value = m || (NIGHT ? 3 : 0);
+  chaosSky.material.uniforms.uPlanets.value = m === 3 ? 1 : 0;
+  chaosSky.material.uniforms.uNeb.value = m === 3 || !NIGHT ? 1 : NIGHT_NEBULA;
   finishPass.uniforms.uGlitch.value = m === 4 ? 1 : 0;
   finishPass.uniforms.uFlash.value.setRGB(0, 0, 0);
   bloomPass.strength = BLOOM_STRENGTH; bloomPass.threshold = BLOOM_THRESHOLD;
@@ -4273,8 +4330,429 @@ function updateUfo(dt) {
   ufo.beam.material.opacity = beam * (0.22 + chaos.beat * 0.15);
 }
 
+// ------------------------------------------------------------------
+// Night tracks (?night=1) — the same course by moonlight. No HDRI: the starry sky without its
+// planets and a big moon ahead, moonlight as the shadow light, street lamps (levels 1–2) whose
+// light pools are additive decals plus a few real point lights that hop to the lamps nearest the
+// rider, a headlamp on the rider, fireflies in the trees, glowsticks in the crowd, searchlights
+// sweeping the sky, and neon road edges on level 3. Chaos modes save/restore on top of all this.
+// ------------------------------------------------------------------
+const NIGHT_FOG      = 0x070b18;   // fog + far-scenery haze
+const NIGHT_EXPOSURE = 1.3;        // tone-mapping exposure (day is 1.05)
+const NIGHT_NEBULA   = 0.3;        // nebula strength in the night sky (STARRY mode is 1)
+const MOON_ELEV      = 0.3;        // radians above the horizon, on the gas giant's bearing (ahead)
+const LAMP_SPACING   = 64;         // world units between street lamps (they alternate sides)
+const LAMP_H         = 8.5;        // lamp head height above the road
+const LAMP_REACH     = 2.4;        // how far the arm leans out over the road
+const LAMP_COLOR     = 0xffc27a;
+const LAMP_LIGHTS    = 6;          // real point lights, moved to the lamps nearest the rider
+const LAMP_LUX       = 70;         // their intensity (decay 1.6)
+const HEADLAMP       = 240;        // the rider's forward spotlight intensity (decay 1.5)
+const FIREFLIES_PER_TREE = 4;
+const SEARCHLIGHTS   = 6;
+const GLOW_COLS = [0x39ff6a, 0xff3cc8, 0x3cd2ff, 0xffe03c, 0xff7a2a];   // crowd glowsticks
+const night = { lamps: [], lights: [], flies: null, beams: [], t: 0, pick: 0 };
+const glowGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.42, 6);
+// a glowstick in a spectator's hand (called from the crowd spawner at night)
+function addGlowstick(person, rnd) {
+  let hand = null;
+  person.traverse(o => { if (!hand && o.isBone && /hand|wrist|fist/i.test(o.name) && /(R|Right|_r)$/.test(o.name)) hand = o; });
+  if (!hand) person.traverse(o => { if (!hand && o.isBone && /hand|wrist|fist/i.test(o.name)) hand = o; });
+  if (!hand) return;
+  person.updateMatrixWorld(true);
+  const ws = hand.getWorldScale(new THREE.Vector3());
+  const stick = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(GLOW_COLS[Math.floor(rnd() * GLOW_COLS.length)]).multiplyScalar(3.2), fog: false }));
+  stick.scale.setScalar(1 / ws.x);
+  stick.position.y = 0.12 / ws.x;
+  stick.rotation.x = 0.4;
+  hand.add(stick);
+}
+function radialTex(inner = 'rgba(255,255,255,1)') {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const cx = cv.getContext('2d'), g = cx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, inner); g.addColorStop(0.35, 'rgba(255,255,255,.55)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  cx.fillStyle = g; cx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(cv);
+}
+if (NIGHT) {
+  // --- sky, moon, light
+  aimPlanets();                                          // the planets stay hidden; the moon takes the big one's bearing
+  const U = chaosSky.material.uniforms, pd = U.uPl.value[0], ph = Math.hypot(pd.x, pd.z) || 1;
+  const moonDir = new THREE.Vector3(pd.x / ph * Math.cos(MOON_ELEV), Math.sin(MOON_ELEV), pd.z / ph * Math.cos(MOON_ELEV));
+  U.uMoon.value.set(moonDir.x, moonDir.y, moonDir.z, 0.045);
+  U.uMode.value = 3; U.uPlanets.value = 0; U.uNeb.value = NIGHT_NEBULA;
+  chaosSky.visible = true; skyDome.visible = false;
+  SUN_LIGHT_DIR.copy(moonDir).setY(Math.max(moonDir.y, 0.5)).normalize();   // a bit higher than the moon: less of the course in shadow
+  sun.color.set(0x9fb4ff); sun.intensity = 1.0;
+  hemi.color.set(0x4a5f9a); hemi.groundColor.set(0x14180f); hemi.intensity = 0.5;
+  scene.environment = null;
+  scene.background = new THREE.Color(0x02040a);
+  scene.fog.color.set(NIGHT_FOG);
+  for (const h of hazeMats) h.mat.color.set(NIGHT_FOG).multiplyScalar(1.5);
+  renderer.toneMappingExposure = NIGHT_EXPOSURE;
+  // road paint: faintly reflective on the mountain roads, neon on the sky course
+  for (const g of glowMats) {
+    const neon = IS_LOOP ? (g.color === 0xffd21a ? 0xff3cc8 : 0x33e0ff) : g.color;
+    g.mat.emissive.set(neon); g.mat.emissiveIntensity = (IS_LOOP ? 1.5 : 0.22) * g.k;
+  }
+
+  // --- street lamps (the mountain roads)
+  if (!IS_LOOP) {
+    const poolTex = radialTex();
+    let side = 1;
+    for (let d = 70; d < TOTAL_LEN - 20; d += LAMP_SPACING) {
+      const u = d / TOTAL_LEN;
+      if (GAPS.some(g => u > g.u0 - 0.004 && u < g.u1 + 0.004)) continue;
+      side = -side;
+      const lat = onBridge(u) ? ROAD_HALF_WIDTH + 1.0 : ROAD_HALF_WIDTH + 2.4;
+      const sd = !inPit(u) && wallAt(u, side * lat) ? -side : side;
+      const f = frameAt(u), sideFlat = new THREE.Vector3(f.side.x, 0, f.side.z).normalize();
+      const base = f.p.clone().addScaledVector(f.side, sd * lat);
+      const head = base.clone().add(new THREE.Vector3(0, LAMP_H, 0)).addScaledVector(sideFlat, -sd * LAMP_REACH);
+      const pool = f.p.clone().addScaledVector(f.side, sd * (lat - LAMP_REACH - 2)).addScaledVector(f.up, 0.07);
+      night.lamps.push({ u, base, head, pool, f, sd, sideFlat });
+    }
+    const n = night.lamps.length, M = new THREE.Matrix4(), q = new THREE.Quaternion(), X = new THREE.Vector3(1, 0, 0);
+    const postMat = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.6, metalness: 0.5 });
+    const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.24, LAMP_H, 6), postMat, n);
+    const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(LAMP_REACH + 0.3, 0.14, 0.14), postMat, n);
+    const heads = new THREE.InstancedMesh(new THREE.BoxGeometry(1.2, 0.22, 0.55),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(LAMP_COLOR).multiplyScalar(4), fog: false }), n);
+    const pools = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
+      map: poolTex, color: LAMP_COLOR, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -4, side: THREE.DoubleSide }), n);
+    night.lamps.forEach((L, i) => {
+      q.setFromUnitVectors(X, L.sideFlat);
+      M.compose(L.base.clone().setY(L.base.y + LAMP_H / 2), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1)); posts.setMatrixAt(i, M);
+      M.compose(L.base.clone().setY(L.base.y + LAMP_H).addScaledVector(L.sideFlat, -L.sd * LAMP_REACH / 2), q, new THREE.Vector3(1, 1, 1)); arms.setMatrixAt(i, M);
+      M.compose(L.head, q, new THREE.Vector3(1, 1, 1)); heads.setMatrixAt(i, M);
+      const nrm = new THREE.Vector3().crossVectors(L.f.side, L.f.tan).normalize();
+      M.makeBasis(L.f.side, L.f.tan, nrm).scale(new THREE.Vector3(24, 24, 1)).setPosition(L.pool); pools.setMatrixAt(i, M);
+    });
+    posts.castShadow = true;
+    for (const m of [posts, arms, heads, pools]) { m.frustumCulled = false; scene.add(m); }
+    for (let i = 0; i < LAMP_LIGHTS; i++) {
+      const l = new THREE.PointLight(LAMP_COLOR, 0, 55, 1.6);
+      scene.add(l); night.lights.push(l);
+    }
+  }
+
+  // --- the rider's headlamp (on the skater, so it doesn't spin with air tricks)
+  const head = new THREE.SpotLight(0xfff1dd, HEADLAMP, 110, 0.5, 0.65, 1.5);
+  head.position.set(0, 3.2, -1.2);
+  head.target.position.set(0, 0, 28);
+  skater.add(head, head.target);
+
+  // --- fireflies drifting and blinking round the trees
+  if (trees.length) {
+    const pos = [], phase = [];
+    let seed = 4242; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (const t of trees) for (let k = 0; k < FIREFLIES_PER_TREE; k++) {
+      const a = rnd() * Math.PI * 2, r = 2 + rnd() * 7;
+      pos.push(t.p.x + Math.cos(a) * r, t.p.y + 0.8 + rnd() * 4.5, t.p.z + Math.sin(a) * r); phase.push(rnd());
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('aPhase', new THREE.Float32BufferAttribute(phase, 1));
+    night.flies = new THREE.Points(geo, new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: { uTime: { value: 0 }, uPx: { value: renderer.getPixelRatio() } },
+      vertexShader: `uniform float uTime, uPx; attribute float aPhase; varying float vA;
+        void main(){
+          float t = uTime, k = aPhase * 6.2831;
+          vec3 p = position + vec3(sin(t * 0.7 + k), 0.5 * sin(t * 0.9 + k * 2.0), cos(t * 0.6 + k * 3.0)) * 1.4;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          vA = pow(0.5 + 0.5 * sin(t * (1.1 + aPhase * 1.4) + k * 7.0), 6.0);
+          gl_PointSize = clamp((1.5 + 4.0 * vA) * uPx * 90.0 / max(-mv.z, 1.0), 0.0, 14.0 * uPx);
+        }`,
+      fragmentShader: `varying float vA;
+        void main(){ float r = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vec3(0.75, 1.0, 0.3) * 3.0 * vA * (1.0 - smoothstep(0.0, 0.5, r)), 1.0); }`,
+    }));
+    night.flies.frustumCulled = false;
+    scene.add(night.flies);
+  }
+
+  // --- searchlights sweeping the sky from far below the course
+  {
+    const box = new THREE.Box3(); for (const f of frames) box.expandByPoint(f.p);
+    const c = box.getCenter(new THREE.Vector3()), R = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2 + 700;
+    const beamMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+      uniforms: { uCol: { value: new THREE.Color(0.55, 0.65, 1.0) } },
+      // brightest down the beam's axis, fading to nothing at its silhouette edges and its far end
+      vertexShader: `varying float vY; varying vec3 vN, vV;
+        void main(){ vY = uv.y; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz);
+          gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `uniform vec3 uCol; varying float vY; varying vec3 vN, vV;
+        void main(){ float edge = pow(abs(dot(normalize(vN), normalize(vV))), 2.5);
+          gl_FragColor = vec4(uCol * 0.2 * edge * pow(clamp(1.0 - vY, 0.0, 1.0), 1.6) * smoothstep(0.0, 0.1, vY), 1.0); }`,   // clamp: pow of a negative is NaN
+    });
+    const LEN = 3200, geo = new THREE.CylinderGeometry(130, 6, LEN, 24, 1, true);
+    geo.translate(0, LEN / 2, 0);                        // pivot at the base (uv.y runs 0 there → 1 at the tip)
+    for (let i = 0; i < SEARCHLIGHTS; i++) {
+      const a = i / SEARCHLIGHTS * Math.PI * 2 + 0.3;
+      const beam = new THREE.Mesh(geo, beamMat);
+      beam.position.set(c.x + Math.cos(a) * R, box.min.y - (IS_LOOP ? 350 : 120), c.z + Math.sin(a) * R);
+      beam.frustumCulled = false; beam.renderOrder = 5;
+      scene.add(beam); night.beams.push({ beam, ph: i * 1.7, sp: 0.15 + (i % 3) * 0.06 });
+    }
+  }
+}
+// ------------------------------------------------------------------
+// Level 3 monsters — a Lovecraftian leviathan (5× the whale) leaps up out of the depths and
+// threads the monster loop's hoop while you ride round it, and three demon dragons weave through
+// the figure-8 as you race it (no fog on them: level 3's haze would flatten them to a grey /
+// black band). Both are chains of instanced segments laid along a path every
+// frame; the leviathan's leap is scrubbed by your progress round the loop (its head passes
+// through the hoop as you reach the top), the dragons just fly laps of a wider figure-8.
+// ------------------------------------------------------------------
+const LEVI_SEGS   = 40;      // body segments…
+const LEVI_SPACE  = 62;      // …this far apart: ~2500 long, 5× the whale
+const LEVI_R      = 140;     // body radius at the head: with spines + tentacles it stays inside the 230 hoop (and off the track)
+const LEVI_REACH  = 1700;    // the leap starts / ends this far out either side of the hoop…
+const LEVI_DEPTH  = 900;     // …and this far below it
+const LEVI_ANGLE  = 0.7;     // radians off square to the hoop, coming at you from ahead so it's in view (and still clears the track)
+const LEVI_OUT_RATE = 0.075; // path fraction per second once you're past the loop (it dives away)
+const DRAGONS     = 3;
+const DRAGON_SEGS = 26, DRAGON_SPACE = 7.5, DRAGON_R = 7.5;
+const DRAGON_SPEED = 0.8;    // lemniscate radians per second
+const monsters = { levi: null, dragons: null };
+{
+  const rnd = (() => { let seed = 777; return () => (seed = (seed * 16807) % 2147483647) / 2147483647; })();
+  // a lumpy, warty unit blob, mottled with vertex colours
+  function lumpGeo(detail, amp, c1, c2) {
+    const g = new THREE.SphereGeometry(1, 12 + detail * 8, 8 + detail * 6), p = g.attributes.position, col = [];   // indexed, so the normals come out smooth
+    const n3 = (x, y, z) => Math.sin(x * 5.1 + Math.sin(y * 3.7)) * Math.sin(y * 4.3 + Math.sin(z * 2.9)) * Math.sin(z * 6.1 + x);
+    const A = new THREE.Color(c1), B = new THREE.Color(c2), c = new THREE.Color();
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = n3(x, y, z), wart = Math.max(0, Math.sin(x * 23) * Math.sin(y * 19) * Math.sin(z * 21)) ** 3;
+      const r = 1 + amp * k + wart * amp * 1.4;
+      p.setXYZ(i, x * r, y * r, z * r);
+      c.copy(A).lerp(B, THREE.MathUtils.clamp(0.5 + k * 1.3, 0, 1)); col.push(c.r, c.g, c.b);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    return g;
+  }
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), S = new THREE.Vector3(), Z = new THREE.Vector3(0, 0, 1);
+
+  if (IS_LOOP) {
+    // ---------- the leviathan
+    const L = LP.loops[LP.loops.length - 1];                     // the monster loop
+    const top = frameAt(lpU(L.s0 + Math.PI * L.R)).p, f0 = frameAt(lpU(L.s0));
+    const C = top.clone(); C.y -= L.R;                            // the hoop's centre
+    const Hf = new THREE.Vector3(f0.tan.x, 0, f0.tan.z).normalize();
+    const N = Hf.clone().cross(new THREE.Vector3(0, 1, 0)).normalize()                     // through the hoop…
+      .multiplyScalar(Math.cos(LEVI_ANGLE)).addScaledVector(Hf, -Math.sin(LEVI_ANGLE));    // …angled to start out ahead of you
+    const path = (t, out = new THREE.Vector3()) => {              // a parabola through C, t 0 → 1
+      const x = 2 * t - 1;
+      return out.copy(C).addScaledVector(N, LEVI_REACH * x).setY(C.y + LEVI_DEPTH * (1 - x * x) - LEVI_DEPTH);
+    };
+    let len = 0; { const a = new THREE.Vector3(), b = new THREE.Vector3(); for (let i = 0; i < 200; i++) len += path(i / 200, a).distanceTo(path((i + 1) / 200, b)); }
+    const skin = new THREE.MeshStandardMaterial({ fog: false, vertexColors: true, roughness: 0.45, metalness: 0.15, emissive: NIGHT ? 0x3a1650 : 0x160a1c, emissiveIntensity: NIGHT ? 0.7 : 1 });
+    const bone = new THREE.MeshStandardMaterial({ fog: false, color: 0xc9bd98, roughness: 0.7 });
+    const flesh = new THREE.MeshStandardMaterial({ fog: false, color: 0x6a1420, roughness: 0.4, emissive: 0x2a0306 });
+    const g = new THREE.Group(); g.visible = false; scene.add(g);
+    const body = new THREE.InstancedMesh(lumpGeo(3, 0.14, 0x1d2a1c, 0x4a2a52), skin, LEVI_SEGS);
+    const spikes = new THREE.InstancedMesh(new THREE.ConeGeometry(0.16, 1, 5).translate(0, 0.5, 0), bone, LEVI_SEGS * 3);
+    const tentN = 12, tentJ = 18;
+    const tents = new THREE.InstancedMesh(lumpGeo(1, 0.2, 0x2a1830, 0x5c2a3a), skin, tentN * tentJ);
+    // bioluminescent photophores in rows down both flanks (what you see of it in the dark)
+    const glow = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshBasicMaterial({ fog: false, color: new THREE.Color(0.5, 2.2, 2.0) }), LEVI_SEGS * 4);
+    for (const m of [body, spikes, tents, glow]) { m.frustumCulled = false; g.add(m); }
+    // the face: a lamprey maw ringed with teeth, a burning throat, a spray of eyes
+    const head = new THREE.Group(); g.add(head);
+    const maw = new THREE.Mesh(new THREE.TorusGeometry(LEVI_R * 0.72, LEVI_R * 0.16, 12, 40), flesh); maw.position.z = LEVI_R * 0.82; head.add(maw);
+    const throat = new THREE.Mesh(new THREE.CircleGeometry(LEVI_R * 0.62, 32), new THREE.MeshBasicMaterial({ fog: false, color: new THREE.Color(1.6, 0.35, 0.1) }));
+    throat.position.z = LEVI_R * 0.8; head.add(throat);
+    const teeth = new THREE.InstancedMesh(new THREE.ConeGeometry(LEVI_R * 0.07, LEVI_R * 0.4, 5).translate(0, LEVI_R * 0.2, 0), bone, 72);
+    for (let ring = 0; ring < 2; ring++) for (let i = 0; i < 36; i++) {
+      const a = i / 36 * Math.PI * 2 + ring * 0.09, r = LEVI_R * (0.66 - ring * 0.14);
+      Q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-Math.cos(a), -Math.sin(a), 0.5 + ring * 0.4).normalize());
+      M.compose(V.set(Math.cos(a) * r, Math.sin(a) * r, LEVI_R * (0.86 - ring * 0.08)), Q, S.set(1, 0.8 + rnd() * 0.6, 1)); teeth.setMatrixAt(ring * 36 + i, M);
+    }
+    head.add(teeth);
+    const eyeMat = new THREE.MeshBasicMaterial({ fog: false, color: new THREE.Color(2.4, 3.0, 0.5) });
+    const eyes = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 8), eyeMat, 22);
+    for (let i = 0; i < 22; i++) {
+      const a = rnd() * Math.PI * 2, ring = 0.95 + rnd() * 0.3, z = 0.35 + rnd() * 0.35;
+      M.compose(V.set(Math.cos(a) * LEVI_R * ring, Math.sin(a) * LEVI_R * ring, LEVI_R * z), Q.identity(), S.setScalar(LEVI_R * (0.04 + rnd() * 0.07))); eyes.setMatrixAt(i, M);
+    }
+    head.add(eyes);
+    monsters.levi = { g, head, body, spikes, tents, glow, path, len, t: 0, done: false,
+      uIn: lpU(L.s0 - 150), uTop: lpU(L.s0 + Math.PI * L.R), uOut: lpU(L.s1 + 150), tentN, tentJ,
+      segR: k => LEVI_R * (1 - 0.82 * (k / LEVI_SEGS) ** 0.8) };
+
+    // ---------- the dragons
+    const e = LP.eight, s0 = lpU(e.s0), s1 = lpU(e.s1);
+    const pts = []; for (let i = 0; i <= 100; i++) pts.push(frameAt(s0 + (s1 - s0) * i / 100).p);
+    const c8 = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
+    let sxx = 0, sxz = 0, szz = 0; for (const p of pts) { const dx = p.x - c8.x, dz = p.z - c8.z; sxx += dx * dx; sxz += dx * dz; szz += dz * dz; }
+    const ang = 0.5 * Math.atan2(2 * sxz, sxx - szz);            // the 8's long axis
+    const u1 = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang)), u2 = new THREE.Vector3(-u1.z, 0, u1.x);
+    const A = e.A * 1.3, B = e.B * 1.55;
+    const dpath = (w, ph, out = new THREE.Vector3()) => out.copy(c8).addScaledVector(u1, A * Math.sin(w)).addScaledVector(u2, B * Math.sin(2 * w))
+      .setY(c8.y + 34 * Math.sin(3 * w + ph) + 6);
+    const hide = new THREE.MeshStandardMaterial({ fog: false, color: 0x1a0707, roughness: 0.5, metalness: 0.3, emissive: 0xff3a0a, emissiveIntensity: NIGHT ? 0.35 : 0.14, vertexColors: true });
+    const dg = new THREE.Group(); dg.visible = false; scene.add(dg);
+    const dbody = new THREE.InstancedMesh(lumpGeo(2, 0.12, 0x2a0a0a, 0x0c0404), hide, DRAGONS * DRAGON_SEGS);
+    const dspikes = new THREE.InstancedMesh(new THREE.ConeGeometry(0.2, 1, 4).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({ fog: false, color: 0x0a0505, roughness: 0.4 }), DRAGONS * DRAGON_SEGS);
+    for (const m of [dbody, dspikes]) { m.frustumCulled = false; dg.add(m); }
+    const wingShape = new THREE.Shape();
+    wingShape.moveTo(0, 0); wingShape.lineTo(10, 8); wingShape.lineTo(34, 16); wingShape.lineTo(58, 6);
+    wingShape.quadraticCurveTo(48, 2, 46, -6); wingShape.quadraticCurveTo(36, -2, 32, -12); wingShape.quadraticCurveTo(22, -6, 16, -16); wingShape.quadraticCurveTo(8, -8, 0, -8);
+    const wingGeo = new THREE.ShapeGeometry(wingShape).rotateX(-Math.PI / 2);   // spans +X, lies flat, chord along Z
+    const wingMat = new THREE.MeshStandardMaterial({ fog: false, color: 0x3a0808, emissive: 0x5a0a02, emissiveIntensity: NIGHT ? 0.5 : 0.2, side: THREE.DoubleSide, roughness: 0.8 });
+    const hornMat = new THREE.MeshStandardMaterial({ fog: false, color: 0x151010, roughness: 0.3, metalness: 0.4 });
+    const dEyeMat = new THREE.MeshBasicMaterial({ fog: false, color: new THREE.Color(3.2, 1.6, 0.2) });
+    const list = [];
+    for (let d = 0; d < DRAGONS; d++) {
+      const hd = new THREE.Group();
+      const skull = new THREE.Mesh(new THREE.ConeGeometry(DRAGON_R * 1.1, DRAGON_R * 4, 6).rotateX(Math.PI / 2), hide); skull.position.z = DRAGON_R * 1.6; skull.scale.set(1, 0.7, 1);
+      const jaw = new THREE.Mesh(new THREE.ConeGeometry(DRAGON_R * 0.8, DRAGON_R * 3.4, 5).rotateX(Math.PI / 2), hide); jaw.position.set(0, -DRAGON_R * 0.7, DRAGON_R * 1.4); jaw.rotation.x = 0.35;
+      hd.add(skull, jaw);
+      for (const sd of [1, -1]) {
+        const horn = new THREE.Mesh(new THREE.ConeGeometry(DRAGON_R * 0.35, DRAGON_R * 3.2, 5), hornMat);
+        horn.position.set(sd * DRAGON_R * 0.6, DRAGON_R * 0.9, -DRAGON_R * 0.2); horn.rotation.set(-1.0, 0, sd * -0.5); hd.add(horn);
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(DRAGON_R * 0.22, 8, 6), dEyeMat); eye.position.set(sd * DRAGON_R * 0.62, DRAGON_R * 0.35, DRAGON_R * 1.3); hd.add(eye);
+      }
+      const wings = [1, -1].map(sd => { const w = new THREE.Mesh(wingGeo, wingMat); w.scale.set(sd, 1, 1); dg.add(w); return w; });
+      dg.add(hd);
+      list.push({ head: hd, wings, ph: d * Math.PI * 2 / DRAGONS });
+    }
+    monsters.dragons = { g: dg, body: dbody, spikes: dspikes, list, dpath, w: 0, arrive: 0, on: false,
+      uOn: lpU(e.s0 - 450), uOff: lpU(e.s1 + 250), perSeg: DRAGON_SPACE / (2 * Math.PI * (A + B) / 2 * 1.2 / (2 * Math.PI)) };
+  }
+}
+const _mV = new THREE.Vector3(), _mA = new THREE.Vector3(), _mB = new THREE.Vector3(), _mT = new THREE.Vector3(), _mU = new THREE.Vector3(), _mR = new THREE.Vector3();
+const _mM = new THREE.Matrix4(), _mQ = new THREE.Quaternion(), _mS = new THREE.Vector3(), _mZ = new THREE.Vector3(0, 0, 1), _mY = new THREE.Vector3(0, 1, 0);
+// a basis whose +Z runs along `t` with +Y as close to world up as it can
+function alongBasis(t, out) {
+  _mU.set(0, 1, 0).addScaledVector(t, -t.y);
+  if (_mU.lengthSq() < 1e-6) _mU.set(1, 0, 0);
+  _mU.normalize(); _mR.crossVectors(_mU, t);
+  return out.makeBasis(_mR, _mU, t);
+}
+function resetMonsters() {
+  if (monsters.levi) { monsters.levi.t = 0; monsters.levi.done = false; monsters.levi.g.visible = false; }
+  if (monsters.dragons) { monsters.dragons.on = false; monsters.dragons.g.visible = false; }
+}
+function updateMonsters(dt) {
+  if (!IS_LOOP) return;
+  const time = performance.now() / 1000;
+  // ---- leviathan: scrubbed by your progress round the monster loop, then it dives off on its own
+  const lv = monsters.levi;
+  if (lv && !lv.done) {
+    const u = state.u;
+    let target = lv.t;
+    if (u >= lv.uIn && u < lv.uTop) target = 0.12 + 0.38 * (u - lv.uIn) / (lv.uTop - lv.uIn);
+    else if (u >= lv.uTop && u < lv.uOut) target = 0.5 + 0.35 * (u - lv.uTop) / (lv.uOut - lv.uTop);
+    if (u >= lv.uIn) lv.t = Math.max(lv.t + (lv.t >= 0.5 && u >= lv.uOut ? LEVI_OUT_RATE * dt : 0), Math.min(target, lv.t + dt * 0.25));
+    const tail = LEVI_SEGS * LEVI_SPACE / lv.len;
+    lv.g.visible = lv.t > 0.05 && lv.t - tail < 1;
+    if (lv.t - tail >= 1) { lv.done = true; lv.g.visible = false; }
+    if (lv.g.visible) {
+      for (let k = 0; k < LEVI_SEGS; k++) {
+        const tk = lv.t - k * LEVI_SPACE / lv.len;
+        lv.path(tk, _mA); lv.path(tk + 0.002, _mB); _mT.subVectors(_mB, _mA).normalize();
+        const r = lv.segR(k) * (1 + 0.06 * Math.sin(time * 2.2 - k * 0.5));       // it breathes / pulses
+        alongBasis(_mT, _mM); _mQ.setFromRotationMatrix(_mM);
+        _mM.compose(_mA, _mQ, _mS.set(r, r, r * 1.35)); lv.body.setMatrixAt(k, _mM);
+        for (let j = 0; j < 3; j++) {                                              // a crest of bone spines + two flank rows
+          const a = [0, 2.2, -2.2][j], h = r * (j ? 0.24 : 0.38);
+          const q2 = _mQ.clone().multiply(new THREE.Quaternion().setFromAxisAngle(_mZ, a));
+          const base = _mA.clone().add(new THREE.Vector3(0, r * 0.9, 0).applyQuaternion(q2));
+          _mM.compose(base, q2, _mS.set(h * 0.9, h, h * 0.9)); lv.spikes.setMatrixAt(k * 3 + j, _mM);
+        }
+        for (let j = 0; j < 4; j++) {                                              // photophores: two rows a side, pulsing down the body
+          const a = [1.25, 1.75, -1.25, -1.75][j] + (k % 2) * 0.12;
+          _mV.set(Math.cos(a) * r * 0.98, Math.sin(a) * r * 0.98, 0).applyQuaternion(_mQ).add(_mA);
+          const pulse = 0.6 + 0.4 * Math.sin(time * 3 - k * 0.45);
+          _mM.compose(_mV, _mQ, _mS.setScalar(r * 0.075 * pulse + 3)); lv.glow.setMatrixAt(k * 4 + j, _mM);
+        }
+        if (k === 0) { lv.head.position.copy(_mA); lv.head.quaternion.copy(_mQ); }
+      }
+      // writhing face tentacles, splayed forward and out round the maw
+      for (let i = 0; i < lv.tentN; i++) {
+        const a = i / lv.tentN * Math.PI * 2, rad = new THREE.Vector3(Math.cos(a), Math.sin(a), 0);
+        for (let j = 0; j < lv.tentJ; j++) {
+          const w = Math.sin(time * 2.6 + j * 0.4 + i * 1.3) * j * 2.2, w2 = Math.cos(time * 2.1 + j * 0.35 + i) * j * 3;
+          // they reach forward out of the maw and writhe, never out past the hoop
+          const out = LEVI_R * 0.85 - j * 1.5;
+          _mV.set(rad.x * out - rad.y * w, rad.y * out + rad.x * w, LEVI_R * 0.9 + j * 16 + w2);
+          const r = LEVI_R * 0.15 * (1 - j / lv.tentJ) + 6;
+          _mM.compose(_mV.applyQuaternion(lv.head.quaternion).add(lv.head.position), _mQ, _mS.setScalar(r)); lv.tents.setMatrixAt(i * lv.tentJ + j, _mM);
+        }
+      }
+      lv.body.instanceMatrix.needsUpdate = lv.spikes.instanceMatrix.needsUpdate = lv.tents.instanceMatrix.needsUpdate = lv.glow.instanceMatrix.needsUpdate = true;
+    }
+  }
+  // ---- dragons: circling the figure-8 while you're on it, flying in from above and off again
+  const dr = monsters.dragons;
+  if (dr) {
+    const inWin = state.u >= dr.uOn && state.u < dr.uOff;
+    if (inWin && !dr.on) { dr.on = true; dr.arrive = 1; }
+    if (!inWin && dr.on && dr.arrive === 0) dr.arrive = -0.001;  // start leaving
+    if (dr.on) {
+      dr.arrive = dr.arrive > 0 ? Math.max(0, dr.arrive - dt / 2.5) : dr.arrive < 0 ? dr.arrive - dt / 3 : 0;
+      if (dr.arrive <= -1) { dr.on = false; dr.g.visible = false; }
+    }
+    dr.g.visible = dr.on;
+    if (dr.on) {
+      dr.w += dt * DRAGON_SPEED;
+      const lift = Math.abs(dr.arrive) ** 2 * 520;                                   // swoop in from / out to the sky
+      dr.list.forEach((d, n) => {
+        for (let k = 0; k < DRAGON_SEGS; k++) {
+          const w = dr.w + d.ph - k * dr.perSeg;
+          dr.dpath(w, d.ph, _mA); dr.dpath(w + 0.01, d.ph, _mB); _mA.y += lift; _mB.y += lift;
+          _mT.subVectors(_mB, _mA).normalize();
+          const r = DRAGON_R * (k < 3 ? 0.9 + k * 0.1 : 1.15 * (1 - (k - 3) / DRAGON_SEGS) ** 0.9 + 0.12);
+          alongBasis(_mT, _mM); _mQ.setFromRotationMatrix(_mM);
+          _mM.compose(_mA, _mQ, _mS.set(r, r, r * 1.5)); dr.body.setMatrixAt(n * DRAGON_SEGS + k, _mM);
+          _mV.set(0, r * 0.95, 0).applyQuaternion(_mQ).add(_mA);
+          _mM.compose(_mV, _mQ, _mS.set(r * 0.7, r * (k % 2 ? 0.8 : 1.3), r * 0.7)); dr.spikes.setMatrixAt(n * DRAGON_SEGS + k, _mM);
+          if (k === 0) { d.head.position.copy(_mA); d.head.quaternion.copy(_mQ); }
+          if (k === 4) d.wings.forEach((wg, i) => {                                // bat wings, flapping
+            wg.position.copy(_mA); wg.quaternion.copy(_mQ);
+            wg.rotateZ((i ? -1 : 1) * (0.25 + 0.75 * Math.sin(time * 5 + n * 2)));
+          });
+        }
+      });
+      dr.body.instanceMatrix.needsUpdate = dr.spikes.instanceMatrix.needsUpdate = true;
+    }
+  }
+}
+
+function updateNight(dt) {
+  if (!NIGHT) return;
+  night.t += dt;
+  if (night.flies) night.flies.material.uniforms.uTime.value = night.t;
+  for (const b of night.beams) b.beam.rotation.set(0.35 * Math.sin(night.t * b.sp + b.ph), 0, 0.45 * Math.cos(night.t * b.sp * 0.8 + b.ph));
+  // hop the real lamp lights to the lamps nearest the rider, a few times a second
+  if (night.lights.length && (night.pick -= dt) <= 0) {
+    night.pick = 0.2;
+    const P = skater.position;
+    const near = night.lamps.map(L => [L.head.distanceToSquared(P), L]).sort((a, b) => a[0] - b[0]).slice(0, night.lights.length);
+    night.lights.forEach((l, i) => {
+      const hit = near[i];
+      if (!hit) { l.intensity = 0; return; }
+      l.position.copy(hit[1].head).y -= 0.4;
+      l.intensity = LAMP_LUX * THREE.MathUtils.clamp(1.4 - Math.sqrt(hit[0]) / 120, 0, 1);
+    });
+  }
+}
+
 function updateChaos(dt) {
-  if (!chaos.mode) return;
+  if (!chaos.mode) {
+    if (NIGHT) {                                          // the plain night sky still twinkles and follows the camera
+      chaos.t += dt;
+      const U = chaosSky.material.uniforms;
+      U.uTime.value = chaos.t; U.uHigh.value = 0.3; U.uMid.value = 0.3; U.uBeat.value = 0; U.uPulse.value = 0;
+      chaosSky.position.copy(camera.position);
+    }
+    return;
+  }
   chaos.t += dt;
   // bands: real spectrum when the analyser is live and music is playing, else a synthetic groove
   let bass, mid, high, flux = 0;
@@ -4366,13 +4844,14 @@ function renderValues() {
 function openMenu()  { gameState = 'PAUSED'; menuIndex = 0; document.exitPointerLock?.(); menuEl.classList.remove('hidden'); showPanel('main'); renderMenu(); }
 function closeMenu() { gameState = 'PLAYING'; menuEl.classList.add('hidden'); }
 function openSettings() { gameState = 'SETTINGS'; menuIndex = 0; showPanel('settings'); renderValues(); renderMenu(); }
-// reload into course n (1-based) and straight on to the rider select; the song carries over
-function gotoLevel(n) {
+// reload into course n (1-based); the song carries over. `then`: 'rider' opens the rider select,
+// 'race' goes straight into a run with the current rider (Next Race)
+function gotoLevel(n, then = 'rider', night = false) {
   try {
     sessionStorage.setItem('downhill.radio', JSON.stringify({ track, time: audio.currentTime, playing: !audio.paused }));
-    sessionStorage.setItem(FLOW_KEY, 'rider');
+    sessionStorage.setItem(FLOW_KEY, then);
   } catch {}
-  location.search = '?level=' + n;
+  location.search = '?level=' + n + (night ? '&night=1' : '');
 }
 function openControls() { gameState = 'CONTROLS'; menuIndex = 0; showPanel('controls'); renderMenu(); }
 function backToMain()   { gameState = 'PAUSED'; menuIndex = 0; showPanel('main'); renderMenu(); }
@@ -4393,8 +4872,8 @@ function activate(item) {
 // the night tracks exist (NIGHT_READY). Picking another track reloads into its rider select.
 // ------------------------------------------------------------------
 const UNLOCK_KEY = 'downhill.unlocks';   // localStorage: { '1': true, '2': true, '1n': true, … }
-const FLOW_KEY = 'downhill.flow';        // sessionStorage: 'rider' = this reload goes straight to the rider select
-const NIGHT_READY = false;
+const FLOW_KEY = 'downhill.flow';        // sessionStorage: what the reload opens — 'rider' (rider select) or 'race' (a run)
+const NIGHT_READY = true;
 const trackKey = (i, night) => (i + 1) + (night ? 'n' : '');
 let unlocks = {};
 try { unlocks = JSON.parse(localStorage.getItem(UNLOCK_KEY)) || {}; } catch {}
@@ -4413,9 +4892,9 @@ function unlockOnFinish(place) {
   if (place === 1 && unlockTrack(LEVEL_IDX, true)) got.push({ i: LEVEL_IDX, night: true });
   return got;
 }
-function bestTime(i) {
+function bestTime(i, night = false) {
   try {
-    const runs = JSON.parse(localStorage.getItem(LEVELS[i].lbKey)) || [];
+    const runs = JSON.parse(localStorage.getItem(LEVELS[i].lbKey + (night ? '.night' : ''))) || [];
     return runs.length ? Math.min(...runs.map(r => r.timeS)) : null;
   } catch { return null; }
 }
@@ -4425,7 +4904,7 @@ const ts = { col: 0, row: 0, from: 'title' };
 const LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.2" fill="rgba(255,255,255,.14)"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.6" r="1.4" fill="#fff" stroke="none"/></svg>';
 tsEl.querySelector('.ts-grid').innerHTML = [0, 1].map(row => LEVELS.map((lv, i) => `
   <div class="ts-card${row ? ' night' : ''}" data-col="${i}" data-row="${row}">
-    <div class="ts-shot" style="background-image:url(${lv.shot}), linear-gradient(160deg, #36507a, #121a30)"></div>
+    <div class="ts-shot" style="background-image:url(${row ? lv.shotNight : lv.shot}), linear-gradient(160deg, #36507a, #121a30)"></div>
     <div class="ts-lock">${LOCK_SVG}</div>
     <div class="ts-soon">COMING SOON</div>
     <div class="ts-label"><span class="ts-name">${row ? '☾ ' : ''}${lv.name}</span><span class="ts-best"></span></div>
@@ -4443,7 +4922,7 @@ function renderTrackSel() {
     c.classList.toggle('locked', !open);
     c.classList.toggle('soon', open && row === 1 && !NIGHT_READY);
     c.classList.toggle('sel', col === ts.col && row === ts.row);
-    const best = row === 0 && open ? bestTime(col) : null;
+    const best = open ? bestTime(col, row === 1) : null;
     c.querySelector('.ts-best').textContent = best != null ? 'BEST ' + fmtTime(best) : '';
   });
   const open = isUnlocked(ts.col, ts.row === 1);
@@ -4453,7 +4932,8 @@ function renderTrackSel() {
 }
 function openTrackSel(from) {
   gameState = 'TRACKSEL'; ts.from = from;
-  ts.row = 0; ts.col = isUnlocked(LEVEL_IDX) ? LEVEL_IDX : 0;
+  ts.row = NIGHT ? 1 : 0; ts.col = isUnlocked(LEVEL_IDX, NIGHT) ? LEVEL_IDX : 0;
+  if (!isUnlocked(ts.col, ts.row === 1)) ts.row = 0;
   menuEl.classList.add('hidden'); titleEl.classList.add('hidden'); results.el.classList.add('hidden');
   tsEl.classList.remove('hidden'); document.body.classList.add('selecting');
   renderTrackSel();
@@ -4471,7 +4951,7 @@ function tsDeny() {
 function pickTrack() {
   const night = ts.row === 1;
   if (!isUnlocked(ts.col, night) || (night && !NIGHT_READY)) return tsDeny();
-  if (ts.col !== LEVEL_IDX) return gotoLevel(ts.col + 1);
+  if (ts.col !== LEVEL_IDX || night !== NIGHT) return gotoLevel(ts.col + 1, 'rider', night);
   tsEl.classList.add('hidden');
   openSelect();
 }
@@ -4497,6 +4977,39 @@ tsCards.forEach(c => {
   c.addEventListener('mouseenter', () => { if (gameState !== 'TRACKSEL') return; ts.col = +c.dataset.col; ts.row = +c.dataset.row; renderTrackSel(); });
   c.addEventListener('click', e => { e.stopPropagation(); if (gameState === 'TRACKSEL') { ts.col = +c.dataset.col; ts.row = +c.dataset.row; pickTrack(); } });
 });
+
+// Unlock screen — shown right after FINISH! when the run opened something (lastRun.unlocked)
+const ulEl = document.getElementById('unlock');
+const ul = { at: 0 };
+const UL_PIECES = {
+  shackle: '<path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>',
+  left:  '<path d="M6.7 10.5H12L11 13.3L13 16L11 18.7L12 21H6.7a2.2 2.2 0 0 1-2.2-2.2v-6.1a2.2 2.2 0 0 1 2.2-2.2Z" fill="rgba(255,255,255,.16)" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>',
+  right: '<path d="M12 10.5H17.3a2.2 2.2 0 0 1 2.2 2.2v6.1a2.2 2.2 0 0 1-2.2 2.2H12L11 18.7L13 16L11 13.3Z" fill="rgba(255,255,255,.16)" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>',
+};
+function showUnlock(list) {
+  gameState = 'UNLOCK'; ul.at = performance.now();
+  results.el.classList.add('hidden');
+  const nights = list.filter(x => x.night).length;
+  ulEl.querySelector('.ul-title').textContent = list.length > 1 ? 'UNLOCKED!' : nights ? 'NIGHT TRACK UNLOCKED!' : 'NEW TRACK UNLOCKED!';
+  ulEl.querySelector('.ul-cards').innerHTML = list.map(({ i, night }, k) => `
+    <div class="ul-card" style="--d:${(k * 0.55).toFixed(2)}s">
+      <div class="ul-frame">
+        <div class="ul-shot" style="background-image:url(${night ? LEVELS[i].shotNight : LEVELS[i].shot})"></div>
+        <div class="ul-flash"></div>
+        <div class="ul-lock">${Object.entries(UL_PIECES).map(([k2, d]) => `<svg class="ul-${k2}" viewBox="0 0 24 24">${d}</svg>`).join('')}</div>
+      </div>
+      <div class="ul-name">${night ? '☾ ' : ''}${LEVELS[i].name}</div>
+      <div class="ul-sub">${night ? 'NIGHT TRACK' : 'NEW TRACK'}</div>
+    </div>`).join('');
+  ulEl.classList.remove('hidden');
+  list.forEach((_, k) => setTimeout(() => { if (gameState === 'UNLOCK') sfx?.unlock(); }, 700 + k * 550));
+}
+function closeUnlock() {
+  if (performance.now() - ul.at < 700) return;   // a held / double-tapped Enter from the stats screen shouldn't skip it
+  ulEl.classList.add('hidden');
+  results.el.classList.remove('hidden');
+  advanceStats();
+}
 function adjustSetting(item, dir) {
   if (item === 'volume') { settings.volume = THREE.MathUtils.clamp(settings.volume + dir * 5, 0, 100); audio.volume = settings.volume / 100; }
   else if (item === 'sfx') { settings.sfx = THREE.MathUtils.clamp(settings.sfx + dir * 5, 0, 100); sfx?.setVolume(settings.sfx); }
@@ -4517,6 +5030,7 @@ function menuNav(code) {
 addEventListener('keydown', e => {
   if (gameState === 'TITLE') { if (!e.repeat && (e.code === 'Enter' || e.code === 'Space')) startFromTitle(); return; }
   if (gameState === 'TRACKSEL') { e.preventDefault(); tsKey(e); return; }
+  if (gameState === 'UNLOCK') { if (!e.repeat && (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape')) closeUnlock(); return; }
   if (gameState === 'SELECT') {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') selMove(-1);
     else if (e.code === 'ArrowRight' || e.code === 'KeyD') selMove(1);
@@ -4608,6 +5122,7 @@ function pollMenuGamepad(dt) {
   }
   if (gameState === 'SELECT') { if (lf) selMove(-1); if (rt) selMove(1); if (a) confirmSelect(); return; }
   if (gameState === 'STATS') { if (a || b) advanceStats(); return; }
+  if (gameState === 'UNLOCK') { if (a || b) closeUnlock(); return; }
   if (gameState === 'RACE') { if (lf) lbCycle(-1); if (rt) lbCycle(1); if (a || b) advanceRace(); return; }
   if (gameState === 'RESULTS') { if (lf) lbCycle(-1); if (rt) lbCycle(1); if (a || b) afterBoard(); return; }
   if (gameState === 'WORLD') { if (lf) lbCycle(-1); if (rt) lbCycle(1); if (a || b) showEnd(); return; }
@@ -4652,7 +5167,8 @@ function pollMenuGamepad(dt) {
 // Ranked by fastest completion time for now; each entry also stores top speed,
 // distance and score so a future rank-toggle can sort by any metric via compareBy[].
 // ------------------------------------------------------------------
-const LB_KEY = LV.lbKey;               // localStorage key for this level's leaderboard (level 1 keeps 'downhill.scores')
+const LB_KEY = LV.lbKey + (NIGHT ? '.night' : '');
+const LB_LEVEL = LV.id + (NIGHT ? '-night' : '');   // the world board's level id               // localStorage key for this level's leaderboard (level 1 keeps 'downhill.scores')
 // Global leaderboard (Supabase). Paste the project URL and its anon / publishable key to turn on the
 // WORLD board; left blank, scores stay local only. The key is meant to be public: the table's
 // row-level security only lets anyone read and add scores (see supabase/schema.sql).
@@ -4758,17 +5274,15 @@ function showEnd() {                           // 4) after everything: just the 
 }
 function rmenuMove(d) { rmenuIndex = (rmenuIndex + d + rmenuItems.length) % rmenuItems.length; renderRmenu(); }
 const NEXT_LEVEL = (LEVEL_IDX + 1) % LEVELS.length;
-rmenuItems.find(li => li.dataset.r === 'next').textContent = 'Next Race: ' + LEVELS[NEXT_LEVEL].name;
 function rmenuPick(i = rmenuIndex) {
   const r = rmenuItems[i].dataset.r;
-  if (r === 'next') {                          // reload into the next course; the song carries over
-    gotoLevel(NEXT_LEVEL + 1);
+  if (r === 'next') {                          // reload into the next course with the same rider; the song carries over
+    gotoLevel(NEXT_LEVEL + 1, 'race', NIGHT && isUnlocked(NEXT_LEVEL, true));
     return;
   }
   results.el.classList.add('hidden');
   if (r === 'restart') beginRun();
-  else if (r === 'rider') openSelect();
-  else quitGame();
+  else quitGame();                             // (a new rider: Quit → track select → rider select)
 }
 rmenuItems.forEach((li, i) => {
   li.addEventListener('mouseenter', () => { rmenuIndex = i; renderRmenu(); });
@@ -4801,6 +5315,7 @@ function finishRun(reason) {
 }
 // FINISH (your stats) → initials, if the run placed on any ranking → THIS RACE → ALL TIME → the choices
 function advanceStats() {
+  if (lastRun.unlocked?.length && !lastRun.unlockShown) { lastRun.unlockShown = true; showUnlock(lastRun.unlocked); return; }
   const scores = loadScores(), probe = { ...lastRun, score: lastRun.score, combo: lastRun.combo || 0 };
   if (placesAnywhere(scores, probe) || placesWorld(probe)) startEntry(scores); else showRace();
 }
@@ -4850,7 +5365,7 @@ const fromRow = r => ({ id: r.id, name: r.name, timeS: r.time_s, score: r.score,
 function fetchWorld(key, force = false) {
   if (!WORLD_ON || (world.tops[key] && !force) || world.loading[key]) return world.loading[key] || Promise.resolve();
   const url = `${SUPABASE_URL}/rest/v1/scores?select=id,name,time_s,score,combo,air_time,top_speed`
-            + `&level=eq.${LV.id}&order=${WORLD_COLS[key]}&limit=${LB_MAX}`;
+            + `&level=eq.${LB_LEVEL}&order=${WORLD_COLS[key]}&limit=${LB_MAX}`;
   return world.loading[key] = fetch(url, { headers: sbHeaders() })
     .then(r => r.ok ? r.json() : Promise.reject(new Error(r.status + ' ' + r.statusText)))
     .then(rows => { world.tops[key] = rows.map(fromRow); world.error = ''; })
@@ -4868,7 +5383,7 @@ function placesWorld(rec) {
 }
 function postWorld(rec) {
   if (!WORLD_ON) return;
-  const body = { level: LV.id, name: rec.name, time_s: rec.timeS, score: rec.score, combo: rec.combo || 0,
+  const body = { level: LB_LEVEL, name: rec.name, time_s: rec.timeS, score: rec.score, combo: rec.combo || 0,
                  air_time: rec.airTime || 0, top_speed: rec.topSpeed, rider: RIDERS[riderIdx]?.name || null };
   fetch(`${SUPABASE_URL}/rest/v1/scores`, { method: 'POST', headers: sbHeaders({ Prefer: 'return=representation' }), body: JSON.stringify(body) })
     .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(new Error(j.message || r.status))))
@@ -4979,7 +5494,7 @@ function beginRun() {
   lightEls.forEach(l => l.classList.remove('on'));
   lightsEl.classList.remove('show');
   gameState = 'COUNTDOWN';
-  showTrick(LV.name);
+  showTrick(LV.name + (NIGHT ? ' · NIGHT' : ''));
   if (!tourShown) startTour();                 // the first run on a track opens with its highlights
 }
 // ------------------------------------------------------------------
@@ -5902,6 +6417,8 @@ function frame(now) {
   updatePads(dt);
   updateDetailLOD(dt);
   updateChaos(dt);
+  updateNight(dt);
+  updateMonsters(dt);
   updateRadio();
   pollMenuGamepad(dt);
   if (warm.at && now >= warm.at) warmUp();
@@ -5923,7 +6440,9 @@ if (IS_LOOP) document.body.classList.add('no-brawl');
 // or Next Race goes straight to the rider select. Every run opens with the flyover + countdown.
 let flow = null;
 try { flow = sessionStorage.getItem(FLOW_KEY); sessionStorage.removeItem(FLOW_KEY); } catch {}
-if (flow === 'rider') openSelect(); else quitGame();
+if (flow === 'race') { document.body.classList.remove('selecting'); beginRun(); }
+else if (flow === 'rider') openSelect();
+else quitGame();
 requestAnimationFrame(frame);
 
 addEventListener('resize', () => {

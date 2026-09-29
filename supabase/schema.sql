@@ -12,7 +12,7 @@
 create table if not exists public.scores (
   id         bigint generated always as identity primary key,
   created_at timestamptz not null default now(),
-  level      text     not null check (level in ('ridge', 'switch', 'loops')),
+  level      text     not null check (level in ('ridge', 'switch', 'loops', 'ridge-night', 'switch-night', 'loops-night')),
   name       text     not null check (name ~ '^[A-Z]{3}$'),
   time_s     real     not null check (time_s > 0 and time_s < 1200),
   score      integer  not null default 0 check (score >= 0),
@@ -24,7 +24,7 @@ create table if not exists public.scores (
 
 -- tables created by an earlier version keep their old checks, so swap them for the current ones
 alter table public.scores drop constraint if exists scores_level_check;
-alter table public.scores add  constraint scores_level_check check (level in ('ridge', 'switch', 'loops'));
+alter table public.scores add  constraint scores_level_check check (level in ('ridge', 'switch', 'loops', 'ridge-night', 'switch-night', 'loops-night'));
 alter table public.scores drop constraint if exists scores_top_speed_check;
 alter table public.scores add  constraint scores_top_speed_check check (top_speed >= 0 and top_speed < 500);
 
