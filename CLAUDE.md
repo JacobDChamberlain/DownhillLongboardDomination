@@ -53,7 +53,21 @@ Anything new placed along the course should use frames too.
   - The feet are separate bones parented to the armature root, not to the shins.
   - Skinned bounding boxes need `updateMatrixWorld(true)` before measuring.
 
-**Menus + unlocks:** a fresh load shows the title → `openTrackSel('title')` (the `TRACKSEL` state: a 3×2 grid of `LEVELS[i].shot` screenshots, night versions under their day track) → `openSelect()` (rider carousel) → run. Picking another track calls `gotoLevel(n)`, which reloads with `sessionStorage 'downhill.flow' = 'rider'` so the new page skips straight to the rider select (Next Race too). The Esc menu's Track Select opens the same screen (`from: 'pause'`). Unlocks live in `localStorage 'downhill.unlocks'` (`{'1','2','3','1n',…}`): `crossFinish` calls `unlockOnFinish(place)`, where any finish opens the next track and 1st opens this track's night version. It stores what it opened in `lastRun.unlocked`. `NIGHT_READY` stays false until night tracks exist; unlocked night cards say COMING SOON. Debug: Shift+U on the track select unlocks everything. Track screenshots are `assets/tracks/*.jpg` (640×360, grabbed from the course tour).
+**Menus + unlocks:** a fresh load shows the title → `openTrackSel('title')` (the `TRACKSEL` state: a 3×2 grid of `LEVELS[i].shot` screenshots, night versions under their day track) → `openSelect()` (rider carousel) → run. Picking another track calls `gotoLevel(n)`, which reloads with `sessionStorage 'downhill.flow' = 'rider'` so the new page skips straight to the rider select (Next Race too). The Esc menu's Track Select opens the same screen (`from: 'pause'`). Unlocks live in `localStorage 'downhill.unlocks'` (`{'1','2','3','1n',…}`): `crossFinish` calls `unlockOnFinish(place)`, where any finish opens the next track and 1st opens this track's night version. It stores what it opened in `lastRun.unlocked`. Debug: Shift+U on the track select unlocks everything. Track screenshots are `assets/tracks/*.jpg` (640×360, grabbed from the course tour).
+
+**Night tracks** (`?night=1`, `NIGHT`): the same course with a separate leaderboard (`lbKey + '.night'`, world level id `LB_LEVEL` = `<id>-night`). The HDRI is skipped. `chaosSky` stays on in STARRY mode with `uPlanets` 0 and a quieter nebula (`uNeb`), and the big moon (`uMoon`) sits on the gas giant's bearing. `SUN_LIGHT_DIR` becomes moonlight. `setChaosMode(0)` returns to this night look, not to day. The "Night tracks" section adds:
+- street lamps (levels 1–2): instanced posts, additive light-pool decals, and `LAMP_LIGHTS` real point lights that hop to the nearest lamps
+- a headlamp spotlight on `skater`
+- fireflies (a `Points` shader around `trees`)
+- crowd glowsticks (`addGlowstick`, called from the spectator spawner)
+- searchlights
+- neon `glowMats` on level 3
+
+Any `pow()` in these shaders gets a clamped base. One NaN pixel is enough: the bloom mip chain spreads it over the whole screen, which goes black.
+
+**Level 3 monsters** (`updateMonsters`): a leviathan (instanced lumpy segments along a parabola through the monster loop's hoop, scrubbed by `state.u` so its head passes through as you reach the top) and `DRAGONS` demon dragons flying a wider figure-8 around `LP.eight` while you're on it. `resetMonsters()` runs in `resetRun`.
+
+**Unlock screen:** `advanceStats` shows `#unlock` (state `UNLOCK`) once when `lastRun.unlocked` is non-empty. The lock animation is pure CSS keyframes, and each card's `--d` staggers it.
 
 **Run flow:** `beginRun()` → COUNTDOWN (flyover + lights, `updateStart`) → PLAYING → crossing `FINISH_U` freezes `lastRun` and hands over to `updateCoast` (controlled stop at `PIT_STOP_U`) → PIT (`pitCam` orbit) → STATS → ENTRY (if placed) → RESULTS. `results.el.dataset.stage` drives which parts of the results panel show. The last stretch of `buildRoadPoints` is levelled/straightened from `END_LEVEL_T`; `inPit(u)` drops grass, cliffs and rails there in favour of the arena geometry (`ARENAS`).
 
