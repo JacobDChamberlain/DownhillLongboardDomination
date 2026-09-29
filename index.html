@@ -2735,8 +2735,8 @@ const CARVE_SCRUB = 9.0;   // speed lost while carving hard
 // Grip caps the turn rate at speed (turn ≤ grip / speed); brake + steer slides for a tighter turn
 // that scrubs speed (the way into a hairpin when you come in hot).
 const CARVE_TURN        = 1.8;   // rad/s turn rate at full lock, at low speed
-const CARVE_GRIP        = 40;    // u/s² sideways grip: a level-2 hairpin (R 70) holds ~53 u/s
-const SLIDE_GRIP        = 85;    // brake + steer: a slide turns up to this hard…
+const CARVE_GRIP        = 60;    // u/s² sideways grip (higher = easier corners): a level-2 hairpin (R 70) holds ~65 u/s, level 1's tightest bend (R 100) ~77
+const SLIDE_GRIP        = 120;   // brake + steer: a slide turns up to this hard (a hairpin at ~92 u/s)…
 const SLIDE_DECEL       = 16;    // …and scrubs this much (u/s², plus a speed-proportional part)
 const CARVE_ASSIST      = 0;     // rad/s the board eases back to the road's line with no steer (level 1 bends turn only 0.05–0.2 rad/s, so much above 0.03 steers them for you)
 const CARVE_MAX_HEADING = 1.25;  // never more than this across the road (no riding back up the hill)
