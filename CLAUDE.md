@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 "Downhill": a downhill longboarding game prototype. The **entire game is `index.html`**: HTML/CSS, then a single `<script type="module">`. It uses Three.js r160 from unpkg via an import map. There's no build step, no package.json, no tests, and no linter. It deploys as a static site (GitHub: `JacobDChamberlain/DownhillLongboardDomination`).
 
-The prototype exists for **fast gameplay iteration**. Mechanics are meant to transfer 1:1 to Unity/Unreal later, so graphics, character animation and multiplayer are deliberately kept "good enough". `ROADMAP.md` (build order and triage) and `FULL_PASS.md` (visual-pass log and tunables) are the living plan. Update them when finishing roadmap items.
+The prototype exists for **fast gameplay iteration**. Mechanics are meant to transfer 1:1 to Unity/Unreal later, so graphics, character animation and multiplayer are deliberately kept "good enough". `ROADMAP.md` (build order and triage), `FULL_PASS.md` (visual-pass log and tunables) and `RELEASE_PLAN.md` (what 1.0 needs, target date May 13, 2027) are the living plan. Update them when finishing roadmap items.
 
 ## Running and checking
 
