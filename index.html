@@ -3995,7 +3995,7 @@ const npTitle = npEl.querySelector('.np-title');
 const npArtist = npEl.querySelector('.np-artist');
 let track = -1, npOpacity = -1, radioStarted = false;
 
-// pausing (and switching courses) holds the music; it picks up again when the ride does
+// the pause menu holds the music; leaving it (resume, track select, quit) picks it up again
 let musicHeld = false;
 function holdMusic() { if (!audio.paused) { audio.pause(); musicHeld = true; } }
 function releaseMusic() { if (musicHeld) { musicHeld = false; audio.play().catch(() => {}); } }
@@ -4031,8 +4031,7 @@ radioStarted = true;
 {
   let carried = null;
   try { carried = JSON.parse(sessionStorage.getItem('downhill.radio')); sessionStorage.removeItem('downhill.radio'); } catch {}
-  musicHeld = !!carried?.held;                 // came from a pause / course switch: quiet until the next run starts
-  playTrack(carried ? carried.track : 0, !carried);
+  playTrack(carried ? carried.track : 0, !carried || carried.playing);
   if (carried) audio.addEventListener('loadedmetadata', () => { audio.currentTime = carried.time || 0; }, { once: true });
 }
 function unlockAudio(e) {
@@ -4963,7 +4962,7 @@ function openSettings() { gameState = 'SETTINGS'; menuIndex = 0; showPanel('sett
 // 'race' goes straight into a run with the current rider (Next Race)
 function gotoLevel(n, then = 'rider', night = false) {
   try {
-    sessionStorage.setItem('downhill.radio', JSON.stringify({ track, time: audio.currentTime, held: musicHeld || !audio.paused }));
+    sessionStorage.setItem('downhill.radio', JSON.stringify({ track, time: audio.currentTime, playing: musicHeld || !audio.paused }));
     sessionStorage.setItem(FLOW_KEY, then);
   } catch {}
   location.search = '?level=' + n + (night ? '&night=1' : '');
@@ -4971,6 +4970,7 @@ function gotoLevel(n, then = 'rider', night = false) {
 function openControls() { gameState = 'CONTROLS'; menuIndex = 0; showPanel('controls'); renderMenu(); }
 function backToMain()   { gameState = 'PAUSED'; menuIndex = 0; showPanel('main'); renderMenu(); }
 function quitGame()  {
+  releaseMusic();
   gameState = 'TITLE'; menuEl.classList.add('hidden'); results.el.classList.add('hidden'); tsEl.classList.add('hidden');
   titleEl.classList.remove('hidden'); document.body.classList.add('selecting');
 }
@@ -5046,6 +5046,7 @@ function renderTrackSel() {
     : ts.row === 1 ? LEVELS[ts.col].name + ' · NIGHT' : LEVELS[ts.col].name;
 }
 function openTrackSel(from) {
+  releaseMusic();
   gameState = 'TRACKSEL'; ts.from = from;
   ts.row = NIGHT ? 1 : 0; ts.col = isUnlocked(LEVEL_IDX, NIGHT) ? LEVEL_IDX : 0;
   if (!isUnlocked(ts.col, ts.row === 1)) ts.row = 0;
