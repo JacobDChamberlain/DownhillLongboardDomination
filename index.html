@@ -3654,7 +3654,7 @@ function drawPop(text) {
 // treatment as the popup; each line is drawn once when it comes up.
 const HINTS = ['TAP W TO KICK & PUSH TO GAIN SPEED!', 'HOLD SHIFT TO TUCK TO GO EVEN FASTER!'];
 const HINT_Y = 0.4, HINT_PX = 26;   // centre (fraction of screen height), text size (CSS px)
-const HINT_DELAY = 0.5;             // after GO! (the green light)
+const HINT_DELAY = 1.4;             // after GO!: right as its popup has faded out
 const HINT_IN = 0.35, HINT_HOLD = 2.6, HINT_OUT = 0.7, HINT_GAP = 0.3;   // seconds per hint
 const hintCv = document.createElement('canvas');
 hintCv.width = 1400; hintCv.height = Math.ceil(HINT_PX * POP_RES * 2.2);
