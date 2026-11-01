@@ -3893,12 +3893,19 @@ const audio = new Audio();
 let audioCtx = null;
 try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
 // ------------------------------------------------------------------
-// Sound effects — all synthesized (Web Audio on the shared audioCtx; no files): an ollie pop, landing
+// Sound effects — mostly synthesized (Web Audio on the shared audioCtx): an ollie pop, landing
 // thud (+ a scrape when sketchy), crash, a rolling-wheels loop (grittier off-road), a grind scrape
 // loop, pickup chime, boost whoosh, punch/kick smack + swing, crowd roar near the crowds (a cheer
 // at the finish and on knockouts), and sea splashes. Effects Volume in Settings.
+// Hits use recorded samples (assets/sfx/, trimmed to start on the sound) when they load: a punch or
+// kick smack plus a random "ough" from whoever got hit; on file:// they fall back to the synth smack.
 // ------------------------------------------------------------------
 const SFX_DEFAULT = 70;        // effects volume (0–100)
+const SFX_SAMPLES = { punch: ['punch'], kick: ['kick'], ough: ['ough_1', 'ough_2'] };   // assets/sfx/<name>.mp3
+const SFX_SAMPLE_GAIN = { punch: 0.35, kick: 1, ough: 1 };   // per-sample level (punch.mp3 is ~10dB hotter than kick.mp3)
+const OUGH_DELAY = 0.04;       // the grunt lands a beat after the smack (s)
+const OUGH_GAIN = 0.8;         // grunt level vs the smack
+const SAMPLE_PITCH_VAR = 0.08; // ± random playback-rate wobble so repeats don't sound identical
 const SFX_QUIET_STATES = ['PAUSED', 'SETTINGS', 'CONTROLS', 'TITLE', 'TRACKSEL', 'SELECT'];   // no crowd / rolling beds here
 const sfx = (() => {
   if (!audioCtx) return null;
@@ -3929,6 +3936,20 @@ const sfx = (() => {
     src.connect(flt).connect(g).connect(out); src.start();
     return { flt, g, set(level, freq) { const t = ctx.currentTime; g.gain.setTargetAtTime(level, t, 0.06); if (freq) flt.frequency.setTargetAtTime(freq, t, 0.08); } };
   }
+  // recorded one-shots: decoded into buffers at load; `play` returns false until (unless) they arrive
+  const samples = {};
+  for (const [kind, names] of Object.entries(SFX_SAMPLES)) for (const n of names)
+    fetch(`assets/sfx/${n}.mp3`).then(r => { if (!r.ok) throw r.status; return r.arrayBuffer(); })
+      .then(b => ctx.decodeAudioData(b)).then(buf => (samples[kind] ||= []).push(buf))
+      .catch(e => console.log(`[assets] sfx ${n} unavailable`, e));
+  function play(kind, { gain = 1, delay = 0 } = {}) {
+    const bufs = samples[kind]; if (!bufs?.length) return false;
+    const t0 = live() + delay, src = ctx.createBufferSource(), g = ctx.createGain();
+    src.buffer = bufs[Math.floor(Math.random() * bufs.length)];
+    src.playbackRate.value = 1 + (Math.random() * 2 - 1) * SAMPLE_PITCH_VAR;
+    g.gain.value = gain * (SFX_SAMPLE_GAIN[kind] ?? 1); src.connect(g).connect(out); src.start(t0);
+    return true;
+  }
   const roll = loop('lowpass', 380, 0.7), grindL = loop('bandpass', 2600, 7), grindH = loop('bandpass', 4300, 9), crowdL = loop('bandpass', 750, 0.6);
   let cheer = 0, crowdT = 0, crowdNear = 1e9;
   return {
@@ -3948,7 +3969,12 @@ const sfx = (() => {
       tone({ type: 'sawtooth', f: 180, to: big ? 900 : 600, dur: big ? 0.6 : 0.4, gain: 0.08 });
     },
     swing() { noise({ type: 'bandpass', f: 700, to: 2200, q: 1, dur: 0.16, gain: 0.25, attack: 0.02 }); },
-    hit()   { noise({ type: 'bandpass', f: 1600, q: 1.2, dur: 0.09, gain: 0.7 }); tone({ f: 95, to: 50, dur: 0.14, gain: 0.8 }); cheer = Math.max(cheer, 0.5); },
+    // a blow landing: kind 'punch' | 'kick' — the sample smack (synth if not loaded) + the victim's grunt
+    hit(kind = 'punch') {
+      if (!play(kind)) { noise({ type: 'bandpass', f: 1600, q: 1.2, dur: 0.09, gain: 0.7 }); tone({ f: 95, to: 50, dur: 0.14, gain: 0.8 }); }
+      play('ough', { gain: OUGH_GAIN, delay: OUGH_DELAY });
+      cheer = Math.max(cheer, 0.5);
+    },
     cheer(k = 1) { cheer = Math.max(cheer, k); },
     splash(dist) {
       const k = THREE.MathUtils.clamp(1 - dist / 2200, 0.05, 1);
@@ -6020,7 +6046,7 @@ function landBlow() {
     knockDown(c, fwd);
     brawl.kos++;
   }
-  if (hits.length) { sfx?.hit(); showTrick((hits.length > 1 ? hits.length + 'x ' : '') + 'KO!  ' + brawl.kos); flash(0.12); }
+  if (hits.length) { sfx?.hit(brawl.kick ? 'kick' : 'punch'); showTrick((hits.length > 1 ? hits.length + 'x ' : '') + 'KO!  ' + brawl.kos); flash(0.12); }
 }
 function reviveCrowd() {
   for (const c of crowd) if (c.down) {
@@ -6491,11 +6517,11 @@ function kickRacer() {
   if (!c) {                                                      // no racer — a spectator beside the road?
     const P = skater.position;
     const sp = crowd.find(p => !p.down && p.obj.visible && p.obj.position.distanceTo(P) < KICK_REACH_LAT + 0.6);
-    if (sp) { sfx?.hit(); knockDown(sp, sp.obj.position.clone().sub(P).setY(0).normalize()); award('KICKED A FAN', KICK_PTS / 2); }
+    if (sp) { sfx?.hit('kick'); knockDown(sp, sp.obj.position.clone().sub(P).setY(0).normalize()); award('KICKED A FAN', KICK_PTS / 2); }
     return;
   }
   c.lat += side * 1.2;
-  sfx?.hit();
+  sfx?.hit('kick');
   cpuCrash(c);
   award('KICKED ' + c.name, KICK_PTS);
 }
