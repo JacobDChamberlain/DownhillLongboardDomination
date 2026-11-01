@@ -101,6 +101,8 @@ board, off-road riding, and level 3 with its loops.)* Quick wins first, then the
   - finish level 1 (any place) → level 2; 1st on level 1 → level 1 night
   - finish level 2 (any place) → level 3; 1st on level 2 → level 2 night
   - 1st on level 3 → level 3 night
+- [ ] **Desert world (levels 4–6, see LEVELS_PLAN.md)** — *level 4 Mesa Run playable (Nov 2026): off a mesa top and down its rim, sweeping carves across the flats, a natural arch, a dry wash dip, a giant sandworm that swallows the road (ride through its glowing gut, burst out of its side off a kicker) and more worms surfacing on the horizon, Poly Haven sand + desert sky, Quaternius cacti, sand you can ride off onto. Track select has world pages. Still to do: tumbleweeds + vultures + heat shimmer, campfires at night, carve tuning by play-test; then level 5 Slot Canyon and level 6.* 
+- [ ] **Worm abduction (Mesa Run)** — swallowed by the giant worm, a vast alien ship carries it to a lush ocean world (our own names and designs, not Dune's), a loop inside the worm, out onto waterfalls / lakes / castles. Replaces the current burst-out-of-the-side exit. Plan in LEVELS_PLAN.md.
 - [ ] Keep the rider out of the mountain on level 1 (parked — "reminds me of the old days").
 
 ## ✨ Quick wins (from the second wishlist)

@@ -155,7 +155,18 @@
   #tracksel { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center;
     color: #fff; user-select: none; background: rgba(6,10,22,.7); backdrop-filter: blur(4px); padding: 16px; box-sizing: border-box; }
   #tracksel.hidden { display: none; }
-  .ts-title { font-size: 40px; font-weight: 900; letter-spacing: 6px; margin-bottom: 3vh; text-shadow: 0 4px 20px rgba(0,0,0,.6); text-align: center; }
+  .ts-world { display: flex; align-items: center; gap: 18px; margin-bottom: 2.4vh; font-size: 20px; font-weight: 900; letter-spacing: 5px; color: #ffd23c; }
+  .ts-world .ts-arrow { cursor: pointer; opacity: .55; font-size: 16px; padding: 4px 8px; color: #fff; }
+  .ts-world .ts-arrow:hover { opacity: 1; }
+  .ts-world .ts-arrow.off { visibility: hidden; }
+  .ts-dots { display: flex; gap: 6px; margin-left: 4px; }
+  .ts-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.3); }
+  .ts-dots i.on { background: #ffd23c; }
+  .ts-page.hidden { display: none; }
+  .ts-card.empty { cursor: default; opacity: .35; border-style: dashed; }
+  .ts-card.empty .ts-shot { filter: grayscale(1) brightness(.18); }
+  .ts-card.empty .ts-soon { display: block; }
+  .ts-title { font-size: 40px; font-weight: 900; letter-spacing: 6px; margin-bottom: 2vh; text-shadow: 0 4px 20px rgba(0,0,0,.6); text-align: center; }
   .ts-grid { display: grid; grid-template-columns: repeat(3, min(27vw, 380px)); gap: 2.4vh 1.6vw; }
   .ts-card { position: relative; border-radius: 14px; overflow: hidden; border: 2px solid rgba(255,255,255,.15); cursor: pointer;
     opacity: .6; transform: scale(.94); transition: transform .18s, opacity .18s, border-color .18s, box-shadow .18s; background: #0b1224; }
@@ -403,9 +414,10 @@
 
 <div id="tracksel" class="hidden">
   <div class="ts-title">CHOOSE YOUR TRACK</div>
-  <div class="ts-grid"></div>
+  <div class="ts-world"><span class="ts-arrow" data-dw="-1">◀ Q</span><span class="ts-wname"></span><span class="ts-dots"></span><span class="ts-arrow" data-dw="1">E ▶</span></div>
+  <div class="ts-pages"></div>
   <div class="ts-info">&nbsp;</div>
-  <div class="menu-hint">← → ↑ ↓ choose · Enter / A to pick · Esc / B back</div>
+  <div class="menu-hint">← → ↑ ↓ choose · Q / E or LB / RB world · Enter / A to pick · Esc / B back</div>
 </div>
 
 <div id="results" class="hidden">
@@ -472,18 +484,24 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 //              no air drag, camera rolls with the track)
 //   pitFlipped the finish pit hangs upside down (level 3, past the twist)
 //   bankGain / bankMax   how hard curves bank the road frames (max in radians)
+//   world      'alpine' | 'desert' — the look (ground, far scenery, trees) and the track-select page
+//   edges also: 'sand' — no rails; ride off the edge onto the terrain (desert)
 // Hand-placed course data (gaps, ramps, items, finish spots…) lives in COURSE, by id. Content
 // that exists on one course only (level 3's monsters, level 1's sea…) still checks IS_*.
 // ------------------------------------------------------------------
 const LEVELS = [
   { id: 'ridge',  name: 'RIDGE RUN',       lbKey: 'downhill.scores',            shot: 'assets/tracks/ridge.jpg', shotNight: 'assets/tracks/ridge-night.jpg',
-    build: () => buildRidgePoints(), terrain: 'ridge', edges: 'cliff', physics: 'normal', bankGain: 1.4, bankMax: 0.30 },
+    world: 'alpine', build: () => buildRidgePoints(), terrain: 'ridge', edges: 'cliff', physics: 'normal', bankGain: 1.4, bankMax: 0.30 },
   { id: 'switch', name: 'SWITCHBACK PASS', lbKey: 'downhill.scores.switchback', shot: 'assets/tracks/switch.jpg', shotNight: 'assets/tracks/switch-night.jpg',
-    build: () => buildSwitchbackPoints(), terrain: 'heightfield', edges: 'rails', physics: 'normal', bankGain: 1.4, bankMax: 0.12 },   // hairpins bank less
+    world: 'alpine', build: () => buildSwitchbackPoints(), terrain: 'heightfield', edges: 'rails', physics: 'normal', bankGain: 1.4, bankMax: 0.12 },   // hairpins bank less
   { id: 'loops',  name: 'LOOP HEIGHTS',    lbKey: 'downhill.scores.loops',      shot: 'assets/tracks/loops.jpg', shotNight: 'assets/tracks/loops-night.jpg',
-    build: () => buildLoopPoints(), terrain: 'sky', edges: 'open', physics: 'stunt', pitFlipped: true, arcDivisions: 6000,
+    world: 'alpine', build: () => buildLoopPoints(), terrain: 'sky', edges: 'open', physics: 'stunt', pitFlipped: true, arcDivisions: 6000,
     bankGain: 10, bankMax: 1.45 },   // only the figure-8 banks, its ends nearly sideways
+  { id: 'mesa',   name: 'MESA RUN',        lbKey: 'downhill.scores.mesa',       shot: 'assets/tracks/mesa.jpg', shotNight: 'assets/tracks/mesa-night.jpg',
+    world: 'desert', build: () => buildMesaPoints(), terrain: 'heightfield', edges: 'sand', physics: 'normal', bankGain: 1.4, bankMax: 0.30 },
 ];
+// track-select pages, three courses each (planned slots show as COMING SOON)
+const WORLDS = [ { id: 'alpine', name: 'ALPINE' }, { id: 'desert', name: 'DESERT' } ];
 const LEVEL_IDX = THREE.MathUtils.clamp((parseInt(new URLSearchParams(location.search).get('level'), 10) || 1) - 1, 0, LEVELS.length - 1);
 const LV = LEVELS[LEVEL_IDX];
 // feature flags (from the descriptor)
@@ -491,13 +509,16 @@ const RIDGE       = LV.terrain === 'ridge';         // grass shoulders + cliff w
 const HEIGHTFIELD = LV.terrain === 'heightfield';   // the road is cut into one terrain mesh
 const SKY         = LV.terrain === 'sky';           // the road floats: no ground beside it
 const OPEN_EDGES  = LV.edges === 'open';            // no rails anywhere: over the side and you fall
-const HOP_RAILS   = LV.edges === 'rails';           // rails that let you through onto the terrain
+const RAILS       = LV.edges === 'cliff' || LV.edges === 'rails';   // guardrails drawn (and grindable)
+const RIDE_OFF    = LV.edges === 'rails' || LV.edges === 'sand';    // the road edge lets you out onto the terrain
+const DESERT      = LV.world === 'desert';
 const STUNT       = LV.physics === 'stunt';         // level 3's physics (see the descriptor notes)
 const PIT_FLIPPED = !!LV.pitFlipped;
 // one course's own content only (its builder's data, its set pieces) — behaviour goes on the descriptor
 const IS_SWITCH = LV.id === 'switch';
 const IS_RIDGE = LV.id === 'ridge';
 const IS_LOOP = LV.id === 'loops';
+const IS_MESA = LV.id === 'mesa';
 const NIGHT = new URLSearchParams(location.search).get('night') === '1';   // the night version (unlocked by winning the day one)
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -544,7 +565,7 @@ scene.add(hemi);
 // Where the sun sits. The HDRI is rotated at load so its sun lands on SUN_AZIMUTH; the
 // shadow-casting light uses the same bearing but a higher elevation — the photographed sun
 // is ~5° up, and a light that low would bury the course in terrain shadow.
-const SUN_AZIMUTH = new THREE.Vector2(-0.6, -0.8).normalize();   // (x, z): ahead-left of the run
+const SUN_AZIMUTH = (LV.world === 'desert' ? new THREE.Vector2(0.55, 0.85) : new THREE.Vector2(-0.6, -0.8)).normalize();   // (x, z): ahead-left of the run (desert: behind you — its low sun whited out the road)
 const SUN_LIGHT_ELEV = 0.38;                                     // radians (~22°)
 const SUN_LIGHT_DIR = new THREE.Vector3(
   SUN_AZIMUTH.x * Math.cos(SUN_LIGHT_ELEV), Math.sin(SUN_LIGHT_ELEV), SUN_AZIMUTH.y * Math.cos(SUN_LIGHT_ELEV));
@@ -761,6 +782,115 @@ function sbLegY(i, x) {
   return SB.Y0 - SB.GRADE * THREE.MathUtils.clamp(sAt - SB.APPROACH * 0.5, 0, SB.roStart - SB.APPROACH * 0.5);
 }
 
+// ------------------------------------------------------------------
+// Level 4 — Mesa Run: off a mesa top, down its rim, then long sweeping carves across the desert
+// flats into a dry lakebed. A turtle of straights and constant-radius arcs, so every bend's radius
+// is known: in free carve a bend of radius R holds about √(60·R) u/s. Most bends are R ≥ 130 (carve
+// them flat out); two tight ones (R 85–90) come after fast straights, so braking / sliding matters.
+// ------------------------------------------------------------------
+const MR = { Y0: 520, STEP: 5, len: 0, marks: {} };
+// [kind 'S' straight | 'A' arc, length | radius, turn (degrees, + = right), grade, mark]
+const MR_COURSE = [
+  ['S', 80,  0,   0.06, 'approach'],     // never level: G·0.06 just beats ROLL, so the launch keeps rolling
+  ['S', 220, 0,   0.08, 'top'],          // across the mesa top
+  ['A', 260, 50,  0.24, 'rim'],          // over the rim: the long sweeping drop
+  ['S', 200, 0,   0.22, 'rimStraight'],
+  ['A', 200, -70, 0.18],
+  ['S', 260, 0,   0.16, 'arch'],         // under the natural arch
+  ['A', 90,  80,  0.10, 'tight1'],       // tight #1 after a fast straight
+  ['A', 150, -60, 0.16],
+  ['A', 150, 60,  0.16, 'esses'],
+  ['S', 200, 0,   0.14, 'wash'],         // dips through a dry wash and pops back out
+  ['A', 130, -55, 0.16],
+  ['S', 140, 0,   0.10, 'wormApproach'], // the giant worm's head rears ahead…
+  ['A', 320, 38,  -0.12, 'belly'],       // …slams down over the road: up through its arching body
+  ['S', 90,  0,   0.42, 'spit'],         // out through the tear in its side: the kicker throws you over this drop
+  ['S', 140, 0,   0.18, 'fast'],
+  ['A', 85,  75,  0.10, 'tight2'],       // tight #2
+  ['A', 180, -80, 0.14],
+  ['S', 300, 0,   0.09, 'lakebed'],
+  ['S', 260, 0,   0,    'runout'],       // level into the finish pit
+];
+const MR_WASH = { depth: 8, len: 70 };   // the dry wash dip (world units)
+// the giant sandworm (see "The sandworms" below for the rest of its tunables)
+const WORM_KICK_BACK = 10;               // the exit kicker sits this far before the tear in its side
+const WORM_PUSH = 9;                     // u/s² its gut muscles push you (and the CPUs) along inside
+const MESA_TOP_R = 130;                  // mesa top: half-width of the flat capsule around the start…
+const MESA_RIM_W = 40;                   // …and how wide its rim cliff is (the road cuts through it on the way down)
+const MESA_SIDE_SLOPE = 0.5;
+const MESA_BANK_R = 60, MESA_BANK_SLOPE = 0.3;   // flats: within this of the road the ground stays below road height + this gentle slope             // how steeply the ground falls away beside the mesa road (rise / run)
+function buildMesaPoints() {
+  const raw = []; let s = 0, yaw = 0, x = 0, z = 0;
+  const push = grade => raw.push({ x, z, s, grade });
+  push(0);
+  for (const [kind, a, turn, grade, mark] of MR_COURSE) {
+    const len = kind === 'S' ? a : a * Math.abs(turn) * Math.PI / 180;
+    const n = Math.max(1, Math.round(len / MR.STEP)), ds = len / n, dyaw = kind === 'A' ? turn * Math.PI / 180 / n : 0, s0 = s;
+    for (let j = 0; j < n; j++) {
+      yaw += dyaw / 2; x += Math.sin(yaw) * ds; z -= Math.cos(yaw) * ds; yaw += dyaw / 2; s += ds;
+      push(grade);
+    }
+    if (mark) MR.marks[mark] = { s0, s1: s };
+  }
+  MR.len = s;
+  // height: integrate the grades, round the kinks (±25 units), then cut the wash dip in
+  const yRaw = [MR.Y0];
+  for (let i = 1; i < raw.length; i++) yRaw.push(yRaw[i - 1] - raw[i].grade * (raw[i].s - raw[i - 1].s));
+  const ys = yRaw.map((y, i) => { let t = 0, c = 0; for (let j = Math.max(0, i - 5); j <= Math.min(yRaw.length - 1, i + 5); j++) { t += yRaw[j]; c++; } return t / c; });
+  const w = MR.marks.wash, wc = (w.s0 + w.s1) / 2;
+  return raw.map((o, i) => {
+    const d = o.s - wc, dip = Math.abs(d) < MR_WASH.len / 2 ? MR_WASH.depth * 0.5 * (1 + Math.cos(2 * Math.PI * d / MR_WASH.len)) : 0;
+    return new THREE.Vector3(o.x, ys[i] - dip, o.z);
+  });
+}
+const mrU = sArc => sArc / (MR.len || 1);                // level 4: builder arc length → u
+const mrMid = k => mrU((MR.marks[k].s0 + MR.marks[k].s1) / 2);
+// the desert floor around Mesa Run: follows the road's height (a coarse nearest-road field), rises
+// gently away from it, with buttes out in the distance. Up on the mesa and down its rim the floor
+// stays at the bottom of the drop: there the ground falls away from the road (MESA_SIDE_SLOPE —
+// rideable, risky), and the mesa top is a flat capsule with a steep rim around the start.
+// Returns the heightfield's extents and base height (pits + road shelf come after).
+function mesaGround(vn) {
+  const b = new THREE.Box3(); frames.forEach(f => b.expandByPoint(f.p));
+  const M = 650, x0 = b.min.x - M, x1 = b.max.x + M, z0 = b.max.z + M, z1 = b.min.z - M;
+  const CS = 40, cw = Math.ceil((x1 - x0) / CS) + 2, ch = Math.ceil((z0 - z1) / CS) + 2;
+  const sBot = MR.marks.rimStraight.s1, yBot = frameAt(mrU(sBot)).p.y;   // the foot of the drop
+  const wb = MR.marks.belly, ws1 = MR.marks.spit.s1, wy0 = frameAt(mrU(wb.s0)).p.y, wy1 = frameAt(mrU(ws1)).p.y;
+  const wormFloor = sArc => THREE.MathUtils.lerp(wy0, wy1, (sArc - wb.s0) / (ws1 - wb.s0));   // the sand under the worm
+  const RY = new Float32Array(cw * ch), RD = new Float32Array(cw * ch), FY = new Float32Array(cw * ch);
+  for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) {
+    const x = x0 + i * CS, z = z0 - j * CS; let best = Infinity, y = 0, kb = 0;
+    for (let k = 0; k <= SAMPLES; k += 8) { const p = frames[k].p, d = (p.x - x) ** 2 + (p.z - z) ** 2; if (d < best) { best = d; y = p.y; kb = k; } }
+    const sk = kb / SAMPLES * MR.len, fy = sk < sBot ? yBot : sk > wb.s0 && sk < ws1 ? wormFloor(sk) : y;
+    RY[j * cw + i] = sk > wb.s0 && sk < wb.s1 ? fy : y; RD[j * cw + i] = Math.sqrt(best);   // (the belly floats: no bank under it)
+    FY[j * cw + i] = fy;                                                            // desert floor height here
+  }
+  const bil = (A, x, z) => {
+    const fi = THREE.MathUtils.clamp((x - x0) / CS, 0, cw - 1.001), fj = THREE.MathUtils.clamp((z0 - z) / CS, 0, ch - 1.001);
+    const i = Math.floor(fi), j = Math.floor(fj), a = fi - i, c = fj - j;
+    return (A[j * cw + i] * (1 - a) + A[j * cw + i + 1] * a) * (1 - c) + (A[(j + 1) * cw + i] * (1 - a) + A[(j + 1) * cw + i + 1] * a) * c;
+  };
+  // the mesa: a capsule from the start pit to the rim, at the road's height there
+  const t0 = new THREE.Vector3(frames[0].tan.x, 0, frames[0].tan.z).normalize();
+  const A = frames[0].p.clone().addScaledVector(t0, -START_PIT_BACK - 40), B = frameAt(mrU(MR.marks.top.s1)).p.clone();
+  const AB = B.clone().sub(A), ab2 = AB.x * AB.x + AB.z * AB.z;
+  return { x0, x1, z0, z1, h(x, z) {
+    const ry = bil(RY, x, z), rd = bil(RD, x, z), fy = bil(FY, x, z), sm = THREE.MathUtils.smoothstep;
+    let h = fy - 1.5 + Math.min(70, Math.max(0, rd - 70) * 0.16)                         // rises away from the road
+          + vn(x * 0.004, z * 0.004) * 30 * sm(rd, 100, 400) + vn(x * 0.05, z * 0.05) * 1.6;   // swells + small dunes
+    const bt = vn(x * 0.005 + 3.1, z * 0.005 - 7.3);                                      // far buttes: flat tops, steep sides
+    h += sm(bt, 0.42, 0.5) * (70 + vn(x * 0.02, z * 0.02) * 15) * sm(rd, 160, 300);
+    if (ry > fy + 1) h = Math.max(h, ry - 0.6 - Math.max(0, rd - 20) * MESA_SIDE_SLOPE + vn(x * 0.03, z * 0.03) * 3);   // up the drop: falls away from the road
+    // on the flats, nothing right beside the road rises much above it (the coarse field blends the road's
+    // heights before and after a bend into a bank the chase camera ran into)
+    const nr = nearestRoad(x, z, MESA_BANK_R);
+    if (nr.i >= 0 && nr.d < MESA_BANK_R && nr.i / SAMPLES * MR.len > sBot) h = Math.min(h, frames[nr.i].p.y - 1 + Math.max(0, nr.d - 22) * MESA_BANK_SLOPE);
+    const t = THREE.MathUtils.clamp(((x - A.x) * AB.x + (z - A.z) * AB.z) / ab2, 0, 1);
+    const dm = Math.hypot(x - (A.x + AB.x * t), z - (A.z + AB.z * t)), rim = MESA_TOP_R + vn(x * 0.012, z * 0.012) * 30;
+    const top = THREE.MathUtils.lerp(A.y, B.y, t) - 0.6;
+    return THREE.MathUtils.lerp(Math.max(h, top), h, sm(dm, rim, rim + MESA_RIM_W));
+  } };
+}
 
 // ------------------------------------------------------------------
 // Level 3 — Loop Heights: a stunt course on pillars high over the valley. A loop, then three in a
@@ -986,6 +1116,12 @@ const fromEnd = d => 1 - d / TOTAL_LEN;
 //   finishU / finishPitU / pitU0 / stopU   (default: the same distances back from the end as level 2)
 //   crowdZones  [[u0, u1] start, [u0, u1] finish] where spectators line the road
 //   detailUMin  trees / props start this far down the run (crowd room)
+//   ground(vn)  heightfield courses: → { x0, x1, z0, z1, h(x, z) } the terrain's extents + base height
+//               (vn: 2D value noise in [-1, 1]); the pits and the road's shelf are carved in after
+// level 4's giant worm: the belly's u range (walls hold you in there), and a wider zone kept clear of scenery
+const WORM_U = IS_MESA ? { u0: mrU(MR.marks.belly.s0), u1: mrU(MR.marks.belly.s1) } : { u0: 2, u1: 2 };
+const inWorm = u => u > WORM_U.u0 && u < WORM_U.u1;
+const wormZone = u => u > WORM_U.u0 - 40 / TOTAL_LEN && u < WORM_U.u1 + 70 / TOTAL_LEN;
 const COURSE = ({
   ridge: () => ({
     gaps: [ { u0: 0.618, u1: 0.628 } ],
@@ -1012,6 +1148,27 @@ const COURSE = ({
       { u: sbMidU(4, 180),  lat:  5, type: 'boost' },
       { u: sbMidU(5, 0),    lat: -4, type: 'weapon' },
     ],
+    // the mountain face: between two traverses it slopes from one road shelf down to the next; above
+    // the top traverse it climbs, below the bottom one and past the hairpins it falls away
+    ground: vn => {
+      const LAST = sbLegs.length - 1, zTop = sbLegs[0].z, zBot = sbLegs[LAST].z;
+      return { x0: -SB.W - 900, x1: SB.W + 900, z0: zTop + 850, z1: zBot - 850, h(x, z) {
+        let h;
+        if (z >= zTop) {                            // above the top traverse: climb to a crest, then fall away behind
+          const up = Math.max(0, z - zTop - SHELF_W);
+          h = sbLegY(0, x) + Math.min(up * 0.9, 160) - Math.max(0, up - 180) * 0.75 + vn(x * 0.03, z * 0.03) * 12;
+        }
+        else if (z <= zBot) h = sbLegY(LAST, x) - Math.max(0, zBot - z - SHELF_W) * 0.7 + vn(x * 0.02, z * 0.02) * 20;
+        else {
+          const k = Math.min(LAST - 1, Math.floor((zTop - z) / SB.DZ)), t = (zTop - z - k * SB.DZ);
+          const tt = THREE.MathUtils.clamp((t - SHELF_W) / (SB.DZ - 2 * SHELF_W), 0, 1);
+          h = THREE.MathUtils.lerp(sbLegY(k, x), sbLegY(k + 1, x), tt) + vn(x * 0.04, z * 0.04) * 7 * Math.sin(Math.PI * tt);
+        }
+        const edge = Math.abs(x) - (SB.W + SB.DZ / 2 + 25);          // past the hairpins the mountain falls away
+        if (edge > 0) h -= edge * 0.7 + vn(x * 0.02, z * 0.02) * Math.min(edge, 60) * 0.3;
+        return h;
+      } };
+    },
   }),
   loops: () => ({
     gaps: [ { u0: lpU(LP.gap.s0), u1: lpU(LP.gap.s1), minSpeed: 95 } ],
@@ -1022,6 +1179,18 @@ const COURSE = ({
       { u: lpU(LP.marks.endurance), lat:  0, type: 'endurance' },
       { u: lpU(LP.marks.weapon),    lat:  5, type: 'weapon' },
     ],
+  }),
+  mesa: () => ({
+    ramps: [ mrMid('rimStraight'), mrU(MR.marks.belly.s1 - WORM_KICK_BACK) ],   // the second one throws you out of the worm
+    items: [
+      { u: mrU(MR.marks.top.s0 + 170), lat:  4, type: 'boost' },
+      { u: mrMid('arch') - 50 / MR.len, lat: -5, type: 'endurance' },
+      { u: mrMid('esses'),             lat:  0, type: 'freedeath' },
+      { u: mrU(MR.marks.fast.s0 + 20), lat:  5, type: 'boost' },
+      { u: mrMid('lakebed'),           lat: -4, type: 'weapon' },
+    ],
+    ground: vn => mesaGround(vn),
+    noShelf: u => u > WORM_U.u0 + 4 / TOTAL_LEN && u < WORM_U.u1,   // the belly floats over the sand
   }),
 }[LV.id] ?? (() => ({})))();
 const GAPS  = COURSE.gaps  ?? [];
@@ -1150,7 +1319,7 @@ const GRASS_TILE   = 22;   // world units per grass texture repeat
   // reflecting the procedural environment reads as a black band)
   railMat = new THREE.MeshStandardMaterial({ color: 0xb8bcc0, roughness: .5, metalness: .2, side: THREE.DoubleSide });
   glowMats.push({ mat: paintMat, color: 0xffffff, k: 1 }, { mat: railMat, color: 0xffffff, k: 0.4 });   // rail is a big surface — less, or bloom fogs the screen
-  const railKeep = i => notInGap(i) && !inPit(i / SAMPLES) && !OPEN_EDGES;   // open-edged (level 3): go over the side and you fall
+  const railKeep = i => notInGap(i) && !inPit(i / SAMPLES) && RAILS;   // no rails on open / sand edges: go over the side and you fall
   if (HEIGHTFIELD) for (const s of [1, -1])    // a concrete curb face down from the road edge to the terrain cut
     strip({ s: s * (GW + 0.05), u: 0.05 }, { s: s * (GW + 0.05), u: -1.6 }, concreteMat, railKeep);
   for (const s of [1, -1]) strip({ s: s * (GW + 0.62), u: 0.72 }, { s: s * (GW + 0.62), u: 1.12 }, railMat, railKeep).castShadow = true;
@@ -1334,16 +1503,39 @@ let cliffMat, waterTex;
   lake.position.set(TRACK_CENTER.x, LAKE_Y, TRACK_CENTER.z);
   lake.receiveShadow = true;
   lake.renderOrder = 20;   // after everything nearer, so the depth test skips the pixels they cover
-  scene.add(lake);
+  if (!DESERT) scene.add(lake);   // the desert's valley stays dry
 }
 
 // ------------------------------------------------------------------
-// Switchback terrain (level 2) — the mountain face the road is cut into. Between two traverses
-// the face slopes from one road shelf down to the next; above the top traverse it climbs, below
-// the bottom one and past the hairpins it falls away to the valley. The road (and both pits) are
-// carved flat into it. Steep ground is tinted toward rock.
+// Heightfield terrain (levels 2 + 4) — one mesh the road is cut into. Its shape comes from the
+// course (COURSE.ground: level 2's mountain face, level 4's desert + mesa); the road (and both pits)
+// are carved flat into it. Steep ground is tinted toward rock (banded sandstone in the desert).
 // ------------------------------------------------------------------
 const TERRAIN_STEP = 7;          // grid spacing (world units)
+const DESERT_SAND   = 0xe3c18e;  // desert floor
+const DESERT_ROCK_A = 0xa9512f;  // sandstone strata: the red bands…
+const DESERT_ROCK_B = 0xd9a06c;  // …and the pale ones
+const DESERT_HAZE   = 0xe8cca2;  // warm dust the fog / far scenery lean toward (by DESERT_HAZE_MIX)
+const DESERT_HAZE_MIX = 0.4;
+const DESERT_NIGHT_SAND = 0.45; // night: sand brightness multiplier
+// a tiling sand detail texture (pale speckle + faint wind ripples), drawn once — the colour comes
+// from the vertex colours / material tint
+let _sandTex = null;
+function sandTex() {
+  if (_sandTex) return _sandTex;
+  const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const cx = cv.getContext('2d'), img = cx.createImageData(N, N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const rip = Math.sin((y + Math.sin(x * 2 * Math.PI / N * 2) * 6) * 2 * Math.PI / N * 9) * 0.015;
+    const v = 0.9 + rip + (Math.random() - 0.5) * 0.12, o = (y * N + x) * 4;
+    img.data[o] = img.data[o + 1] = img.data[o + 2] = Math.min(255, v * 255); img.data[o + 3] = 255;
+  }
+  cx.putImageData(img, 0, 0);
+  _sandTex = new THREE.CanvasTexture(cv);
+  _sandTex.wrapS = _sandTex.wrapT = THREE.RepeatWrapping; _sandTex.colorSpace = THREE.SRGBColorSpace;
+  _sandTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return _sandTex;
+}
 const TERRAIN_FALLOFF = 400;     // the mountain slopes down to the valley over this much at the grid's edge
 const SHELF_W      = ROAD_HALF_WIDTH + 4;   // flat shelf either side of the road centreline
 let terrainHeightAt = null, terrainMat = null;
@@ -1378,15 +1570,14 @@ function groundize(p, ribbonDy) {
   if (terrainHeightAt) p.y = terrainHeightAt(p.x, p.z) + ribbonDy + 0.4; else p.y += ribbonDy;
   return p;
 }
-if (HEIGHTFIELD) {   // (the grid extents still follow level 2's traverses — generalise for a new heightfield course)
+if (HEIGHTFIELD) {   // the course's own ground (COURSE.ground), then the pits and the road's shelf carved in
   const hash = (x, y) => { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); };
   const vn = (x, y) => {
     const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
     const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
     return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
   };
-  const LAST = sbLegs.length - 1, zTop = sbLegs[0].z, zBot = sbLegs[LAST].z;
-  const x0 = -SB.W - 900, x1 = SB.W + 900, z0 = zTop + 850, z1 = zBot - 850;
+  const GND = COURSE.ground(vn), { x0, x1, z0, z1 } = GND;
   const nx = Math.ceil((x1 - x0) / TERRAIN_STEP), nz = Math.ceil((z0 - z1) / TERRAIN_STEP);
   const flatV = v => new THREE.Vector3(v.x, 0, v.z).normalize();
   const pits = [
@@ -1396,25 +1587,13 @@ if (HEIGHTFIELD) {   // (the grid extents still follow level 2's traverses — g
   const H = new Float32Array((nx + 1) * (nz + 1));
   for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
     const x = x0 + i * TERRAIN_STEP, z = z0 - j * TERRAIN_STEP;
-    let h;
-    if (z >= zTop) {                            // above the top traverse: climb to a crest, then fall away behind
-      const up = Math.max(0, z - zTop - SHELF_W);
-      h = sbLegY(0, x) + Math.min(up * 0.9, 160) - Math.max(0, up - 180) * 0.75 + vn(x * 0.03, z * 0.03) * 12;
-    }
-    else if (z <= zBot) h = sbLegY(LAST, x) - Math.max(0, zBot - z - SHELF_W) * 0.7 + vn(x * 0.02, z * 0.02) * 20;
-    else {
-      const k = Math.min(LAST - 1, Math.floor((zTop - z) / SB.DZ)), t = (zTop - z - k * SB.DZ);
-      const tt = THREE.MathUtils.clamp((t - SHELF_W) / (SB.DZ - 2 * SHELF_W), 0, 1);
-      h = THREE.MathUtils.lerp(sbLegY(k, x), sbLegY(k + 1, x), tt) + vn(x * 0.04, z * 0.04) * 7 * Math.sin(Math.PI * tt);
-    }
-    const edge = Math.abs(x) - (SB.W + SB.DZ / 2 + 25);          // past the hairpins the mountain falls away
-    if (edge > 0) h -= edge * 0.7 + vn(x * 0.02, z * 0.02) * Math.min(edge, 60) * 0.3;
+    let h = GND.h(x, z);
     for (const pt of pits) {                                       // flatten both pits
       const d = Math.hypot(x - pt.c.x, z - pt.c.z);
       h = THREE.MathUtils.lerp(pt.c.y - 0.6, h, THREE.MathUtils.smoothstep(d, pt.R + 16, pt.R + 130));   // wide blend: no plateau cliff
     }
     const nr = nearestRoad(x, z, 36);                             // carve the road's shelf last, so the pit blend can't bury the road
-    if (nr.i >= 0 && nr.d < ROAD_HALF_WIDTH + 14) {
+    if (nr.i >= 0 && nr.d < ROAD_HALF_WIDTH + 14 && !COURSE.noShelf?.(nr.i / SAMPLES)) {
       const f = frames[nr.i], shelf = f.p.y - 0.45 - Math.abs(f.side.y) * ROAD_HALF_WIDTH;
       h = THREE.MathUtils.lerp(shelf, h, THREE.MathUtils.smoothstep(nr.d, ROAD_HALF_WIDTH + 2.5, ROAD_HALF_WIDTH + 14));
     }
@@ -1439,12 +1618,21 @@ if (HEIGHTFIELD) {   // (the grid extents still follow level 2's traverses — g
   g.setIndex(idx); g.computeVertexNormals();
   // steep ground reads as bare rock / earth
   const nrm = g.attributes.normal, col = new Float32Array(nrm.count * 3);
+  const sand = new THREE.Color(DESERT_SAND), rockA = new THREE.Color(DESERT_ROCK_A), rockB = new THREE.Color(DESERT_ROCK_B), c3 = new THREE.Color();
   for (let k = 0; k < nrm.count; k++) {
+    if (DESERT) {                              // sand on the flats; steep faces show horizontal strata
+      const r = THREE.MathUtils.smoothstep(1 - nrm.getY(k), 0.1, 0.32), y = pos[k * 3 + 1], x = pos[k * 3], z = pos[k * 3 + 2];
+      const band = 0.5 + 0.5 * Math.sin(y * 0.42 + Math.sin(y * 0.061) * 2.5);
+      c3.copy(sand).multiplyScalar(0.93 + 0.1 * vn(x * 0.02, z * 0.02)).lerp(c3.clone().copy(rockA).lerp(rockB, band), r);
+      col.set([c3.r, c3.g, c3.b], k * 3);
+      continue;
+    }
     const r = THREE.MathUtils.smoothstep(1 - nrm.getY(k), 0.18, 0.5);
     col.set([1 - r * 0.45, 1 - r * 0.5, 1 - r * 0.47], k * 3);
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  terrainMat = new THREE.MeshStandardMaterial({ color: 0x4f7233, roughness: 1, vertexColors: true });
+  terrainMat = DESERT ? new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, vertexColors: true, map: sandTex() })
+                      : new THREE.MeshStandardMaterial({ color: 0x4f7233, roughness: 1, vertexColors: true });
   const terrain = new THREE.Mesh(g, terrainMat);
   terrain.receiveShadow = true; terrain.renderOrder = 10;
   scene.add(terrain);
@@ -1527,7 +1715,7 @@ const hazeMats = [];
   const posts = new THREE.InstancedMesh(postGeo, postMat, Math.floor(SAMPLES / 6) * 2);
   const dummy = new THREE.Object3D(); let pc = 0;
   for (let i = 0; i < SAMPLES; i += 6) {
-    if (inPit(i / SAMPLES) || OPEN_EDGES) continue;
+    if (inPit(i / SAMPLES) || !RAILS) continue;
     const f = frames[i];
     for (const s of [1, -1]) {
       dummy.position.copy(f.p).addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 0.8)).addScaledVector(f.up, 0.7);
@@ -1547,7 +1735,8 @@ const hazeMats = [];
       const a = (i / seg) * Math.PI * 2;
       const jag = (Math.sin(a * 6 + seed) * 0.5 + 0.5) * (0.35 + rnd() * 0.65)
                 + (Math.sin(a * 17 + seed) * 0.5 + 0.5) * 0.25;
-      const h = minH + (maxH - minH) * Math.min(1, jag);
+      const h = DESERT ? minH * 0.3 + (maxH * 0.55 - minH * 0.3) * THREE.MathUtils.smoothstep(jag, 0.42, 0.52)   // flat-topped mesas
+                       : minH + (maxH - minH) * Math.min(1, jag);
       const x = center.x + Math.cos(a) * radius, z = center.z + Math.sin(a) * radius;
       verts.push(x, -400, z, x, h, z);
       if (i < seg) { const b = i * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
@@ -1559,7 +1748,7 @@ const hazeMats = [];
     m.renderOrder = -1; scene.add(m);
     return m.material;
   }
-  const rock = new THREE.Color(0x53637a);
+  const rock = new THREE.Color(DESERT ? 0xa35d3e : 0x53637a);   // far ridgelines (red mesas in the desert)
   [ { r: 2400, min: 300, max: 800,  f: 0.25 },
     { r: 3300, min: 380, max: 1000, f: 0.45 },
     { r: 4200, min: 460, max: 1150, f: 0.65 },
@@ -1570,13 +1759,13 @@ const hazeMats = [];
   // Distant valley floor far below the road — sells the height/exposure
   const valley = new THREE.Mesh(
     new THREE.CircleGeometry(6000, 48),
-    new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6f7d55).lerp(hazeColor, 0.35), fog: true })
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(DESERT ? 0xc9a273 : 0x6f7d55).lerp(hazeColor, 0.35), fog: true })
   );
   valley.rotation.x = -Math.PI / 2; valley.position.set(center.x, -260, center.z);
   scene.add(valley);
   // with the HDRI: a darker green seen through haze, tinted by hand — full fog at this range
   // turned it into a flat white void
-  hazeMats.push({ mat: valley.material, base: new THREE.Color(0x34432a), f: 0.45, noFog: true });
+  hazeMats.push({ mat: valley.material, base: new THREE.Color(DESERT ? 0x9a7348 : 0x34432a), f: 0.45, noFog: true });
 }
 
 
@@ -1664,6 +1853,9 @@ const wallAt = (u, lateral) => {    // true if (u, lateral) is inside a wall's f
 const TREE_SPACING  = 5;     // try a tree every N road samples, per side
 const TREE_CHANCE   = 0.55;  // probability each try places one
 const TREE_MIN_H = 14, TREE_MAX_H = 26;   // world units (rider is 2.5)
+const CACTUS_KEEP = 0.4;                 // desert: the share of tree spots that get a saguaro
+const CACTUS_MIN_H = 6, CACTUS_MAX_H = 13;
+const CACTUS_MODEL_H = [0.85, 0.3];      // the GLB cacti's height vs a tree spot's (the flowering prickly pear stays low)
 const TREE_CHUNK = 12;   // trees per instanced draw (per variant) — the unit of frustum culling
 const DETAIL_U_MIN = COURSE.detailUMin ?? 150 / TOTAL_LEN;   // trees / props start this far down the run (crowd room)
 const trees = [];
@@ -1677,6 +1869,7 @@ const trees = [];
     if (GAPS.some(g => i / SAMPLES > g.u0 - 0.01 && i / SAMPLES < g.u1 + 0.01)) continue;
     if (i / SAMPLES > BRIDGE.u0 - 0.012 && i / SAMPLES < BRIDGE.u1 + 0.012) continue;
     if (i / SAMPLES < DETAIL_U_MIN || i / SAMPLES > FINISH_U - 0.04) continue;   // leave room for the start/finish crowds
+    if (wormZone(i / SAMPLES)) continue;
     for (const s of [1, -1]) {
       if (rnd() > TREE_CHANCE) continue;
       const d = ROAD_HALF_WIDTH + 6 + rnd() * (SHOULDER - ROAD_HALF_WIDTH - 10);
@@ -1689,11 +1882,58 @@ const trees = [];
         const q = frames[j].p;
         if (Math.hypot(q.x - p.x, q.z - p.z) < ROAD_HALF_WIDTH + 5 && Math.abs(q.y - p.y) < 30) clear = false;
       }
-      if (clear) trees.push({ p, h: TREE_MIN_H + rnd() * (TREE_MAX_H - TREE_MIN_H), yaw: rnd() * Math.PI * 2, v: Math.floor(rnd() * 3) });
+      if (DESERT && rnd() > CACTUS_KEEP) continue;         // the desert is sparser
+      const [h0, h1] = DESERT ? [CACTUS_MIN_H, CACTUS_MAX_H] : [TREE_MIN_H, TREE_MAX_H];
+      if (clear) trees.push({ p, h: h0 + rnd() * (h1 - h0), yaw: rnd() * Math.PI * 2, v: Math.floor(rnd() * 3) });
     }
   }
 
+  if (DESERT) {   // saguaros: a trunk with 0–2 arms (3 variants), instanced — no model needed
+    const mat = new THREE.MeshStandardMaterial({ color: 0x55743c, roughness: 0.85 });
+    const cap = (r, x, y) => new THREE.SphereGeometry(r, 9, 4, 0, Math.PI * 2, 0, Math.PI / 2).translate(x, y, 0);
+    const geoFor = arms => {
+      const parts = [new THREE.CylinderGeometry(0.075, 0.085, 1, 9).translate(0, 0.5, 0), cap(0.075, 0, 1)];
+      for (let a = 0; a < arms; a++) {
+        const sd = a ? -1 : 1, y = 0.36 + a * 0.15, up = 0.26 + a * 0.07;
+        parts.push(new THREE.CylinderGeometry(0.05, 0.05, 0.16, 8).rotateZ(Math.PI / 2).translate(sd * 0.13, y, 0));
+        parts.push(new THREE.CylinderGeometry(0.05, 0.055, up, 8).translate(sd * 0.2, y + up / 2 - 0.02, 0), cap(0.05, sd * 0.2, y + up - 0.02));
+      }
+      return mergeGeos(parts);
+    };
+    const m4 = new THREE.Matrix4(), qq = new THREE.Quaternion(), sv = new THREE.Vector3(), upv = new THREE.Vector3(0, 1, 0);
+    const procByV = [[], [], []];
+    for (let v = 0; v < 3; v++) {
+      const mine = trees.filter(t => t.v === v), geo = geoFor(v);
+      for (let c0 = 0; c0 < mine.length; c0 += TREE_CHUNK) {
+        const chunk = mine.slice(c0, c0 + TREE_CHUNK), inst = new THREE.InstancedMesh(geo, mat, chunk.length);
+        chunk.forEach((t, i) => inst.setMatrixAt(i, m4.compose(t.p, qq.setFromAxisAngle(upv, t.yaw), sv.setScalar(t.h))));
+        inst.computeBoundingSphere(); inst.castShadow = inst.receiveShadow = true;
+        scene.add(inst); procByV[v].push(inst);
+      }
+    }
+    // Quaternius cacti (CC0, one GLB: a columnar cactus, a flowering prickly pear) for variants 0 and 1;
+    // the procedural saguaros keep variant 2
+    new GLTFLoader().loadAsync('assets/models/cacti.glb').then(g => {
+      g.scenes.slice(0, 2).forEach((variant, v) => {
+        variant.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(variant), nativeH = box.max.y - box.min.y, mine = trees.filter(t => t.v === v);
+        variant.traverse(o => {
+          if (!o.isMesh) return;
+          o.material.envMapIntensity = ENV_INTENSITY;
+          const geo = o.geometry.clone().applyMatrix4(o.matrixWorld).translate(0, -box.min.y, 0);
+          for (let c0 = 0; c0 < mine.length; c0 += TREE_CHUNK) {
+            const chunk = mine.slice(c0, c0 + TREE_CHUNK), inst = new THREE.InstancedMesh(geo, o.material, chunk.length);
+            chunk.forEach((t, i) => inst.setMatrixAt(i, m4.compose(t.p, qq.setFromAxisAngle(upv, t.yaw), sv.setScalar(t.h * CACTUS_MODEL_H[v] / nativeH))));
+            inst.computeBoundingSphere(); inst.castShadow = inst.receiveShadow = true;
+            scene.add(inst);
+          }
+        });
+        procByV[v].forEach(m => { m.visible = false; });
+      });
+    }).catch(e => console.warn('[assets] cactus models unavailable, keeping procedural saguaros:', e?.message || e));
+  }
   // fallback cones (instanced)
+  if (!DESERT) {
   const coneTrunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.5, 0.8, 6, 6),
     new THREE.MeshStandardMaterial({ color: 0x5b3d24, roughness: 1 }), trees.length);
   const coneLeaf = new THREE.InstancedMesh(new THREE.ConeGeometry(4, 12, 7),
@@ -1740,6 +1980,315 @@ const trees = [];
     });
     coneTrunk.visible = coneLeaf.visible = false;
   }).catch(e => console.warn('[assets] pine models unavailable, keeping cone trees:', e?.message || e));
+  }
+}
+
+// ------------------------------------------------------------------
+// The natural arch (level 4) — a sandstone span over the road: a thick tube along a half-ellipse
+// whose feet sink into the desert either side, roughened so it reads as rock.
+// ------------------------------------------------------------------
+const ARCH_SPAN = 27;    // half-width between the feet (road half-width is 9)
+const ARCH_RISE = 36;    // height of the arch's centreline above the road
+const ARCH_THICK = 7.5;  // tube radius
+if (IS_MESA) {
+  const f = frameAt(mrMid('arch')), sd = new THREE.Vector3(f.side.x, 0, f.side.z).normalize(), pts = [];
+  for (let k = 0; k <= 28; k++) {
+    const th = -0.4 + (Math.PI + 0.8) * k / 28;
+    pts.push(f.p.clone().addScaledVector(sd, Math.cos(th) * ARCH_SPAN).add(new THREE.Vector3(0, Math.sin(th) * ARCH_RISE, 0)));
+  }
+  const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 80, ARCH_THICK, 14, false);
+  const pa = geo.attributes.position, na = geo.attributes.normal;
+  for (let i = 0; i < pa.count; i++) {        // lumpy: push each vertex out along its normal by a little noise
+    const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i);
+    const n = Math.sin(x * 0.31 + y * 0.17) * Math.cos(z * 0.27 - y * 0.23) + 0.5 * Math.sin(y * 0.9 + x * 0.4);
+    pa.setXYZ(i, x + na.getX(i) * n * 1.4, y + na.getY(i) * n * 1.4, z + na.getZ(i) * n * 1.4);
+  }
+  geo.computeVertexNormals();
+  const archMat = new THREE.MeshStandardMaterial({ color: 0xc0714a, roughness: 0.95 });
+  // (deferred past the module body: the texture loader is defined further down)
+  Promise.resolve().then(() => applyPBR(archMat, 'rock', 0xe0956a)).catch(e => console.warn('[assets] rock textures unavailable (arch):', e?.message || e));
+  const arch = new THREE.Mesh(geo, archMat);
+  arch.castShadow = arch.receiveShadow = true;
+  scene.add(arch); groundMeshes.push(arch);    // the trackside camera won't sit behind it
+}
+
+// ------------------------------------------------------------------
+// The sandworms (level 4) — an original design: a ringed, armour-plated body and a round mouth
+// lined with rows of hooked teeth. The giant one lies across the flats, its body arching up out of
+// the sand: the road runs in at its mouth, climbs through its glowing gut (its muscles push you,
+// WORM_PUSH) and leaves through a tear in its side, where a kicker throws you over a steep drop.
+// Its head rears up while you're far off and slams down over the road as you arrive — scrubbed by
+// your progress, so it always lands just in time. Out on the horizon smaller ones (still huge)
+// surface and dive (SANDWORMS).
+// ------------------------------------------------------------------
+const WORM_R      = 17;     // giant worm: body radius (outside)
+const WORM_WALL   = 3.2;    // body wall thickness (the gut's radius is WORM_R - WORM_WALL)
+const WORM_FLOOR  = 10.2;   // the road runs this far below the body's centreline
+const WORM_RING   = 9;      // armour ring spacing along the body
+const WORM_HEAD   = 64;     // length of the head section that rears up
+const WORM_REAR   = 1.1;    // how far it rears (radians) while you're still far off
+const WORM_SLAM   = [250, 85];   // your distance from the mouth when the slam starts / when it lands
+const WORM_TEAR_R = 12.5;   // how far round the road's way out the side wall is torn open
+const WORM_TAIL   = 280;    // body past the tear: curls away and dives into the sand
+const WORM_TEETH  = 20;     // teeth per row (3 rows round the inside of the lip)
+const SANDWORMS   = 4;      // distant worms surfacing on the horizon
+const SW = { R: 11, len: 320, segs: 24, arcL: 560, arcH: 150, secs: 15, wait: [2, 9], clear: 380 };   // their size / arc / timing; `clear`: how far from the road they surface
+// the colossus: just past the arch a worm ~5.5× the giant one erupts beside the road, arcs high over
+// it and dives on the far side. Scrubbed by your progress like the giant's head, so you always pass
+// right under it: its head crosses the road when you're `overheadAt` short of the crossing point.
+const COLOSSUS = { R: 95, segs: 40, segL: 30, D: 760, H: 260, rate: 1.4, overheadAt: 380, crossAfterArch: 60 };   // H: the arc's top (centreline) above the road
+let wormQuake = 0;          // camera shake from the slam (decays)
+const worm = { head: null, axis: null, roared: false, landed: false, distant: [], col: null, dust: [] };
+let wormSkinMat = null;
+if (IS_MESA) {
+  const UPV = new THREE.Vector3(0, 1, 0);
+  wormSkinMat = new THREE.MeshStandardMaterial({ color: 0x8a7458, roughness: 0.9 });
+  Promise.resolve().then(() => applyPBR(wormSkinMat, 'rock', 0xa48a6a)).catch(e => console.warn('[assets] rock textures unavailable (worm):', e?.message || e));
+  // gut: dark flesh with glowing veins (a canvas emissive map)
+  const vc = document.createElement('canvas'); vc.width = vc.height = 256;
+  const vx = vc.getContext('2d'); vx.fillStyle = '#000'; vx.fillRect(0, 0, 256, 256);
+  vx.strokeStyle = '#ff6a6a'; vx.lineCap = 'round';
+  for (let v = 0; v < 26; v++) {
+    let x = Math.random() * 256, y = Math.random() * 256, a = Math.random() * 6.3; vx.lineWidth = 1 + Math.random() * 3;
+    vx.beginPath(); vx.moveTo(x, y);
+    for (let k = 0; k < 18; k++) { a += (Math.random() - 0.5) * 0.9; x += Math.cos(a) * 9; y += Math.sin(a) * 9; vx.lineTo(x, y); }
+    vx.stroke();
+  }
+  const veins = new THREE.CanvasTexture(vc); veins.wrapS = veins.wrapT = THREE.RepeatWrapping; veins.colorSpace = THREE.SRGBColorSpace;
+  const gutMat = new THREE.MeshStandardMaterial({ color: 0x7a2733, roughness: 0.45, metalness: 0.05, emissive: 0xff3b4e, emissiveMap: veins, emissiveIntensity: 0.9, side: THREE.BackSide });
+  const toothMat = new THREE.MeshStandardMaterial({ color: 0xe6dcc2, roughness: 0.5 });
+  const ring = s => Math.pow(0.5 + 0.5 * Math.cos(2 * Math.PI * s / WORM_RING), 4);   // 1 on an armour ridge
+
+  // ---- the giant worm's path: along the road through the belly, then curling away and diving
+  const b = MR.marks.belly, n0 = Math.round(mrU(b.s0) * SAMPLES), n1 = Math.round(mrU(b.s1) * SAMPLES);
+  const path = []; let sAcc = 0;
+  const push = (c, side, up) => { if (path.length) sAcc += c.distanceTo(path[path.length - 1].c); path.push({ c, side, up, s: sAcc }); };
+  for (let i = n0; i <= n1; i++) {
+    const f = frames[i];
+    push(f.p.clone().addScaledVector(f.up, WORM_FLOOR), f.side.clone(), f.up.clone());   // a ring every road sample (~2.6 units)
+  }
+  const sTear = sAcc, fT = frames[n1];
+  const sgn = Math.sign(fT.side.dot(new THREE.Vector3().crossVectors(fT.tan, UPV))) || 1;
+  let hd = new THREE.Vector3(fT.tan.x, 0, fT.tan.z).normalize(), c = path[path.length - 1].c.clone();
+  for (let d = 4; d <= WORM_TAIL; d += 4) {
+    hd.applyAxisAngle(UPV, -(Math.PI * 0.6) / (WORM_TAIL / 4));      // curls right, away from the road
+    const dive = Math.min(0.75, (d / WORM_TAIL) * 1.1);
+    c = c.clone().addScaledVector(hd, 4); c.y -= dive * 4;
+    const t = hd.clone().setY(-dive).normalize(), side = new THREE.Vector3().crossVectors(t, UPV).normalize().multiplyScalar(sgn);
+    let up = new THREE.Vector3().crossVectors(side, t); if (up.y < 0) up.negate();
+    push(c, side, up);
+  }
+  const L = sAcc;
+  // the tear: the road straight out of the side, beyond the kicker
+  // the tear: a ragged round hole wherever the wall comes within WORM_TEAR_R of the road's path out
+  // (3D, so the roof stays whole: you burst out low through the side, not through a sliced-off slab)
+  const tearRoad = []; for (let i = n1 - 4; i <= Math.min(SAMPLES, n1 + Math.round(80 / TOTAL_LEN * SAMPLES)); i++) tearRoad.push(frames[i].p.clone().addScaledVector(frames[i].up, 3));
+  const torn = (p, k) => path[k].s > sTear - 6 && tearRoad.some(q => p.distanceTo(q) < WORM_TEAR_R + Math.sin(p.y * 0.7 + p.x * 0.3) * 1.5 + Math.sin(p.z * 0.5 - p.x * 0.2) * 1.2);
+  // one tube over path[k0..k1]: rings of RS verts, radius r(q, θ); faces dropped where torn
+  const RS = 30;
+  function tube(k0, k1, r, origin) {
+    const pos = [], uv = [], idx = [];
+    for (let k = k0; k <= k1; k++) {
+      const q = path[k];
+      for (let j = 0; j <= RS; j++) {
+        const th = j / RS * Math.PI * 2, rr = r(q, th);
+        pos.push(q.c.x + (q.side.x * Math.cos(th) + q.up.x * Math.sin(th)) * rr - origin.x,
+                 q.c.y + (q.side.y * Math.cos(th) + q.up.y * Math.sin(th)) * rr - origin.y,
+                 q.c.z + (q.side.z * Math.cos(th) + q.up.z * Math.sin(th)) * rr - origin.z);
+        uv.push(j / RS * 5, q.s / 18);
+      }
+    }
+    const P = k => new THREE.Vector3(pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]).add(origin);
+    for (let k = 0; k < k1 - k0; k++) for (let j = 0; j < RS; j++) {
+      const a = k * (RS + 1) + j, bb = a + 1, cc = a + RS + 1, d = cc + 1;
+      const cen = P(a).add(P(bb)).add(P(cc)).add(P(d)).multiplyScalar(0.25);
+      if (torn(cen, k0 + k)) continue;
+      idx.push(a, bb, cc, bb, d, cc);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    // make the normals point outward (whichever way the rings wound)
+    const n = g.attributes.normal, q0 = path[k0], o = new THREE.Vector3(n.getX(0), n.getY(0), n.getZ(0));
+    if (o.dot(q0.side) < 0) { const ix = g.index.array; for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; } g.computeVertexNormals(); }
+    return g;
+  }
+  const taper = q => (1 + 0.16 * THREE.MathUtils.smoothstep(14, 0, q.s)) * (1 - 0.55 * THREE.MathUtils.smoothstep(q.s, L - 140, L));
+  const outR = (q, th) => (WORM_R + 1.5 * ring(q.s) + 0.45 * Math.abs(Math.sin(th * 7))) * taper(q);
+  const inR  = (q, th) => (WORM_R - WORM_WALL - 1.0 * ring(q.s) + 0.3 * Math.sin(th * 11 + q.s * 0.2)) * taper(q);
+  const kHead = path.findIndex(q => q.s >= WORM_HEAD);
+  // head: built about the hinge so it can rear
+  const hinge = path[kHead].c.clone();
+  const head = new THREE.Group(); head.position.copy(hinge);
+  head.add(new THREE.Mesh(tube(0, kHead, outR, hinge), wormSkinMat), new THREE.Mesh(tube(0, kHead, inR, hinge), gutMat));
+  // three rows of hooked teeth round the inside of the lip (none along the floor, where the road runs)
+  const toothGeo = new THREE.ConeGeometry(0.85, 4.6, 6).translate(0, 2.3, 0);
+  for (const [row, s0] of [[0, 1.5], [1, 5], [2, 9]]) {
+    const q = path.find(p => p.s >= s0) || path[0];
+    for (let t = 0; t < WORM_TEETH; t++) {
+      const th = (t + row * 0.5) / WORM_TEETH * Math.PI * 2, rad = q.side.clone().multiplyScalar(Math.cos(th)).addScaledVector(q.up, Math.sin(th));
+      if (Math.sin(th) < -0.45) continue;
+      const tan = path[Math.min(path.length - 1, path.indexOf(q) + 1)].c.clone().sub(q.c).normalize();
+      const tooth = new THREE.Mesh(toothGeo, toothMat);
+      tooth.position.copy(q.c).addScaledVector(rad, inR(q, th) - 0.2).sub(hinge);
+      tooth.quaternion.setFromUnitVectors(UPV, rad.clone().negate().multiplyScalar(0.75).addScaledVector(tan, 0.65).normalize());
+      tooth.scale.setScalar(1.25 - row * 0.25);
+      head.add(tooth);
+    }
+  }
+  head.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
+  scene.add(head);
+  worm.head = head;
+  const fwd = path[0].c.clone().sub(hinge).setY(0).normalize();               // hinge → mouth, flat
+  worm.axis = new THREE.Vector3().crossVectors(fwd, UPV).normalize();          // turning about it lifts the mouth
+  // body: the rest, fixed
+  const body = new THREE.Mesh(tube(kHead, path.length - 1, outR, new THREE.Vector3()), wormSkinMat);
+  const gut = new THREE.Mesh(tube(kHead, path.length - 1, inR, new THREE.Vector3()), gutMat);
+  body.castShadow = body.receiveShadow = gut.receiveShadow = true;
+  scene.add(body, gut); groundMeshes.push(body);
+
+  // ---- distant worms: instanced armour segments along a parabola, head first
+  const segL = SW.len / SW.segs;
+  const segGeo = new THREE.LatheGeometry([[0.9, 0], [1, 0.18], [1.06, 0.5], [1, 0.82], [0.9, 1]].map(([r, y]) => new THREE.Vector2(r * SW.R, y * segL)), 18).rotateX(Math.PI / 2);
+  for (let w = 0; w < SANDWORMS; w++) {
+    const inst = new THREE.InstancedMesh(segGeo, wormSkinMat, SW.segs);
+    inst.frustumCulled = false; inst.visible = false;
+    scene.add(inst);
+    worm.distant.push({ inst, t: 0, wait: 1 + w * 3.5, A: new THREE.Vector3(), h: new THREE.Vector3() });
+  }
+
+  // ---- the colossus: a vertical arc across the road just past the arch, ends sunk in the sand
+  {
+    const C = COLOSSUS, sC = MR.marks.arch.s1 + C.crossAfterArch, fc = frameAt(mrU(sC));
+    const tH = new THREE.Vector3(fc.tan.x, 0, fc.tan.z).normalize(), sideH = new THREE.Vector3(-tH.z, 0, tH.x);
+    let A = null, B = null;
+    for (const ang of [0, 0.3, -0.3, 0.6, -0.6]) {             // across the road, ends clear of any other stretch of it
+      const dir = sideH.clone().applyAxisAngle(UPV, ang);
+      const a = fc.p.clone().addScaledVector(dir, -C.D), b = fc.p.clone().addScaledVector(dir, C.D);
+      if (nearestRoad(a.x, a.z, 220).d >= 220 && nearestRoad(b.x, b.z, 220).d >= 220) { A = a; B = b; break; }
+    }
+    if (!A) { A = fc.p.clone().addScaledVector(sideH, -C.D); B = fc.p.clone().addScaledVector(sideH, C.D); }
+    A.y = (terrainHeightAt ? terrainHeightAt(A.x, A.z) : A.y) - 25; B.y = (terrainHeightAt ? terrainHeightAt(B.x, B.z) : B.y) - 25;
+    const Lh = Math.hypot(B.x - A.x, B.z - A.z), peak = fc.p.y + C.H - (A.y + B.y) / 2;
+    const segGeo = new THREE.LatheGeometry([[0.95, 0], [1, 0.15], [1.04, 0.5], [1, 0.85], [0.95, 1]].map(([r, y]) => new THREE.Vector2(r * C.R, y * C.segL)), 24).rotateX(Math.PI / 2);
+    const inst = new THREE.InstancedMesh(segGeo, wormSkinMat, C.segs);
+    inst.frustumCulled = false; inst.visible = false; inst.castShadow = true;
+    // its head: a dark maw ringed with hooked teeth, facing the way it travels (+z)
+    const head = new THREE.Group(), toothMat2 = new THREE.MeshStandardMaterial({ color: 0xe6dcc2, roughness: 0.5 });
+    head.add(new THREE.Mesh(new THREE.CircleGeometry(C.R * 0.86, 32), new THREE.MeshStandardMaterial({ color: 0x1a0306, emissive: 0x3a0610, roughness: 0.6 })));
+    const tg = new THREE.ConeGeometry(C.R * 0.07, C.R * 0.32, 6).translate(0, C.R * 0.16, 0);
+    for (let k = 0; k < 28; k++) {
+      const a = k / 28 * Math.PI * 2, t = new THREE.Mesh(tg, toothMat2), rad = new THREE.Vector3(Math.cos(a), Math.sin(a), 0);
+      t.position.copy(rad).multiplyScalar(C.R * 0.9).setZ(C.R * 0.05);
+      t.quaternion.setFromUnitVectors(UPV, rad.clone().multiplyScalar(-0.8).add(new THREE.Vector3(0, 0, 0.6)).normalize());
+      head.add(t);
+    }
+    head.visible = false;
+    scene.add(inst, head);
+    worm.col = { inst, head, A, B, Lh, peak, sC, roared: false, over: false };
+  }
+  // ---- sand thrown up where the colossus breaks the surface: a small pool of soft sprites
+  {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+    const cx = cv.getContext('2d'), gr = cx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    cx.fillStyle = gr; cx.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(cv);
+    for (let k = 0; k < 36; k++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: 0xd9bb8c, transparent: true, depthWrite: false, opacity: 0 }));
+      sp.visible = false; scene.add(sp);
+      worm.dust.push({ sp, life: 0, t: 0, v: new THREE.Vector3() });
+    }
+  }
+}
+function resetWorms() { worm.roared = worm.landed = false; wormQuake = 0; if (worm.col) worm.col.roared = false; }
+// a fresh spot for a distant worm: on the terrain, well clear of the road, the arc clear too
+function placeDistantWorm(dw) {
+  const b = new THREE.Box3(); for (let i = 0; i <= SAMPLES; i += 40) b.expandByPoint(frames[i].p);
+  for (let tries = 0; tries < 40; tries++) {
+    const x = THREE.MathUtils.lerp(b.min.x - 500, b.max.x + 500, Math.random()), z = THREE.MathUtils.lerp(b.min.z - 500, b.max.z + 500, Math.random());
+    const a = Math.random() * Math.PI * 2, h = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+    const ok = [0, 0.5, 1].every(k => nearestRoad(x + h.x * SW.arcL * k, z + h.z * SW.arcL * k, SW.clear).d >= SW.clear);
+    if (!ok) continue;
+    dw.A.set(x, terrainHeightAt ? terrainHeightAt(x, z) - 6 : 0, z); dw.h.copy(h);
+    return true;
+  }
+  return false;
+}
+function updateWorms(dt) {
+  if (!IS_MESA) return;
+  wormQuake = Math.max(0, wormQuake - dt * 1.6);
+  // ---- the giant one: rears while you're far off, slams down as you reach it
+  const d = (WORM_U.u0 - state.u) * TOTAL_LEN, now = performance.now() / 1000;
+  const k = THREE.MathUtils.smoothstep(d, WORM_SLAM[1], WORM_SLAM[0]);           // 1 far off → 0 down
+  const a = WORM_REAR * Math.pow(k, 0.55) + Math.sin(now * 0.7) * 0.05 * k;     // sways while it waits
+  worm.head.quaternion.setFromAxisAngle(worm.axis, a);
+  const live = gameState === 'PLAYING';
+  if (live && !worm.roared && d < WORM_SLAM[0]) { worm.roared = true; sfx?.roar(); }
+  if (live && !worm.landed && k < 0.02 && d > 0) { worm.landed = true; sfx?.crash(1); wormQuake = 1.4; }
+  // ---- distant ones
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(1, 1, 1), Z = new THREE.Vector3(0, 0, 1);
+  updateColossus(dt, live, M, Q, S, Z);
+  const at = (dw, x) => {      // a point on the arc, x along it
+    const y = SW.arcH * 4 * x * (SW.arcL - x) / (SW.arcL * SW.arcL);
+    return new THREE.Vector3(dw.A.x + dw.h.x * x, dw.A.y + y, dw.A.z + dw.h.z * x);
+  };
+  for (const dw of worm.distant) {
+    if (dw.wait > 0) { dw.wait -= dt; if (dw.wait <= 0 && !placeDistantWorm(dw)) dw.wait = 3; else if (dw.wait <= 0) { dw.t = 0; dw.inst.visible = true; } continue; }
+    dw.t += dt;
+    const xh = dw.t / SW.secs * (SW.arcL + SW.len);
+    if (xh - SW.len > SW.arcL) { dw.inst.visible = false; dw.wait = THREE.MathUtils.lerp(SW.wait[0], SW.wait[1], Math.random()); continue; }
+    for (let s = 0; s < SW.segs; s++) {
+      const x0 = xh - (s + 1) * segLen(), x1 = x0 + segLen();
+      if (x1 < 0 || x0 > SW.arcL) { M.makeScale(0, 0, 0); dw.inst.setMatrixAt(s, M); continue; }
+      const p0 = at(dw, x0), p1 = at(dw, x1), taperK = s === 0 ? 0.92 : 1 - 0.5 * Math.max(0, (s - SW.segs * 0.6) / (SW.segs * 0.4));
+      Q.setFromUnitVectors(Z, p1.clone().sub(p0).normalize()); S.set(taperK, taperK, 1);
+      dw.inst.setMatrixAt(s, M.compose(p0, Q, S));
+    }
+    dw.inst.instanceMatrix.needsUpdate = true;
+  }
+}
+function segLen() { return SW.len / SW.segs; }
+function updateColossus(dt, live, M, Q, S, Z) {
+  const c = worm.col, C = COLOSSUS; if (!c) return;
+  const at = x => new THREE.Vector3(
+    THREE.MathUtils.lerp(c.A.x, c.B.x, x / c.Lh), THREE.MathUtils.lerp(c.A.y, c.B.y, x / c.Lh) + c.peak * 4 * x * (c.Lh - x) / (c.Lh * c.Lh),
+    THREE.MathUtils.lerp(c.A.z, c.B.z, x / c.Lh));
+  const d = (c.sC / MR.len - state.u) * TOTAL_LEN;                // how far you are short of the crossing
+  const xh = c.Lh / 2 + (C.overheadAt - d) * C.rate, body = C.segs * C.segL;
+  const on = xh > 0 && xh < c.Lh + body;
+  c.inst.visible = on; c.head.visible = on && xh < c.Lh;
+  if (on) {
+    for (let k = 0; k < C.segs; k++) {
+      const x0 = xh - (k + 1) * C.segL, x1 = x0 + C.segL;
+      if (x1 < 0 || x0 > c.Lh) { M.makeScale(0, 0, 0); c.inst.setMatrixAt(k, M); continue; }
+      const p0 = at(Math.max(0, x0)), p1 = at(Math.min(c.Lh, x1)), len = p0.distanceTo(p1);
+      const taper = 1 - 0.45 * Math.max(0, (k - C.segs * 0.65) / (C.segs * 0.35));
+      Q.setFromUnitVectors(Z, p1.clone().sub(p0).normalize()); S.set(taper, taper, Math.max(0.05, len / C.segL));
+      c.inst.setMatrixAt(k, M.compose(p0, Q, S));
+    }
+    c.inst.instanceMatrix.needsUpdate = true;
+    if (c.head.visible) { const ph = at(xh), pn = at(Math.min(c.Lh, xh + 2)); c.head.position.copy(ph); c.head.lookAt(xh + 2 < c.Lh ? pn : ph.clone().add(ph.clone().sub(at(xh - 2)))); }
+    // sand bursting up where it breaks the surface (both ends while the body passes through)
+    for (const [P, act] of [[c.A, xh < body + 40], [c.B, xh > c.Lh - 20]]) {
+      if (!act || Math.random() > dt * 14) continue;
+      const fr = worm.dust.find(q => q.life <= 0); if (!fr) continue;
+      const a = Math.random() * Math.PI * 2, r = C.R * (0.6 + Math.random() * 0.7);
+      fr.sp.position.set(P.x + Math.cos(a) * r, P.y + 25 + Math.random() * C.R * 0.6, P.z + Math.sin(a) * r);
+      fr.v.set(Math.cos(a) * 12, 25 + Math.random() * 30, Math.sin(a) * 12); fr.life = fr.t = 3 + Math.random() * 2; fr.sp.visible = true;
+    }
+  }
+  for (const q of worm.dust) {
+    if (q.life <= 0) continue;
+    q.life -= dt; q.v.y -= 6 * dt; q.sp.position.addScaledVector(q.v, dt);
+    const k = 1 - q.life / q.t;
+    q.sp.scale.setScalar(C.R * (0.9 + k * 1.8)); q.sp.material.opacity = 0.55 * (1 - k) * Math.min(1, k * 6);
+    if (q.life <= 0) q.sp.visible = false;
+  }
+  // a roar as it breaks the surface; the ground shakes while it streams over the road
+  if (live && !c.roared && xh > 0 && xh < c.Lh / 2) { c.roared = true; sfx?.roar(); wormQuake = Math.max(wormQuake, 0.7); }
+  if (live && xh > c.Lh / 2 - 60 && xh < c.Lh / 2 + body) wormQuake = Math.max(wormQuake, 0.35);
 }
 
 // ------------------------------------------------------------------
@@ -1760,7 +2309,7 @@ let grassWind = { value: 0 };  // wind-sway clock shared with the grass shader
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const skip = (u, lat) => SKY ||
     GAPS.some(g => u > g.u0 - 0.006 && u < g.u1 + 0.006) || onBridge(u) || inPit(u) || u < DETAIL_U_MIN + 0.005 ||
-    u > FINISH_U - 0.038 || wallAt(u, lat);
+    u > FINISH_U - 0.038 || wallAt(u, lat) || wormZone(u);
   const onOtherRoad = p => HEIGHTFIELD && (nearestRoad(p.x, p.z, 24).d < ROAD_HALF_WIDTH + 2 || steepAt(p.x, p.z) > 0.75);   // another traverse, or too steep
   const up = new THREE.Vector3(0, 1, 0);
 
@@ -1811,14 +2360,15 @@ let grassWind = { value: 0 };  // wind-sway clock shared with the grass shader
   for (let b = 0; b < 46; b++) {
     const x = 8 + Math.random() * 112, h = 55 + Math.random() * 70, lean = (Math.random() - 0.5) * 34, w = 2 + Math.random() * 3;
     const gr = cx.createLinearGradient(0, 128, 0, 128 - h);
-    gr.addColorStop(0, '#5f7d36'); gr.addColorStop(1, Math.random() < 0.3 ? '#c9c56a' : '#8fae4a');
+    if (DESERT) { gr.addColorStop(0, '#8a7445'); gr.addColorStop(1, Math.random() < 0.4 ? '#e2cf8c' : '#b9a466'); }   // dry bunchgrass
+    else { gr.addColorStop(0, '#5f7d36'); gr.addColorStop(1, Math.random() < 0.3 ? '#c9c56a' : '#8fae4a'); }
     cx.fillStyle = gr;
     cx.beginPath(); cx.moveTo(x - w, 128); cx.quadraticCurveTo(x + lean * 0.4, 128 - h * 0.6, x + lean, 128 - h); cx.lineTo(x + w, 128); cx.fill();
   }
   // transparent pixels get grass-coloured RGB so the smaller mip levels (distant tufts) don't
   // darken — a canvas would store them as black, so build a DataTexture from the pixels instead
   const px = cx.getImageData(0, 0, 128, 128).data;
-  for (let k = 0; k < px.length; k += 4) if (px[k + 3] === 0) { px[k] = 88; px[k + 1] = 118; px[k + 2] = 48; }
+  for (let k = 0; k < px.length; k += 4) if (px[k + 3] === 0) { px[k] = DESERT ? 150 : 88; px[k + 1] = DESERT ? 128 : 118; px[k + 2] = DESERT ? 80 : 48; }
   const gtex = new THREE.DataTexture(new Uint8Array(px), 128, 128, THREE.RGBAFormat);
   gtex.flipY = true; gtex.colorSpace = THREE.SRGBColorSpace; gtex.generateMipmaps = true;
   gtex.minFilter = THREE.LinearMipmapLinearFilter; gtex.magFilter = THREE.LinearFilter; gtex.needsUpdate = true;
@@ -1883,7 +2433,7 @@ function updateDetailLOD(dt) {
 // Real-world assets — HDRI sky + lighting, PBR tarmac and grass (Poly Haven, CC0)
 // Fetched, so they need a local server; from file:// the procedural look above stays.
 // ------------------------------------------------------------------
-const HDRI_URL       = 'assets/hdri/kloppenheim_06_puresky_2k.hdr';
+const HDRI_URL       = DESERT ? 'assets/hdri/qwantani_noon_puresky_2k.hdr' : 'assets/hdri/kloppenheim_06_puresky_2k.hdr';   // the desert: clear, high noon sun (a low one glared out the road on every bend facing it)
 const HDRI_EXPOSURE  = 1.0;    // sky brightness (background)
 const ENV_INTENSITY  = 0.8;    // how much the HDRI lights / reflects on materials
 const texLoader = new THREE.TextureLoader();
@@ -1955,7 +2505,7 @@ function aimHdri(tex, az) {
     Object.assign(railMat, { metalness: 0.85, roughness: 0.32 });
     scene.traverse(o => { if (o.material?.isMeshStandardMaterial) o.material.envMapIntensity = ENV_INTENSITY; });
     // haze + far scenery pick up the photographed horizon so distance melts into the sky
-    const haze = horizon;
+    const haze = DESERT ? horizon.clone().lerp(new THREE.Color(DESERT_HAZE), DESERT_HAZE_MIX) : horizon;
     scene.fog.color.copy(haze);
     for (const h of hazeMats) {
       h.mat.color.copy(h.base).lerp(haze, h.f);
@@ -1969,7 +2519,32 @@ applyPBR(cliffMat, 'rock', 0xc8c4b8)
   .catch(e => console.warn('[assets] rock textures unavailable:', e?.message || e));
 applyPBR(groundMeshes[1].material, 'asphalt', 0xffffff)
   .catch(e => console.warn('[assets] asphalt textures unavailable:', e?.message || e));
-applyPBR(groundMeshes[0].material, 'grass', 0xd2e6a0).then(() => {
+if (DESERT) {
+  Object.assign(groundMeshes[0].material, { map: sandTex(), color: new THREE.Color(DESERT_SAND) }).needsUpdate = true;   // pit floors + berms
+  // real sand (Poly Haven aerial_sand): its own colour is divided back out, so the flats keep DESERT_SAND
+  // and the strata keep their vertex colours — the texture only adds the ripples and grain
+  const pitMat = groundMeshes[0].material;
+  Promise.all([pitMat, terrainMat].filter(Boolean).map(m => applyPBR(m, 'sand', 0xffffff))).then(() => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 16;
+    const cx = cv.getContext('2d'); cx.drawImage(pitMat.map.image, 0, 0, 16, 16);
+    const px = cx.getImageData(0, 0, 16, 16).data, avg = [0, 0, 0];
+    for (let i = 0; i < px.length; i += 4) for (let c = 0; c < 3; c++) avg[c] += px[i + c] / 255 / 256;
+    const lin = new THREE.Color().setRGB(avg[0], avg[1], avg[2], THREE.SRGBColorSpace), inv = new THREE.Color(1 / lin.r, 1 / lin.g, 1 / lin.b);
+    pitMat.color.set(DESERT_SAND).multiply(inv);
+    if (terrainMat) terrainMat.color.copy(inv);
+    if (NIGHT) for (const m of [pitMat, terrainMat].filter(Boolean)) m.color.multiplyScalar(DESERT_NIGHT_SAND);
+    for (const m of [pitMat, terrainMat].filter(Boolean)) {      // anti-tiling, as on the grass
+      m.onBeforeCompile = sh => {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `
+          vec4 texA = texture2D( map, vMapUv );
+          vec4 texB = texture2D( map, vMapUv * 0.117 + vec2(0.31, 0.57) );
+          diffuseColor *= mix( texA, texB, 0.45 );`);
+      };
+      m.normalScale = new THREE.Vector2(0.7, 0.7); m.needsUpdate = true;
+    }
+  }).catch(e => console.warn('[assets] sand textures unavailable, keeping the procedural sand:', e?.message || e));
+}
+else applyPBR(groundMeshes[0].material, 'grass', 0xd2e6a0).then(() => {
   // anti-tiling: blend in the same texture at a much larger scale so the repeat doesn't read
   groundMeshes[0].material.onBeforeCompile = sh => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `
@@ -2848,7 +3423,7 @@ const BAL_CONTROL    = 2.6;    // how hard steering pushes the needle
 const grind = { on: false, side: 1, t: 0, dist: 0, bal: 0, drift: 0, name: '', cd: 0, buffer: 0 };
 const grindPts = () => Math.round(grind.dist * GRIND_PTS * (grind.name === 'BOARDSLIDE' ? GRIND_SLIDE_X : 1));
 let jumpWasDown = false, grindWasDown = false;
-const railAt = u => !OPEN_EDGES && !GAPS.some(g => u > g.u0 && u < g.u1) && !inPit(u);   // breaks at the gaps; none in the pit
+const railAt = u => RAILS && !GAPS.some(g => u > g.u0 && u < g.u1) && !inPit(u);   // breaks at the gaps; none in the pit
 
 // --- Ramps / gaps: a kicker launches you; you need speed to clear a gap or you fall.
 const RAMP_BASE   = 6;         // base launch vy off a kicker
@@ -2874,6 +3449,7 @@ function resetRun() {
   combo.n = combo.pts = combo.t = 0; state.crashT = 0; state.free = false; state.atEdge = false; state.slideV = 0;
   sea.bridgeDone = false; sea.showsDone = [];
   resetMonsters();
+  resetWorms();
   push.meter = 1; push.cd = 0; kickWasDown = false;
   trick.type = null; trick.spin = 0; trick.air = 0; trick.grab = false;
   if (rig.mixer) rig.mixer.stopAllAction();
@@ -3323,6 +3899,7 @@ function update(dt) {
   const flying = STUNT && state.airborne;              // level 3's gap is a 5-second flight: no drag in the air, or the lip's launch falls short
   if (!flying) accel -= drag * state.speed * state.speed;
   if (!flying) accel -= ROLL;
+  if (inWorm(state.u) && !state.airborne) accel += WORM_PUSH;   // level 4: the worm's gut pushes you through
   if (!state.atEdge) accel -= carve ? Math.abs(carveRate) * state.speed * CARVE_SCRUB_TURN   // pinned on a rail isn't a carve
                                     : Math.abs(state.heading) * state.speed * (CARVE_SCRUB / 100);
 
@@ -3427,13 +4004,13 @@ function update(dt) {
   // soft wall at shoulder edge
   // edges: level 2's rails (hop them to ride the mountain), level 1's cliff edges (ride off and
   // you fall); walls where there's nowhere to go — the bridge rails, mountain walls, the pits
-  const canLeave = !inPit(state.u) && state.u > FREE_MIN_U && !finish.crossed;
+  const canLeave = !inPit(state.u) && state.u > FREE_MIN_U && !finish.crossed && !inWorm(state.u);   // the gut walls hold you
   let limit = Infinity;
   if (OPEN_EDGES) {
     // open edges: over the side and you fall (the pits still hold you)
     if (canLeave && Math.abs(state.lateral) > ROAD_HALF_WIDTH + 1.2) return enterFree(inp, frameAt(state.u), true);
     if (!canLeave) limit = ROAD_HALF_WIDTH - 0.5;
-  } else if (HOP_RAILS) {
+  } else if (RIDE_OFF) {
     // like level 1: the rails don't hold you — ride or jump through one and you're on the mountain
     // (except by the start and finish pits)
     if (canLeave && Math.abs(state.lateral) > RAIL_LAT + 0.8) return enterFree(inp, f);
@@ -3617,6 +4194,7 @@ function place(info) {
   camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 3);
   camera.updateProjectionMatrix();
 
+  shake += wormQuake;                              // the giant worm slamming down
   // speed shake — subtle camera jitter that grows with velocity
   camera.position.x += (Math.random() - 0.5) * shake;
   camera.position.y += (Math.random() - 0.5) * shake;
@@ -3783,37 +4361,66 @@ function updateTimer() {
   const txt = String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(Math.floor(secs % 60)).padStart(2, '0');
   if (txt !== timerTxt) drawTimer(txt);
 }
-// race position under it: POS 2/4 (same treatment, smaller)
-const POS_PX = 20, POS_Y = TIMER_Y + 30;
-const posCv = document.createElement('canvas');
-posCv.width = 256; posCv.height = Math.ceil(POS_PX * POP_RES * 1.8);
-const posCx = posCv.getContext('2d');
-const posTex = new THREE.CanvasTexture(posCv); posTex.colorSpace = THREE.SRGBColorSpace;
-const posMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
-  new THREE.MeshBasicMaterial({ map: posTex, transparent: true, opacity: TIMER_OPACITY, depthTest: false, depthWrite: false, toneMapped: false }));
-hudScene.add(posMesh);
-let posTxt = '';
+// race standings under the minimap: one row per racer, 1st at the top, a dot in their minimap
+// colour. Every name is its own little quad, drawn once — when places change the quads just slide
+// to their new rows (STAND_SLIDE), so nothing redraws a texture mid-run.
+const STAND_PX = 16, STAND_ROW = 22, STAND_W = 150;    // text size, row spacing, row width (CSS px)
+const STAND_SLIDE = 10;       // how quickly a row slides to its new place (1/s)
+const STAND_ME = '#ffd23c';   // your row (and your minimap dot)
+const stand = { rows: [], key: '', last: 0 };       // rows: { who: 'me' | cpu, mesh, num, y }
+function standQuad(draw) {
+  const cv = document.createElement('canvas'); cv.width = STAND_W * POP_RES; cv.height = STAND_ROW * POP_RES;
+  const cx = cv.getContext('2d');
+  cx.font = `400 ${STAND_PX * POP_RES}px ${TIMER_FONT}`; cx.letterSpacing = 1.5 * POP_RES + 'px';
+  cx.textBaseline = 'middle'; cx.shadowColor = 'rgba(0,0,0,.65)'; cx.shadowBlur = 6 * POP_RES; cx.shadowOffsetY = 2 * POP_RES;
+  draw(cx, cv.width, cv.height);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: TIMER_OPACITY, depthTest: false, depthWrite: false, toneMapped: false }));
+  m.scale.set(STAND_W, STAND_ROW, 1);
+  return m;
+}
+const standGroup = new THREE.Group(); hudScene.add(standGroup);
+const posMesh = standGroup;   // (the HUD pass checks its visibility)
+function buildStandings() {
+  for (const r of stand.rows) { standGroup.remove(r.mesh, r.num); r.mesh.material.map.dispose(); r.num.material.map.dispose(); }
+  stand.rows = [];
+  const racers = [{ who: 'me', name: 'YOU', color: STAND_ME }, ...cpus.map((c, i) => ({ who: c, name: c.name, color: '#' + new THREE.Color(MAP_CPU_COLORS[i % MAP_CPU_COLORS.length]).getHexString() }))];
+  racers.forEach((r, i) => {
+    const mesh = standQuad((cx, W, H) => {
+      cx.fillStyle = r.color; cx.beginPath(); cx.arc(34 * POP_RES, H / 2, 4 * POP_RES, 0, Math.PI * 2); cx.fill();
+      cx.fillStyle = r.who === 'me' ? STAND_ME : '#fff'; cx.fillText(r.name, 46 * POP_RES, H / 2);
+    });
+    const num = standQuad((cx, W, H) => { cx.fillStyle = 'rgba(255,255,255,.75)'; cx.fillText(String(i + 1), 6 * POP_RES, H / 2); });
+    standGroup.add(mesh, num);
+    stand.rows.push({ who: r.who, mesh, num, y: i });
+  });
+  stand.key = cpus.map(c => c.name).join();
+  layoutPos();
+}
+// everyone's order: finishers first (by finish time), then whoever's furthest down the run
+function standings() {
+  const me = { who: 'me', fin: finish.crossed, t: lastRun?.timeS ?? 0, u: state.u };
+  const all = [me, ...cpus.map(c => ({ who: c, fin: c.finished, t: c.finishT, u: c.u }))];
+  return all.sort((a, b) => a.fin !== b.fin ? (a.fin ? -1 : 1) : a.fin ? a.t - b.t : b.u - a.u);
+}
 function layoutPos() {
-  posMesh.scale.set(posCv.width / POP_RES, posCv.height / POP_RES, 1);
-  posMesh.position.set(MAP_X + MAP_W / 2, -(MAP_Y + MAP_H + 16), 0);   // under the minimap
+  const x = MAP_X + STAND_W / 2, y0 = MAP_Y + MAP_H + 10 + STAND_ROW / 2;
+  stand.rows.forEach((r, i) => { r.num.position.set(x, -(y0 + i * STAND_ROW), 0); r.mesh.position.set(x, -(y0 + r.y * STAND_ROW), 0); });
 }
 function updatePos() {
   posMesh.visible = timerMesh.visible && cpus.length > 0 && ['COUNTDOWN', 'PLAYING', 'PIT'].includes(gameState);   // with the minimap
+  const now = performance.now(), dt = Math.min(0.1, (now - stand.last) / 1000); stand.last = now;
   if (!posMesh.visible) return;
-  const txt = `POS ${racePlace()}/${cpus.length + 1}`;
-  if (txt === posTxt) return;
-  posTxt = txt;
-  const W = posCv.width, H = posCv.height;
-  posCx.clearRect(0, 0, W, H);
-  posCx.font = `400 ${POS_PX * POP_RES}px ${TIMER_FONT}`;
-  posCx.letterSpacing = 2 * POP_RES + 'px';
-  posCx.textAlign = 'center'; posCx.textBaseline = 'middle';
-  posCx.fillStyle = '#fff';
-  posCx.shadowColor = 'rgba(0,0,0,.6)'; posCx.shadowBlur = 8 * POP_RES; posCx.shadowOffsetY = 2 * POP_RES;
-  posCx.fillText(txt, W / 2, H / 2);
-  posTex.needsUpdate = true;
+  if (stand.rows.length !== cpus.length + 1 || stand.key !== cpus.map(c => c.name).join()) buildStandings();
+  const order = standings(), x = MAP_X + STAND_W / 2, y0 = MAP_Y + MAP_H + 10 + STAND_ROW / 2;
+  for (const r of stand.rows) {
+    const want = order.findIndex(o => o.who === r.who);
+    r.y += (want - r.y) * Math.min(1, dt * STAND_SLIDE);
+    if (Math.abs(want - r.y) < 0.002) r.y = want;
+    r.mesh.position.set(x, -(y0 + r.y * STAND_ROW), 0);
+  }
 }
-document.fonts?.load(`400 ${TIMER_PX * POP_RES}px "Share Tech Mono"`).then(() => { timerTxt = posTxt = ''; }).catch(() => {});   // redraw once the font lands
+document.fonts?.load(`400 ${TIMER_PX * POP_RES}px "Share Tech Mono"`).then(() => { timerTxt = ''; stand.key = '-'; }).catch(() => {});   // redraw once the font lands   // redraw once the font lands
 layoutTimer();
 
 // Minimap — top left, under the Esc pill: the course drawn to shape (turned so downhill runs down
@@ -4026,6 +4633,13 @@ const sfx = (() => {
       cheer = Math.max(cheer, 0.5);
     },
     cheer(k = 1) { cheer = Math.max(cheer, k); },
+    // the giant worm: a long, low, gravelly bellow
+    roar() {
+      noise({ type: 'lowpass', f: 480, to: 110, q: 2, dur: 2.8, gain: 0.9, attack: 0.3 });
+      tone({ type: 'sawtooth', f: 64, to: 36, dur: 2.6, gain: 0.32 });
+      tone({ type: 'sawtooth', f: 97, to: 52, dur: 2.1, gain: 0.18, delay: 0.12 });
+      cheer = Math.max(cheer, 0.8);
+    },
     splash(dist) {
       const k = THREE.MathUtils.clamp(1 - dist / 2200, 0.05, 1);
       noise({ type: 'lowpass', f: 1600, to: 300, dur: 1.6, gain: 0.9 * k, attack: 0.03 }); tone({ f: 70, to: 35, dur: 0.8, gain: 0.6 * k });
@@ -4575,6 +5189,10 @@ if (NIGHT) {
   scene.background = new THREE.Color(0x02040a);
   scene.fog.color.set(NIGHT_FOG);
   for (const h of hazeMats) h.mat.color.set(NIGHT_FOG).multiplyScalar(1.5);
+  if (DESERT) {                                   // pale sand glows under the moon: take it down to the alpine ground's level
+    terrainMat?.color.multiplyScalar(DESERT_NIGHT_SAND);
+    groundMeshes[0].material.color.multiplyScalar(DESERT_NIGHT_SAND);
+  }
   renderer.toneMappingExposure = NIGHT_EXPOSURE;
   // road paint: faintly reflective on the mountain roads, neon on the sky course
   for (const g of glowMats) {
@@ -5093,15 +5711,26 @@ function bestTime(i, night = false) {
 const tsEl = document.getElementById('tracksel');
 const ts = { col: 0, row: 0, from: 'title' };
 const LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.2" fill="rgba(255,255,255,.14)"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.6" r="1.4" fill="#fff" stroke="none"/></svg>';
-tsEl.querySelector('.ts-grid').innerHTML = [0, 1].map(row => LEVELS.map((lv, i) => `
-  <div class="ts-card${row ? ' night' : ''}" data-col="${i}" data-row="${row}">
-    <div class="ts-shot" style="background-image:url(${row ? lv.shotNight : lv.shot}), linear-gradient(160deg, #36507a, #121a30)"></div>
-    <div class="ts-lock">${LOCK_SVG}</div>
-    <div class="ts-soon">COMING SOON</div>
-    <div class="ts-label"><span class="ts-name">${row ? '☾ ' : ''}${lv.name}</span><span class="ts-best"></span></div>
-  </div>`).join('')).join('');
-const tsCards = [...tsEl.querySelectorAll('.ts-card')];
-const tsCard = (col, row) => tsCards[row * LEVELS.length + col];
+// one page per world: its courses across (day on top, night under), planned slots as COMING SOON
+const TS_SLOTS = 3;
+const worldOf = i => Math.max(0, WORLDS.findIndex(w => w.id === LEVELS[i].world));
+const worldLevels = w => LEVELS.map((lv, i) => i).filter(i => worldOf(i) === w);
+tsEl.querySelector('.ts-pages').innerHTML = WORLDS.map((w, wi) => `<div class="ts-page ts-grid" data-world="${wi}">` +
+  [0, 1].map(row => [...Array(TS_SLOTS)].map((_, k) => {
+    const i = worldLevels(wi)[k];
+    if (i === undefined) return `<div class="ts-card empty"><div class="ts-shot"></div><div class="ts-soon">COMING SOON</div>
+      <div class="ts-label"><span class="ts-name">${row ? '☾ ' : ''}???</span></div></div>`;
+    const lv = LEVELS[i];
+    return `<div class="ts-card${row ? ' night' : ''}" data-col="${i}" data-row="${row}">
+      <div class="ts-shot" style="background-image:url(${row ? lv.shotNight : lv.shot}), linear-gradient(160deg, #36507a, #121a30)"></div>
+      <div class="ts-lock">${LOCK_SVG}</div>
+      <div class="ts-soon">COMING SOON</div>
+      <div class="ts-label"><span class="ts-name">${row ? '☾ ' : ''}${lv.name}</span><span class="ts-best"></span></div>
+    </div>`;
+  }).join('')).join('') + '</div>').join('');
+tsEl.querySelector('.ts-dots').innerHTML = WORLDS.map(() => '<i></i>').join('');
+const tsCards = [...tsEl.querySelectorAll('.ts-card:not(.empty)')];
+const tsCard = (col, row) => tsCards.find(c => +c.dataset.col === col && +c.dataset.row === row);
 
 function tsRequirement(col, row) {
   if (row) return `Win ${LEVELS[col].name} (1st place) to unlock its night run`;
@@ -5116,6 +5745,11 @@ function renderTrackSel() {
     const best = open ? bestTime(col, row === 1) : null;
     c.querySelector('.ts-best').textContent = best != null ? 'BEST ' + fmtTime(best) : '';
   });
+  const w = worldOf(ts.col), worldOpen = worldLevels(w).some(i => isUnlocked(i));
+  tsEl.querySelectorAll('.ts-page').forEach(pg => pg.classList.toggle('hidden', +pg.dataset.world !== w));
+  tsEl.querySelector('.ts-wname').textContent = (worldOpen ? '' : '🔒 ') + WORLDS[w].name;
+  tsEl.querySelectorAll('.ts-dots i').forEach((d, k) => d.classList.toggle('on', k === w));
+  tsEl.querySelectorAll('.ts-arrow').forEach(a => a.classList.toggle('off', WORLDS.length < 2));
   const open = isUnlocked(ts.col, ts.row === 1);
   tsEl.querySelector('.ts-info').textContent = !open ? '🔒 ' + tsRequirement(ts.col, ts.row)
     : ts.row === 1 && !NIGHT_READY ? 'Unlocked! Night tracks are on their way'
@@ -5130,12 +5764,19 @@ function openTrackSel(from) {
   tsEl.classList.remove('hidden'); document.body.classList.add('selecting');
   renderTrackSel();
 }
-function tsMove(dc, dr) {
+function tsMove(dc, dr) {          // left / right run through every course, flipping world pages at the ends
   const n = LEVELS.length;
   ts.col = (ts.col + dc + n) % n;
   ts.row = THREE.MathUtils.clamp(ts.row + dr, 0, 1);
   renderTrackSel();
 }
+function tsWorld(dw) {             // jump to the next / previous world's first course
+  const w = (worldOf(ts.col) + dw + WORLDS.length) % WORLDS.length, lv = worldLevels(w);
+  if (!lv.length) return;
+  ts.col = lv[0]; if (!isUnlocked(ts.col, ts.row === 1)) ts.row = 0;
+  renderTrackSel();
+}
+tsEl.querySelectorAll('.ts-arrow').forEach(a => a.addEventListener('click', e => { e.stopPropagation(); if (gameState === 'TRACKSEL') tsWorld(+a.dataset.dw); }));
 function tsDeny() {
   const c = tsCard(ts.col, ts.row);
   c.classList.remove('deny'); void c.offsetWidth; c.classList.add('deny');
@@ -5157,6 +5798,8 @@ function tsKey(e) {
   else if (e.code === 'ArrowRight' || e.code === 'KeyD') tsMove(1, 0);
   else if (e.code === 'ArrowUp' || e.code === 'KeyW') tsMove(0, -1);
   else if (e.code === 'ArrowDown' || e.code === 'KeyS') tsMove(0, 1);
+  else if (e.code === 'KeyQ') tsWorld(-1);
+  else if (e.code === 'KeyE') tsWorld(1);
   else if (e.repeat) return;
   else if (e.code === 'Enter' || e.code === 'Space') pickTrack();
   else if (e.code === 'Escape') tsBack();
@@ -5310,6 +5953,7 @@ function pollMenuGamepad(dt) {
   if (gameState === 'TITLE') { if (a) startFromTitle(); return; }
   if (gameState === 'TRACKSEL') {
     if (lf) tsMove(-1, 0); if (rt) tsMove(1, 0); if (up) tsMove(0, -1); if (dn) tsMove(0, 1);
+    if (padEdge(p, 4)) tsWorld(-1); if (padEdge(p, 5)) tsWorld(1);   // LB / RB
     if (a) pickTrack(); else if (b) tsBack();
     return;
   }
@@ -5902,6 +6546,13 @@ function tourShots() {
       at(FINISH_U, 'THE FINISH', { back: -90, side: 30, up: 24, dolly: 60, ahead: 40 }),
     ];
   }
+  if (IS_MESA) return [
+    at(mrU(MR.marks.top.s1), 'THE MESA', { back: -70, side: 45, up: 40, dolly: 60, ahead: 220, lookUp: -70 }),
+    at(mrMid('arch'), 'THE ARCH', { back: -110, side: 8, up: 14, dolly: 80, lookUp: 24 }),
+    at(mrMid('esses'), 'THE FLATS', { back: -220, side: 170, up: 130, dolly: 120 }),
+    at(mrU(MR.marks.wormApproach.s0), 'THE WORM', { back: -110, side: -55, up: 24, dolly: 80, ahead: 230, lookUp: 70 }),
+    at(FINISH_U, 'THE FINISH', { back: -90, side: 30, up: 24, dolly: 60, ahead: 40 }),
+  ];
   const wall = MOUNTAIN_WALLS[0];
   return [
     at(0.06, 'THE DROP', { back: -50, side: 30, up: 30, dolly: 60, ahead: 200, lookUp: -40 }),
@@ -6431,6 +7082,7 @@ function updateCpu(c, i, dt) {
     const pull = STUNT ? -G * f.tan.y * (f.tan.y < 0 ? c.skill * (1 + behind) : 1) : G * slope * c.skill * (1 + behind);
     const air = STUNT && c.airborne;                       // (no drag over level 3's gap, like yours)
     let accel = pull - (air ? 0 : DRAG_TUCK * (tucked ? 1 : CPU_SITUP_DRAG) * c.speed * c.speed + ROLL) - (c.turn ? Math.abs(c.turn) * c.speed * CARVE_SCRUB_TURN : Math.abs(c.heading) * c.speed * (CARVE_SCRUB / 100));
+    if (inWorm(c.u) && !c.airborne) accel += WORM_PUSH;
     c.speed = Math.max(0, c.speed + accel * dt);
     c.kickCd -= dt;
     c.recoverT = Math.max(0, (c.recoverT || 0) - dt);
@@ -6668,6 +7320,7 @@ function frame(now) {
   updateChaos(dt);
   updateNight(dt);
   updateMonsters(dt);
+  updateWorms(dt);
   updateRadio();
   pollMenuGamepad(dt);
   if (warm.at && now >= warm.at) warmUp();

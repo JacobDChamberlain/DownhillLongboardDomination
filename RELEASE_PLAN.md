@@ -26,7 +26,7 @@ The game is 11 weeks old (first commit July 11, 2026). It is one 6,456-line `ind
 
 | Area | Current state | Release-ready? |
 | --- | --- | --- |
-| Tracks | 3 courses (Ridge Run, Switchback Pass, Loop Heights), each with a night version: 6 variants | No: about 25% of target |
+| Tracks | 4 courses (Ridge Run, Switchback Pass, Loop Heights; Mesa Run in the desert world), each with a night version: 8 variants | No: about 25% of target |
 | Modes | 1: race against 3 CPUs, scored on time, tricks, air and combo | No |
 | Riders | 12 (8 Quaternius models, 3 re-dressed looks, THE OG) | Count yes; stats and cosmetics no |
 | Tricks | Ollie, 180s, one grab, revert, 50-50, boardslide, combos | Thin: 8 grind tricks still open |
