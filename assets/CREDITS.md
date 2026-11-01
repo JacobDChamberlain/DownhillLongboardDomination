@@ -1,6 +1,6 @@
 # Asset credits
 
-All assets are licensed **CC0** (public domain).
+All assets are licensed **CC0** (public domain), except the hit sounds in `sfx/` (Pixabay Content License, below).
 
 | File | Asset |
 |---|---|
@@ -26,3 +26,13 @@ All assets are licensed **CC0** (public domain).
 HDRI and textures are from [Poly Haven](https://polyhaven.com).
 
 - `tracks/*.jpg` — track select screenshots, captured from the game itself (course tour).
+
+## Sound effects (`sfx/`)
+
+From [Pixabay](https://pixabay.com/sound-effects/) under the [Pixabay Content License](https://pixabay.com/service/license-summary/): free for commercial use, no attribution required, but not CC0. Originals are in `sfx/raw/`; the game copies are trimmed to start on the sound, faded out and converted to mono.
+
+| File | Use |
+|---|---|
+| `sfx/punch.mp3` | brawl punch / stick smack |
+| `sfx/kick.mp3` | kick smack (race + brawl) |
+| `sfx/ough_1.mp3`, `sfx/ough_2.mp3` | victim grunts, picked at random |
