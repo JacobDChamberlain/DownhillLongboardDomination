@@ -458,20 +458,47 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 // ------------------------------------------------------------------
-// Levels — ?level=N picks the course (1 = Ridge Run, 2 = Switchback Pass). "Next Race" on the
-// final screen reloads into the next one, carrying the song + playback position across.
+// Levels — ?level=N picks the course (1 = Ridge Run, 2 = Switchback Pass, 3 = Loop Heights). "Next
+// Race" on the final screen reloads into the next one, carrying the song + playback position across.
+// Each entry describes how its level *behaves*, so the code checks features, not level ids:
+//   build      the course builder (returns the spline's control points)
+//   terrain    'ridge' — a road on a ridge: grass shoulders, cliff walls, valley floor (level 1)
+//              'heightfield' — one terrain mesh with shelves cut for the road (level 2)
+//              'sky' — a slab road on pillars, nothing beside it to stand on (level 3)
+//   edges      'cliff' — no rails, ride off the grass and you fall (rails only where placed)
+//              'rails' — rails all the way; hop one to ride the terrain
+//              'open' — no rails; over the side and you drop
+//   physics    'normal' | 'stunt' (level 3: signed gravity, stick-to-the-track, stunt tuck,
+//              no air drag, camera rolls with the track)
+//   pitFlipped the finish pit hangs upside down (level 3, past the twist)
+//   bankGain / bankMax   how hard curves bank the road frames (max in radians)
+// Hand-placed course data (gaps, ramps, items, finish spots…) lives in COURSE, by id. Content
+// that exists on one course only (level 3's monsters, level 1's sea…) still checks IS_*.
 // ------------------------------------------------------------------
 const LEVELS = [
-  { id: 'ridge',  name: 'RIDGE RUN',       lbKey: 'downhill.scores',            shot: 'assets/tracks/ridge.jpg', shotNight: 'assets/tracks/ridge-night.jpg' },
-  { id: 'switch', name: 'SWITCHBACK PASS', lbKey: 'downhill.scores.switchback', shot: 'assets/tracks/switch.jpg', shotNight: 'assets/tracks/switch-night.jpg' },
-  { id: 'loops',  name: 'LOOP HEIGHTS',    lbKey: 'downhill.scores.loops',      shot: 'assets/tracks/loops.jpg', shotNight: 'assets/tracks/loops-night.jpg' },
+  { id: 'ridge',  name: 'RIDGE RUN',       lbKey: 'downhill.scores',            shot: 'assets/tracks/ridge.jpg', shotNight: 'assets/tracks/ridge-night.jpg',
+    build: () => buildRidgePoints(), terrain: 'ridge', edges: 'cliff', physics: 'normal', bankGain: 1.4, bankMax: 0.30 },
+  { id: 'switch', name: 'SWITCHBACK PASS', lbKey: 'downhill.scores.switchback', shot: 'assets/tracks/switch.jpg', shotNight: 'assets/tracks/switch-night.jpg',
+    build: () => buildSwitchbackPoints(), terrain: 'heightfield', edges: 'rails', physics: 'normal', bankGain: 1.4, bankMax: 0.12 },   // hairpins bank less
+  { id: 'loops',  name: 'LOOP HEIGHTS',    lbKey: 'downhill.scores.loops',      shot: 'assets/tracks/loops.jpg', shotNight: 'assets/tracks/loops-night.jpg',
+    build: () => buildLoopPoints(), terrain: 'sky', edges: 'open', physics: 'stunt', pitFlipped: true, arcDivisions: 6000,
+    bankGain: 10, bankMax: 1.45 },   // only the figure-8 banks, its ends nearly sideways
 ];
 const LEVEL_IDX = THREE.MathUtils.clamp((parseInt(new URLSearchParams(location.search).get('level'), 10) || 1) - 1, 0, LEVELS.length - 1);
 const LV = LEVELS[LEVEL_IDX];
+// feature flags (from the descriptor)
+const RIDGE       = LV.terrain === 'ridge';         // grass shoulders + cliff walls + valley floor
+const HEIGHTFIELD = LV.terrain === 'heightfield';   // the road is cut into one terrain mesh
+const SKY         = LV.terrain === 'sky';           // the road floats: no ground beside it
+const OPEN_EDGES  = LV.edges === 'open';            // no rails anywhere: over the side and you fall
+const HOP_RAILS   = LV.edges === 'rails';           // rails that let you through onto the terrain
+const STUNT       = LV.physics === 'stunt';         // level 3's physics (see the descriptor notes)
+const PIT_FLIPPED = !!LV.pitFlipped;
+// one course's own content only (its builder's data, its set pieces) — behaviour goes on the descriptor
 const IS_SWITCH = LV.id === 'switch';
-const IS_RIDGE = LV.id === 'ridge';   // level 1: grass shoulders, cliffs, bridge, mountain walls
+const IS_RIDGE = LV.id === 'ridge';
 const IS_LOOP = LV.id === 'loops';
-const NIGHT = new URLSearchParams(location.search).get('night') === '1';   // the night version (unlocked by winning the day one)    // level 3: loops, a huge gap, a banked figure-8 — track frames can go upside down
+const NIGHT = new URLSearchParams(location.search).get('night') === '1';   // the night version (unlocked by winning the day one)
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -821,9 +848,7 @@ function buildLoopPoints() {
   return pts;
 }
 
-function buildRoadPoints() {
-  if (IS_SWITCH) return buildSwitchbackPoints();
-  if (IS_LOOP) return buildLoopPoints();
+function buildRidgePoints() {
   // rolling rises that break up the drop — eased in over START_EASE so the run opens
   // with a clean descent that evens out from the top, then hits the fun terrain
   const rawY = t => {
@@ -852,8 +877,8 @@ function buildRoadPoints() {
   return pts;
 }
 
-const curve = new THREE.CatmullRomCurve3(buildRoadPoints(), false, 'catmullrom', 0.5);
-if (IS_LOOP) curve.arcLengthDivisions = 6000;   // accurate arc length through the loops
+const curve = new THREE.CatmullRomCurve3(LV.build(), false, 'catmullrom', 0.5);
+if (LV.arcDivisions) curve.arcLengthDivisions = LV.arcDivisions;   // accurate arc length (level 3's loops)
 const TOTAL_LEN = curve.getLength();
 const lpU = sArc => sArc / (LP.len || 1);        // level 3: builder arc length → u
 
@@ -873,7 +898,7 @@ for (let i = 0; i <= SAMPLES; i++) {
 // Banking — roll each frame so the surface leans INTO its curve (superelevation).
 // Direction is derived geometrically, so it always banks the right way; only the
 // amount is tunable via BANK_GAIN / MAX_BANK.
-const BANK_GAIN = IS_LOOP ? 10 : 1.4, MAX_BANK = IS_SWITCH ? 0.12 : IS_LOOP ? 1.45 : 0.30;   // hairpins bank less; the figure-8's ends ride nearly sideways
+const BANK_GAIN = LV.bankGain, MAX_BANK = LV.bankMax;
 const i8a = IS_LOOP ? Math.floor(lpU(LP.eight.s0) * SAMPLES) - 6 : 0, i8b = IS_LOOP ? Math.ceil(lpU(LP.eight.s1) * SAMPLES) + 6 : 0;
 for (let i = 0; i < frames.length; i++) {
   if (IS_LOOP && (i < i8a || i > i8b)) continue;       // level 3: only the 8 banks (the loops carry their own up)
@@ -950,46 +975,74 @@ function frameAt(u) {
 // Course features — hand-placed along the run (positions are u in [0,1]). Playtest-tunable.
 // Level 2 places things at the middle of its traverses (never in a hairpin)
 const sbMidU = (leg, off = 0) => (sbLegs[leg].s0 + SB.W + off) / SB.len;
-// road holes you must jump (a kicker sits right before); level 3's gap launches you at least minSpeed
-const GAPS  = IS_SWITCH ? [] : IS_LOOP ? [ { u0: lpU(LP.gap.s0), u1: lpU(LP.gap.s1), minSpeed: 95 } ] : [ { u0: 0.618, u1: 0.628 } ];
-const RAMPS = IS_SWITCH ? [ sbMidU(1, -60), sbMidU(3, 80), sbMidU(4, -40) ]
-            : IS_LOOP ? [ lpU(LP.gap.s0 - 4) ]            // the lip's kicker
-                        : [ 0.30, 0.47, 0.613 ];          // launch kickers; the last one feeds the gap
+const fromEnd = d => 1 - d / TOTAL_LEN;
+// Per-course hand-placed data, by level id (built lazily: each reads its own builder's data). Anything
+// left out takes the default below — a new course starts with no gaps/ramps/items and pits placed
+// from its own length.
+//   gaps      road holes you must jump (a kicker sits right before); minSpeed: the launch is at least that
+//   ramps     launch kickers (u)
+//   items     pickups { u, lat, type }; .mesh / .taken get attached when built
+//   bridge    { u0, u1 } a viaduct (ridge terrain)        mountainWalls  [{ u0, u1 }] walls beside the road
+//   finishU / finishPitU / pitU0 / stopU   (default: the same distances back from the end as level 2)
+//   crowdZones  [[u0, u1] start, [u0, u1] finish] where spectators line the road
+//   detailUMin  trees / props start this far down the run (crowd room)
+const COURSE = ({
+  ridge: () => ({
+    gaps: [ { u0: 0.618, u1: 0.628 } ],
+    ramps: [ 0.30, 0.47, 0.613 ],                  // the last one feeds the gap
+    items: [
+      { u: 0.20, lat:  5, type: 'boost' },
+      { u: 0.38, lat: -6, type: 'endurance' },
+      { u: 0.55, lat:  0, type: 'freedeath' },
+      { u: 0.74, lat:  6, type: 'boost' },
+      { u: 0.86, lat: -5, type: 'weapon' },
+    ],
+    bridge: { u0: 0.665, u1: 0.725 },              // the ridge breaks here; the road crosses the gap on a viaduct
+    mountainWalls: [ { u0: 0.395, u1: 0.515 }, { u0: 0.755, u1: 0.865 } ],
+    finishU: 0.958, finishPitU: 0.988, pitU0: 0.971, stopU: 0.996,   // hand-tuned
+    crowdZones: [ [0.006, 0.034], [0.928, 0.957] ],
+    detailUMin: 0.035,
+  }),
+  switch: () => ({                                 // features sit mid-traverse, never in a hairpin
+    ramps: [ sbMidU(1, -60), sbMidU(3, 80), sbMidU(4, -40) ],
+    items: [
+      { u: sbMidU(0, 120),  lat:  4, type: 'boost' },
+      { u: sbMidU(2, -120), lat: -5, type: 'endurance' },
+      { u: sbMidU(3, -150), lat:  0, type: 'freedeath' },
+      { u: sbMidU(4, 180),  lat:  5, type: 'boost' },
+      { u: sbMidU(5, 0),    lat: -4, type: 'weapon' },
+    ],
+  }),
+  loops: () => ({
+    gaps: [ { u0: lpU(LP.gap.s0), u1: lpU(LP.gap.s1), minSpeed: 95 } ],
+    ramps: [ lpU(LP.gap.s0 - 4) ],                 // the lip's kicker
+    items: [
+      { u: lpU(LP.marks.boost),     lat:  4, type: 'boost' },
+      { u: lpU(LP.marks.freedeath), lat: -4, type: 'freedeath' },
+      { u: lpU(LP.marks.endurance), lat:  0, type: 'endurance' },
+      { u: lpU(LP.marks.weapon),    lat:  5, type: 'weapon' },
+    ],
+  }),
+}[LV.id] ?? (() => ({})))();
+const GAPS  = COURSE.gaps  ?? [];
+const RAMPS = COURSE.ramps ?? [];
 const KICKER_HALF_W = 6;       // kicker ramp: half-width across the road
 const KICKER_LEN    = 7;       // length along the road
 const KICKER_H      = 2.6;     // lip height
-const BRIDGE = !IS_RIDGE ? { u0: -1, u1: -1 } : { u0: 0.665, u1: 0.725 };   // the ridge breaks here; the road crosses the gap on a viaduct
+const BRIDGE = COURSE.bridge ?? { u0: -1, u1: -1 };
 const onBridge = u => u > BRIDGE.u0 && u < BRIDGE.u1;
 // Start / finish pits — enclosed arenas at both ends (crowd all around, no cut-off level edge)
-// (level 1's values are hand-tuned; level 2 derives the same distances from its own length)
-const fromEnd = d => 1 - d / TOTAL_LEN;
-const FINISH_U       = IS_RIDGE ? 0.958 : fromEnd(188);   // finish line (arch): the clock stops, controls hand over to the coast
-const FINISH_PIT_U   = IS_RIDGE ? 0.988 : fromEnd(54);   // finish pit centre along the road
+// (level 1's values are hand-tuned; the others derive the same distances from their own length)
+const FINISH_U       = COURSE.finishU    ?? fromEnd(188);   // finish line (arch): the clock stops, controls hand over to the coast
+const FINISH_PIT_U   = COURSE.finishPitU ?? fromEnd(54);    // finish pit centre along the road
 const FINISH_PIT_R   = 80;      // floor radius (the road's end at u=1 sits inside it)
 const START_PIT_BACK = 63;      // start pit centre sits this far behind the start line (floor ends at the line)
 const START_PIT_R    = 62;
-const PIT_U0         = IS_RIDGE ? 0.971 : fromEnd(125);   // past here the pit floor replaces grass / cliffs / rails
-const STOP_U         = IS_RIDGE ? 0.996 : fromEnd(18);   // the far berm — you can't roll past this
+const PIT_U0         = COURSE.pitU0 ?? fromEnd(125);   // past here the pit floor replaces grass / cliffs / rails
+const STOP_U         = COURSE.stopU ?? fromEnd(18);    // the far berm — you can't roll past this
 const inPit = u => u > PIT_U0;
 const START_U        = 0.0015;  // start line (arch) — you begin right on it
-const ITEMS = IS_SWITCH ? [
-  { u: sbMidU(0, 120),  lat:  4, type: 'boost' },
-  { u: sbMidU(2, -120), lat: -5, type: 'endurance' },
-  { u: sbMidU(3, -150), lat:  0, type: 'freedeath' },
-  { u: sbMidU(4, 180),  lat:  5, type: 'boost' },
-  { u: sbMidU(5, 0),    lat: -4, type: 'weapon' },
-] : IS_LOOP ? [
-  { u: lpU(LP.marks.boost),     lat:  4, type: 'boost' },
-  { u: lpU(LP.marks.freedeath), lat: -4, type: 'freedeath' },
-  { u: lpU(LP.marks.endurance), lat:  0, type: 'endurance' },
-  { u: lpU(LP.marks.weapon),    lat:  5, type: 'weapon' },
-] : [                                        // pickups; .mesh / .taken get attached when built
-  { u: 0.20, lat:  5, type: 'boost' },
-  { u: 0.38, lat: -6, type: 'endurance' },
-  { u: 0.55, lat:  0, type: 'freedeath' },
-  { u: 0.74, lat:  6, type: 'boost' },
-  { u: 0.86, lat: -5, type: 'weapon' },
-];
+const ITEMS = COURSE.items ?? [];             // pickups; .mesh / .taken get attached when built
 
 // Boost pads (level 3) — glowing chevron strips across the full road. Everyone who rolls over one
 // gets the boost (CPUs too), and never less than the speed that carries them round to the next pad:
@@ -1040,7 +1093,7 @@ const GRASS_TILE   = 22;   // world units per grass texture repeat
       const uSeg = i / SAMPLES;
       if (GAPS.some(g => uSeg > g.u0 && uSeg < g.u1)) continue;   // leave a hole — the abyss shows through
       roadIdx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
-      if (IS_RIDGE && !onBridge(uSeg) && !inPit(uSeg)) {
+      if (RIDGE && !onBridge(uSeg) && !inPit(uSeg)) {
         const c = i * 4;   // 4 grass verts per sample: left-outer, left-inner, right-inner, right-outer
         grassIdx.push(c, c + 1, c + 4, c + 1, c + 5, c + 4, c + 2, c + 3, c + 6, c + 3, c + 7, c + 6);
       }
@@ -1097,13 +1150,13 @@ const GRASS_TILE   = 22;   // world units per grass texture repeat
   // reflecting the procedural environment reads as a black band)
   railMat = new THREE.MeshStandardMaterial({ color: 0xb8bcc0, roughness: .5, metalness: .2, side: THREE.DoubleSide });
   glowMats.push({ mat: paintMat, color: 0xffffff, k: 1 }, { mat: railMat, color: 0xffffff, k: 0.4 });   // rail is a big surface — less, or bloom fogs the screen
-  const railKeep = i => notInGap(i) && !inPit(i / SAMPLES) && !IS_LOOP;   // level 3 is open-edged: go over the side and you fall
-  if (IS_SWITCH) for (const s of [1, -1])    // level 2: a concrete curb face down from the road edge to the cut
+  const railKeep = i => notInGap(i) && !inPit(i / SAMPLES) && !OPEN_EDGES;   // open-edged (level 3): go over the side and you fall
+  if (HEIGHTFIELD) for (const s of [1, -1])    // a concrete curb face down from the road edge to the terrain cut
     strip({ s: s * (GW + 0.05), u: 0.05 }, { s: s * (GW + 0.05), u: -1.6 }, concreteMat, railKeep);
   for (const s of [1, -1]) strip({ s: s * (GW + 0.62), u: 0.72 }, { s: s * (GW + 0.62), u: 1.12 }, railMat, railKeep).castShadow = true;
 
-  // level 3: the whole road is a slab in the sky — edge faces and an underside
-  if (IS_LOOP) {
+  // a sky road is a slab — edge faces and an underside
+  if (SKY) {
     const slab = i => notInGap(i) && !inPit(i / SAMPLES);
     for (const s of [1, -1]) strip({ s: s * GW, u: 0.05 }, { s: s * GW, u: -LOOP_DECK }, concreteMat, slab);
     strip({ s: GW, u: -LOOP_DECK }, { s: -GW, u: -LOOP_DECK }, concreteMat, slab);
@@ -1145,7 +1198,7 @@ let cliffMat, waterTex;
   const iStart = Math.ceil(BRIDGE.u0 * SAMPLES), iEnd = Math.floor(BRIDGE.u1 * SAMPLES);
   const flat = v => new THREE.Vector3(v.x, 0, v.z).normalize();
 
-  if (IS_RIDGE) {   // the ridge's cliffs, gorge and viaduct — level 2 has a mountain face, level 3 open sky
+  if (RIDGE) {   // the ridge's cliffs, gorge and viaduct — level 2 has a mountain face, level 3 open sky
   // one rock wall per side; `cols[s][i][r]` keeps vertices so the gorge caps can stitch to them
   const cols = { 1: [], [-1]: [] };
   const verts = [], uvs = [], idx = [];
@@ -1325,7 +1378,7 @@ function groundize(p, ribbonDy) {
   if (terrainHeightAt) p.y = terrainHeightAt(p.x, p.z) + ribbonDy + 0.4; else p.y += ribbonDy;
   return p;
 }
-if (IS_SWITCH) {
+if (HEIGHTFIELD) {   // (the grid extents still follow level 2's traverses — generalise for a new heightfield course)
   const hash = (x, y) => { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); };
   const vn = (x, y) => {
     const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
@@ -1448,9 +1501,9 @@ function flipPit(o) {
     scene.add(floor); PIT_FLOORS.push(floor);
     // grass berm rim, then rock walls outside down to the valley floor
     ring([[R, FLOOR_DY], [R + 3, 0.6], [R + 7, 3.8], [R + 11, 5.2], [R + 17, 5.4]], c, openAng, openHalf, groundMeshes[0].material, planarUV);
-    if (IS_LOOP && roadThrough)   // level 3's finish pit is flipped: a short rock rim, so it floats as an island
+    if (PIT_FLIPPED && roadThrough)   // level 3's finish pit is flipped: a short rock rim, so it floats as an island
       ring([[R + 17, 5.4], [R + 21, 1.5], [R + 32, -30], [R + 50, -62], [R + 60, -80]], c, openAng, openHalf, cliffMat, rockUV);
-    else if (!IS_SWITCH)   // level 1's pits stand on the ridge; level 2's sit on the mountain terrain
+    else if (!HEIGHTFIELD)   // ridge / sky pits stand on rock; heightfield pits sit on the terrain
       ring([[R + 17, 5.4], [R + 21, 1.5], [R + 32, -45], [R + 60, -150], [R + 95, CLIFF_FLOOR - c.y]], c, openAng, openHalf, cliffMat, rockUV);
     ARENAS.push({ c: c.clone(), R, openAng, openHalf, roadThrough });
   }
@@ -1458,7 +1511,7 @@ function flipPit(o) {
   const fe = frameAt(FINISH_PIT_U);
   const before = scene.children.length;
   arena(fe.p, FINISH_PIT_R, flat(fe.tan).negate(), true);
-  if (IS_LOOP) for (const o of scene.children.slice(before)) flipPit(o);   // level 3's pit hangs upside down
+  if (PIT_FLIPPED) for (const o of scene.children.slice(before)) flipPit(o);   // level 3's pit hangs upside down
   // start: behind the start line; opening faces down the road
   const f0 = frames[0];
   arena(f0.p.clone().addScaledVector(flat(f0.tan), -START_PIT_BACK), START_PIT_R, flat(f0.tan), false);
@@ -1474,7 +1527,7 @@ const hazeMats = [];
   const posts = new THREE.InstancedMesh(postGeo, postMat, Math.floor(SAMPLES / 6) * 2);
   const dummy = new THREE.Object3D(); let pc = 0;
   for (let i = 0; i < SAMPLES; i += 6) {
-    if (inPit(i / SAMPLES) || IS_LOOP) continue;          // level 3 is open-edged
+    if (inPit(i / SAMPLES) || OPEN_EDGES) continue;
     const f = frames[i];
     for (const s of [1, -1]) {
       dummy.position.copy(f.p).addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 0.8)).addScaledVector(f.up, 0.7);
@@ -1532,7 +1585,7 @@ const hazeMats = [];
 // the inside of the curve (the drop stays on the other side). The inside is worked out from the
 // road's own curvature, and the wall tapers out of the grass at both ends.
 // ------------------------------------------------------------------
-const MOUNTAIN_WALLS = !IS_RIDGE ? [] : [ { u0: 0.395, u1: 0.515 }, { u0: 0.755, u1: 0.865 } ];
+const MOUNTAIN_WALLS = COURSE.mountainWalls ?? [];
 const WALL_SET_BACK  = 5;      // grass between the road edge and the foot of the wall
 const WALL_TAPER_U   = 0.018;  // the wall grows out of the grass over this much of the run
 const wallAt = (u, lateral) => {    // true if (u, lateral) is inside a wall's footprint
@@ -1612,14 +1665,14 @@ const TREE_SPACING  = 5;     // try a tree every N road samples, per side
 const TREE_CHANCE   = 0.55;  // probability each try places one
 const TREE_MIN_H = 14, TREE_MAX_H = 26;   // world units (rider is 2.5)
 const TREE_CHUNK = 12;   // trees per instanced draw (per variant) — the unit of frustum culling
-const DETAIL_U_MIN = IS_RIDGE ? 0.035 : 150 / TOTAL_LEN;   // trees / props start this far down the run (crowd room)
+const DETAIL_U_MIN = COURSE.detailUMin ?? 150 / TOTAL_LEN;   // trees / props start this far down the run (crowd room)
 const trees = [];
 {
   let seed = 1337;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const SHOULDER = 60;   // grass ribbon half-width — trees past it would float over the valley
   for (let i = 0; i < SAMPLES; i += TREE_SPACING) {
-    if (IS_LOOP) break;                                   // nothing to stand on beside a road in the sky
+    if (SKY) break;                                       // nothing to stand on beside a road in the sky
     const f = frames[i];
     if (GAPS.some(g => i / SAMPLES > g.u0 - 0.01 && i / SAMPLES < g.u1 + 0.01)) continue;
     if (i / SAMPLES > BRIDGE.u0 - 0.012 && i / SAMPLES < BRIDGE.u1 + 0.012) continue;
@@ -1705,10 +1758,10 @@ let grassWind = { value: 0 };  // wind-sway clock shared with the grass shader
 {
   let seed = 4242;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const skip = (u, lat) => IS_LOOP ||
+  const skip = (u, lat) => SKY ||
     GAPS.some(g => u > g.u0 - 0.006 && u < g.u1 + 0.006) || onBridge(u) || inPit(u) || u < DETAIL_U_MIN + 0.005 ||
     u > FINISH_U - 0.038 || wallAt(u, lat);
-  const onOtherRoad = p => IS_SWITCH && (nearestRoad(p.x, p.z, 24).d < ROAD_HALF_WIDTH + 2 || steepAt(p.x, p.z) > 0.75);   // another traverse, or too steep
+  const onOtherRoad = p => HEIGHTFIELD && (nearestRoad(p.x, p.z, 24).d < ROAD_HALF_WIDTH + 2 || steepAt(p.x, p.z) > 0.75);   // another traverse, or too steep
   const up = new THREE.Vector3(0, 1, 0);
 
   // ---- rocks + bushes
@@ -2366,7 +2419,7 @@ function makeLabel(text, color, width = 0.2) {     // width as a fraction of scr
 const PILLAR_STEP = 9;         // a pillar every N samples
 const PAD_LEN = 7;             // pad length along the road
 let padTex = null;
-if (IS_LOOP) {
+if (SKY) {
   const pillars = [];
   for (let i = 0; i <= SAMPLES; i += PILLAR_STEP) {
     const f = frames[i], u = i / SAMPLES;
@@ -2406,7 +2459,7 @@ function updatePads(dt) { if (padTex) padTex.offset.y = (padTex.offset.y - dt * 
 // For each pad: the lowest speed that carries a rider (sitting up — the worst case) to the next pad
 // without dropping off a loop, sliding off a bank or stalling; the pad never leaves you below it.
 function computePadMins() {
-  if (!IS_LOOP) return;
+  if (!BOOST_PADS.length) return;
   const ds = TOTAL_LEN / SAMPLES, reach = Math.round(LOOP_REACH / ds);
   const gapAt = i => GAPS.some(g => i / SAMPLES > g.u0 - 0.003 && i / SAMPLES < g.u1);
   const carries = (i0, i1, v0) => {
@@ -2500,11 +2553,8 @@ let itemSpin = 0;
 // Start / finish — arches over the road and cheering crowds behind the rails. Spectators are
 // clones of Quaternius "Man" (CC0) with per-person colors; mixers only tick near the camera.
 // ------------------------------------------------------------------
-const CROWD_ZONES = !IS_RIDGE
-  ? [ { u0: 25 / TOTAL_LEN, u1: 150 / TOTAL_LEN, arch: START_U, label: 'START' },
-      { u0: FINISH_U - 130 / TOTAL_LEN, u1: FINISH_U - 4 / TOTAL_LEN, arch: FINISH_U, label: 'FINISH' } ]
-  : [ { u0: 0.006, u1: 0.034, arch: START_U, label: 'START' },
-      { u0: 0.928, u1: 0.957, arch: FINISH_U, label: 'FINISH' } ];
+const CROWD_ZONES = (COURSE.crowdZones ?? [ [25 / TOTAL_LEN, 150 / TOTAL_LEN], [FINISH_U - 130 / TOTAL_LEN, FINISH_U - 4 / TOTAL_LEN] ])
+  .map(([u0, u1], k) => ({ u0, u1, arch: k ? FINISH_U : START_U, label: k ? 'FINISH' : 'START' }));
 const CROWD_PER_SIDE = 16;    // spectators per side of the road, per zone
 const PIT_CROWD_SPACING = 5;  // world units between spectators lining the road through the finish pit
 const CROWD_START_PIT   = 45; // spectators around the start line in the start pit
@@ -2518,7 +2568,7 @@ const crowd = [];             // { mixer, obj }
     const f = frameAt(z.arch), yaw = Math.atan2(f.tan.x, f.tan.z);
     const arch = new THREE.Group();
     arch.position.copy(f.p); arch.rotation.y = yaw;
-    if (IS_LOOP) arch.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(f.side, f.up, f.tan));   // upside down past the twist
+    if (STUNT) arch.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(f.side, f.up, f.tan));   // upside down past the twist
     const half = ROAD_HALF_WIDTH + 1.6, H = 9;
     for (const s of [1, -1]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.7, H, 0.7), postMat);
@@ -2570,7 +2620,7 @@ const crowd = [];             // { mixer, obj }
       person.scale.setScalar(scale * (0.9 + rnd() * 0.2));
       person.position.copy(p);
       person.rotation.y = Math.atan2(face.x, face.z) + (rnd() - 0.5) * 0.5;
-      if (IS_LOOP && p.distanceTo(frameAt(FINISH_PIT_U).p) < FINISH_PIT_R + 60) flipPit(person);   // level 3's upside-down pit
+      if (PIT_FLIPPED && p.distanceTo(frameAt(FINISH_PIT_U).p) < FINISH_PIT_R + 60) flipPit(person);   // level 3's upside-down pit
       const mixer = new THREE.AnimationMixer(person);
       const r = rnd();
       const action = mixer.clipAction(r < 0.65 ? clips.clap : r < 0.85 ? clips.jump : clips.idle);
@@ -2584,7 +2634,7 @@ const crowd = [];             // { mixer, obj }
     }
     // lining the road into the start and up to the finish line
     for (const z of CROWD_ZONES) for (const s of [1, -1]) for (let n = 0; n < CROWD_PER_SIDE; n++) {
-      if (IS_LOOP) continue;                             // level 3's roads hang in the sky: crowds only in the pits
+      if (SKY) continue;                                 // sky roads: crowds only in the pits
       const u = z.u0 + (z.u1 - z.u0) * (n + rnd() * 0.8) / CROWD_PER_SIDE;
       const f = frameAt(u);
       const p = groundize(f.p.clone().addScaledVector(f.side, s * (ROAD_HALF_WIDTH + 2.4 + rnd() * 5)), -0.4);
@@ -2798,14 +2848,14 @@ const BAL_CONTROL    = 2.6;    // how hard steering pushes the needle
 const grind = { on: false, side: 1, t: 0, dist: 0, bal: 0, drift: 0, name: '', cd: 0, buffer: 0 };
 const grindPts = () => Math.round(grind.dist * GRIND_PTS * (grind.name === 'BOARDSLIDE' ? GRIND_SLIDE_X : 1));
 let jumpWasDown = false, grindWasDown = false;
-const railAt = u => !IS_LOOP && !GAPS.some(g => u > g.u0 && u < g.u1) && !inPit(u);   // breaks at the gaps; none in the pit
+const railAt = u => !OPEN_EDGES && !GAPS.some(g => u > g.u0 && u < g.u1) && !inPit(u);   // breaks at the gaps; none in the pit
 
 // --- Ramps / gaps: a kicker launches you; you need speed to clear a gap or you fall.
 const RAMP_BASE   = 6;         // base launch vy off a kicker
 const RAMP_FACTOR = 0.30;      // + this * speed (need speed to clear gaps)
 const GAP_MIN_SPEED = 30;      // u/s (~35 mph) you need at a gap kicker to clear the gap
 const GAP_MARGIN    = 10;      // world units of landing room past the gap
-const GAP_MAX_VY    = IS_LOOP ? 120 : 45;   // cap on the assisted launch (level 3's gap is huge)
+const GAP_MAX_VY    = STUNT ? 120 : 45;   // cap on the assisted launch (level 3's gap is huge)
 const GAP_RESPAWN_BACK  = 45;  // fall in → respawn this far (world units) before the gap's kicker…
 const GAP_RESPAWN_SPEED = GAP_MIN_SPEED + 6;   // …already rolling fast enough to clear it
 
@@ -2910,7 +2960,7 @@ function updateCoast(dt, inp, f, slope) {
 function pitCam(dt) {                                  // slow orbit around the stopped rider
   finish.t += dt;
   finish.orbitAng += dt * 0.32;
-  const p = skater.position, up = IS_LOOP ? frameAt(state.u).up : UP;   // level 3's pit is upside down
+  const p = skater.position, up = PIT_FLIPPED ? frameAt(state.u).up : UP;   // level 3's pit is upside down
   const want = new THREE.Vector3(p.x + Math.cos(finish.orbitAng) * 13, p.y, p.z + Math.sin(finish.orbitAng) * 13)
     .addScaledVector(up, 4 + Math.sin(finish.t * 0.4) * 0.8);
   camPos.lerp(want, Math.min(1, dt * 1.5));
@@ -3032,7 +3082,7 @@ function enterFree(inp, f, withVel = false) {
 function leaveFree(msg) {                       // respawn on the road where you left it
   state.free = false;
   let u = free.lastU;
-  if (IS_LOOP) {                                   // level 3: back before the last entry pad, so it carries you round
+  if (BOOST_PADS.length) {                         // back before the last entry pad, so it carries you round
     const pad = BOOST_PADS.filter(p => p.entry && p.u < u - 1e-4).pop();
     if (pad) u = Math.max(START_U, pad.u - 25 / TOTAL_LEN);
   }
@@ -3111,10 +3161,10 @@ function updateFree(dt, inp, jumpPressed) {
   // gone too far: below the finish, into the lake, off a level-1 cliff for good, or stuck
   if (state.airborne && P.y < free.leftY) free.fallT += dt; else free.fallT = 0;
   free.stuckT = state.speed < 1 && !state.airborne ? free.stuckT + dt : 0;
-  const floorY = IS_SWITCH ? frames[SAMPLES].p.y - 20 : free.leftY - FREE_FALL_RESPAWN;
-  const why = IS_SWITCH ? 'TOO FAR DOWN!' : IS_LOOP ? 'FELL OFF!' : 'OFF THE CLIFF!';
+  const floorY = HEIGHTFIELD ? frames[SAMPLES].p.y - 20 : free.leftY - FREE_FALL_RESPAWN;
+  const why = HEIGHTFIELD ? 'TOO FAR DOWN!' : SKY ? 'FELL OFF!' : 'OFF THE CLIFF!';
   if (P.y < floorY || P.y < LAKE_Y + 1) leaveFree(why);
-  else if (!IS_SWITCH && free.fallT > FREE_FALL_SECS) leaveFree(why);
+  else if (!HEIGHTFIELD && free.fallT > FREE_FALL_SECS) leaveFree(why);
   else if (free.stuckT > FREE_STUCK_SECS) leaveFree('BACK TO THE ROAD');
   return info;
 }
@@ -3246,13 +3296,13 @@ function update(dt) {
   // steering -> heading. Classic: heading relative to the road (less authority at very high speed).
   // Free carve: steer sets a turn rate and the road's bend turns the road away under you; level 3's
   // stunt sections (loops, banks) stay classic
-  const carve = carveOn() && !(IS_LOOP && inStunt(f));
+  const carve = carveOn() && !(STUNT && inStunt(f));
   const kap = carve ? roadCurv(state.u) : 0;
   const pathK = carve ? THREE.MathUtils.clamp(1 - kap * state.lateral, 0.5, 1.5) : 1;   // inside of a bend is a shorter way round
   state.sliding = carve && inp.brake && !state.airborne && Math.abs(state.steerSmooth) > 0.3;
   // in the air A/D spin you; once a spin is going they don't steer as well, and level 3's long gap
   // flight doesn't steer at all, so a big spin still lands you on the far side
-  const airSteer = !state.airborne ? 1 : (trick.type === 'spin' || IS_LOOP) ? 0 : AIR_STEER;
+  const airSteer = !state.airborne ? 1 : (trick.type === 'spin' || STUNT) ? 0 : AIR_STEER;
   if (carve) {
     const cap = Math.min(CARVE_TURN, (state.sliding ? SLIDE_GRIP : CARVE_GRIP) / Math.max(state.speed, 1));
     carveRate = -state.steerSmooth * cap * airSteer;
@@ -3260,7 +3310,7 @@ function update(dt) {
     if (Math.abs(state.steerSmooth) < 0.1 && !state.airborne) dh -= Math.sign(state.heading) * Math.min(Math.abs(state.heading) / dt, CARVE_ASSIST);
     state.heading = THREE.MathUtils.clamp(state.heading + dh * dt, -CARVE_MAX_HEADING, CARVE_MAX_HEADING);
     if (state.crashT > 0) state.heading *= Math.exp(-dt * 2);   // down and sliding: settle along the road
-    if (IS_LOOP && state.airborne) state.heading *= Math.exp(-dt * 2);   // the gap's lip carries you straight across
+    if (STUNT && state.airborne) state.heading *= Math.exp(-dt * 2);   // the gap's lip carries you straight across
   } else {
     const authority = THREE.MathUtils.clamp(1.3 - state.speed / 120, 0.35, 1.1);
     const targetHeading = -state.steerSmooth * MAX_HEADING * authority * airSteer;
@@ -3268,9 +3318,9 @@ function update(dt) {
   }
 
   // speed integration
-  const drag = (inp.tuck || (IS_LOOP && inStunt(f)) ? DRAG_TUCK : DRAG_UP);
-  let accel = IS_LOOP ? -G * f.tan.y : G * slope;      // level 3: climbs slow you (the loops are real)
-  const flying = IS_LOOP && state.airborne;              // level 3's gap is a 5-second flight: no drag in the air, or the lip's launch falls short
+  const drag = (inp.tuck || (STUNT && inStunt(f)) ? DRAG_TUCK : DRAG_UP);
+  let accel = STUNT ? -G * f.tan.y : G * slope;      // level 3: climbs slow you (the loops are real)
+  const flying = STUNT && state.airborne;              // level 3's gap is a 5-second flight: no drag in the air, or the lip's launch falls short
   if (!flying) accel -= drag * state.speed * state.speed;
   if (!flying) accel -= ROLL;
   if (!state.atEdge) accel -= carve ? Math.abs(carveRate) * state.speed * CARVE_SCRUB_TURN   // pinned on a rail isn't a carve
@@ -3278,7 +3328,7 @@ function update(dt) {
 
   // grass drag past the road edge — but not where rails hold you on the asphalt (level 2, the bridge):
   // riding along the rail there counted as off-road and dragged you to a stop
-  const offroad = Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1.0 && IS_RIDGE && !onBridge(state.u);
+  const offroad = Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1.0 && RIDGE && !onBridge(state.u);
   if (offroad && !state.airborne) accel -= OFFROAD_DRAG;
   // brakes (B / LT): a foot-drag stop — strong enough to hold you still on the steepest pitch
   if ((inp.brake || state.crashT > 0) && !state.airborne) accel -= state.sliding ? SLIDE_DECEL + state.speed * 0.15 : BRAKE_DECEL + state.speed * 0.3;
@@ -3298,7 +3348,7 @@ function update(dt) {
   }
 
   // jump / air + tricks
-  if (inp.jump && !(IS_LOOP && f.up.y < 0.5)) takeoff(Math.min(14, 8 + state.speed * 0.04));   // no ollies upside down
+  if (inp.jump && !(STUNT && f.up.y < 0.5)) takeoff(Math.min(14, 8 + state.speed * 0.04));   // no ollies upside down
   if (state.airborne) {
     run.airTime += dt;   // hangtime — wheels off the ground
     trick.air += dt;
@@ -3358,7 +3408,7 @@ function update(dt) {
   for (const pd of BOOST_PADS) if (uPrev < pd.u && state.u >= pd.u) padBoost(pd);
   // level 3: stay on the track. Upside down you need speed to press you into it; on a steep bank
   // the pull down the slope has to be held by grip (more speed → more grip) or you slide off.
-  if (IS_LOOP && !state.airborne && !grind.on && !inPit(state.u) && state.u < FLIP_U) {
+  if (STUNT && !state.airborne && !grind.on && !inPit(state.u) && state.u < FLIP_U) {
     const fn = frameAt(state.u), cv = CURV[Math.round(state.u * SAMPLES)], v2 = state.speed * state.speed;
     const N = v2 * cv.dot(fn.up) + G * fn.up.y;                 // how hard the track pushes on you
     if (N < 0 && fn.up.y < 0.5) return enterFree(inp, fn, true);   // too slow over the top: you drop off
@@ -3379,11 +3429,11 @@ function update(dt) {
   // you fall); walls where there's nowhere to go — the bridge rails, mountain walls, the pits
   const canLeave = !inPit(state.u) && state.u > FREE_MIN_U && !finish.crossed;
   let limit = Infinity;
-  if (IS_LOOP) {
+  if (OPEN_EDGES) {
     // open edges: over the side and you fall (the pits still hold you)
     if (canLeave && Math.abs(state.lateral) > ROAD_HALF_WIDTH + 1.2) return enterFree(inp, frameAt(state.u), true);
     if (!canLeave) limit = ROAD_HALF_WIDTH - 0.5;
-  } else if (IS_SWITCH) {
+  } else if (HOP_RAILS) {
     // like level 1: the rails don't hold you — ride or jump through one and you're on the mountain
     // (except by the start and finish pits)
     if (canLeave && Math.abs(state.lateral) > RAIL_LAT + 0.8) return enterFree(inp, f);
@@ -3557,7 +3607,7 @@ function place(info) {
     camLook.copy(pos).add(chaseOff.look);
   }
   camera.position.copy(keepAboveGround(camPos));
-  if (IS_LOOP) {                                  // roll with the track through the loops and banks
+  if (STUNT) {                                    // roll with the track through the loops and banks
     camUp.lerp(f.up, Math.min(1, dt * 4)).normalize();
     camera.up.copy(camUp); camera.lookAt(camLook); camera.up.set(0, 1, 0);
   } else camera.lookAt(camLook);
@@ -3999,7 +4049,7 @@ const sfx = (() => {
     // every frame: the loops follow what you're doing
     update(dt, riding, quiet) {   // quiet: a menu is up (pause, title, selects) — the beds go silent
       const onBoard = riding && !state.free && !state.airborne && state.crashT <= 0;
-      const off = IS_RIDGE && Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1;
+      const off = RIDGE && Math.abs(state.lateral) > ROAD_HALF_WIDTH - 1;
       const sp = Math.min(1, state.speed / 90);
       roll.set(onBoard && !grind.on ? (0.05 + sp * 0.35) * (off ? 1.6 : 1) : 0, off ? 900 : 260 + sp * 420);
       const g = riding && grind.on ? 0.12 + sp * 0.3 : 0;
@@ -4528,12 +4578,12 @@ if (NIGHT) {
   renderer.toneMappingExposure = NIGHT_EXPOSURE;
   // road paint: faintly reflective on the mountain roads, neon on the sky course
   for (const g of glowMats) {
-    const neon = IS_LOOP ? (g.color === 0xffd21a ? 0xff3cc8 : 0x33e0ff) : g.color;
-    g.mat.emissive.set(neon); g.mat.emissiveIntensity = (IS_LOOP ? 1.5 : 0.22) * g.k;
+    const neon = SKY ? (g.color === 0xffd21a ? 0xff3cc8 : 0x33e0ff) : g.color;
+    g.mat.emissive.set(neon); g.mat.emissiveIntensity = (SKY ? 1.5 : 0.22) * g.k;
   }
 
   // --- street lamps (the mountain roads)
-  if (!IS_LOOP) {
+  if (!SKY) {
     const poolTex = radialTex();
     let side = 1;
     for (let d = 70; d < TOTAL_LEN - 20; d += LAMP_SPACING) {
@@ -4629,7 +4679,7 @@ if (NIGHT) {
     for (let i = 0; i < SEARCHLIGHTS; i++) {
       const a = i / SEARCHLIGHTS * Math.PI * 2 + 0.3;
       const beam = new THREE.Mesh(geo, beamMat);
-      beam.position.set(c.x + Math.cos(a) * R, box.min.y - (IS_LOOP ? 350 : 120), c.z + Math.sin(a) * R);
+      beam.position.set(c.x + Math.cos(a) * R, box.min.y - (SKY ? 350 : 120), c.z + Math.sin(a) * R);
       beam.frustumCulled = false; beam.renderOrder = 5;
       scene.add(beam); night.beams.push({ beam, ph: i * 1.7, sp: 0.15 + (i % 3) * 0.06 });
     }
@@ -5948,7 +5998,7 @@ const brawlRay = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0);
 // down (`flipPit`). There the walker lives inside the same flip, so walking, the floor ray, hits and
 // the camera all work as if the pit stood upright.
 const brawlSpace = new THREE.Group(); scene.add(brawlSpace); brawlSpace.add(brawl.walker);
-if (IS_LOOP) { flipPit(brawlSpace); brawlSpace.updateMatrixWorld(true); }
+if (PIT_FLIPPED) { flipPit(brawlSpace); brawlSpace.updateMatrixWorld(true); }
 const brawlQInv = brawlSpace.quaternion.clone().invert();
 const toPit    = v => brawlSpace.worldToLocal(v.clone());            // world point → pit space
 const fromPit  = v => brawlSpace.localToWorld(v.clone());            // pit space → world point
@@ -6378,8 +6428,8 @@ function updateCpu(c, i, dt) {
     // speed: skill + an asymmetric rubber band on the slope pull; kick only when slow
     const gap = (state.u - c.u) * TOTAL_LEN * CPU_RUBBER;
     const behind = THREE.MathUtils.clamp(gap, -CPU_RUBBER_DOWN, CPU_RUBBER_UP);
-    const pull = IS_LOOP ? -G * f.tan.y * (f.tan.y < 0 ? c.skill * (1 + behind) : 1) : G * slope * c.skill * (1 + behind);
-    const air = IS_LOOP && c.airborne;                       // (no drag over level 3's gap, like yours)
+    const pull = STUNT ? -G * f.tan.y * (f.tan.y < 0 ? c.skill * (1 + behind) : 1) : G * slope * c.skill * (1 + behind);
+    const air = STUNT && c.airborne;                       // (no drag over level 3's gap, like yours)
     let accel = pull - (air ? 0 : DRAG_TUCK * (tucked ? 1 : CPU_SITUP_DRAG) * c.speed * c.speed + ROLL) - (c.turn ? Math.abs(c.turn) * c.speed * CARVE_SCRUB_TURN : Math.abs(c.heading) * c.speed * (CARVE_SCRUB / 100));
     c.speed = Math.max(0, c.speed + accel * dt);
     c.kickCd -= dt;
@@ -6396,7 +6446,7 @@ function updateCpu(c, i, dt) {
     if (GAPS.some(g => { const d = (g.u0 - c.u) * TOTAL_LEN; return d > 0 && d < 120; })) target = 0;
     const lim = ROAD_HALF_WIDTH - 1.2;
     target = THREE.MathUtils.clamp(target, -lim, lim);
-    if (carveOn() && !(IS_LOOP && inStunt(f))) {
+    if (carveOn() && !(STUNT && inStunt(f))) {
       // free carve: brake (sliding) if a bend ahead can't be held at this speed, then turn toward the line
       const kap = roadCurv(c.u);
       c.pathK = THREE.MathUtils.clamp(1 - kap * c.lat, 0.5, 1.5);
