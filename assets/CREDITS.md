@@ -8,6 +8,9 @@ All assets are licensed **CC0** (public domain), except the hit sounds in `sfx/`
 | `textures/asphalt_*_1k.jpg` | [Asphalt Track](https://polyhaven.com/a/asphalt_track) — diffuse, normal (GL), ARM |
 | `textures/grass_*_1k.jpg` | [Aerial Grass Rock](https://polyhaven.com/a/aerial_grass_rock) — diffuse, normal (GL), ARM |
 | `textures/rock_*_1k.jpg` | [Aerial Rocks 02](https://polyhaven.com/a/aerial_rocks_02) — diffuse, normal (GL), ARM |
+| `textures/sand_*_1k.jpg` | [Aerial Sand](https://polyhaven.com/a/aerial_sand) — diffuse, normal (GL), ARM (desert world) |
+| `hdri/qwantani_noon_puresky_2k.hdr` | [Qwantani Noon (Pure Sky)](https://polyhaven.com/a/qwantani_noon_puresky) (desert world) |
+| `models/cacti.glb` | Quaternius [Cactus](https://poly.pizza/m/HsEJgRLQWX) and [Cactus Flowers](https://poly.pizza/m/Da39rzd54k) (via Poly Pizza); merged into one GLB (desert world) |
 | `models/skater.glb` | [Casual Character](https://poly.pizza/m/kZ3DmIoGip) by Quaternius (via Poly Pizza) |
 | `models/longboard.glb` | [Skateboard](https://poly.pizza/m/Bt1Iql32Ox) by cg_world (via Poly Pizza) |
 | `models/spectator.glb` | [Man](https://poly.pizza/m/HMnuH5geEG) by Quaternius (via Poly Pizza) |
